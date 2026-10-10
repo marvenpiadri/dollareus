@@ -125,6 +125,11 @@ const UpdateStorefrontSchema = z.object({
   message: 'The default experience must be enabled.',
   path: ['enabledExperiences']
 });
+const CreateEntryPointSchema = z.object({
+  type: z.enum(['direct-link', 'qr', 'embed']),
+  targetPath: z.enum(['/', '/menu', '/catalog', '/services']).default('/')
+}).strict();
+const UpdateEntryPointSchema = z.object({ status: z.enum(['active', 'disabled']) }).strict();
 const CreateCategorySchema = z.object({
   name: z.string().trim().min(1).max(120),
   slug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -649,6 +654,119 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       throw error;
     }
     return reply.code(201).send({ data: category, requestId: request.id });
+  }
+);
+
+
+app.get<{ Params: { organizationId: string; storeId: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/entry-points',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) {
+      return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    }
+    const snapshot = await storeRef.collection('entryPoints').orderBy('createdAt', 'desc').limit(100).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data(), publicPath: `/q/${document.id}` })), requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/entry-points',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateEntryPointSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The entry-point payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    }
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) {
+      return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    }
+    const store = storeSnapshot.data()!;
+    const experienceForPath: Record<string, string> = { '/': String(store.defaultExperience ?? 'commerce'), '/menu': 'menu', '/catalog': 'catalog', '/services': 'services' };
+    const experience = experienceForPath[parsed.data.targetPath];
+    const enabledExperiences = (store.enabledExperiences ?? []) as string[];
+    if (!enabledExperiences.includes(experience)) {
+      return reply.code(400).send({ error: { code: 'EXPERIENCE_NOT_ENABLED', message: 'Enable this storefront experience before creating an entry point for it.', requestId: request.id } });
+    }
+    const entryPointRef = storeRef.collection('entryPoints').doc();
+    const globalRef = db.doc(`publicEntryPoints/${entryPointRef.id}`);
+    const now = new Date().toISOString();
+    const entryPoint = {
+      id: entryPointRef.id,
+      storeId,
+      organizationId,
+      type: parsed.data.type,
+      targetPath: parsed.data.targetPath,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now
+    };
+    await db.runTransaction(async (transaction) => {
+      transaction.create(entryPointRef, entryPoint);
+      transaction.create(globalRef, { organizationId, storeId, entryPointId: entryPointRef.id, createdAt: now });
+    });
+    return reply.code(201).send({
+      data: { ...entryPoint, publicPath: `/q/${entryPointRef.id}`, targetExperience: experience },
+      requestId: request.id
+    });
+  }
+);
+
+app.patch<{ Params: { organizationId: string; storeId: string; entryPointId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/entry-points/:entryPointId',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId, entryPointId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = UpdateEntryPointSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The entry-point update is invalid.', requestId: request.id } });
+    }
+    const entryRef = db.doc(`organizations/${organizationId}/stores/${storeId}/entryPoints/${entryPointId}`);
+    const snapshot = await entryRef.get();
+    if (!snapshot.exists) {
+      return reply.code(404).send({ error: { code: 'ENTRY_POINT_NOT_FOUND', message: 'The entry point does not exist.', requestId: request.id } });
+    }
+    const updatedAt = new Date().toISOString();
+    await entryRef.update({ status: parsed.data.status, updatedAt });
+    return { data: { ...snapshot.data(), ...parsed.data, updatedAt, publicPath: `/q/${entryPointId}` }, requestId: request.id };
+  }
+);
+
+app.get<{ Params: { entryPointId: string } }>(
+  '/api/v1/public/entry-points/:entryPointId',
+  async (request, reply) => {
+    const globalSnapshot = await db.doc(`publicEntryPoints/${request.params.entryPointId}`).get();
+    if (!globalSnapshot.exists) {
+      return reply.code(404).send({ error: { code: 'ENTRY_POINT_NOT_FOUND', message: 'This public link is not available.', requestId: request.id } });
+    }
+    const index = globalSnapshot.data()!;
+    const entrySnapshot = await db.doc(`organizations/${index.organizationId}/stores/${index.storeId}/entryPoints/${index.entryPointId}`).get();
+    const storeSnapshot = await db.doc(`organizations/${index.organizationId}/stores/${index.storeId}`).get();
+    if (!entrySnapshot.exists || !storeSnapshot.exists || entrySnapshot.data()?.status !== 'active' || storeSnapshot.data()?.published !== true || storeSnapshot.data()?.status !== 'active') {
+      return reply.code(404).send({ error: { code: 'ENTRY_POINT_NOT_FOUND', message: 'This public link is not available.', requestId: request.id } });
+    }
+    const entryPoint = entrySnapshot.data()!;
+    const store = storeSnapshot.data()!;
+    const experienceForPath: Record<string, string> = { '/': String(store.defaultExperience ?? 'commerce'), '/menu': 'menu', '/catalog': 'catalog', '/services': 'services' };
+    return {
+      data: {
+        storeSlug: store.slug,
+        storeName: store.name,
+        targetPath: entryPoint.targetPath,
+        experience: experienceForPath[String(entryPoint.targetPath)] ?? store.defaultExperience,
+        canonicalPath: `/s/${store.slug}${entryPoint.targetPath === '/' ? '' : entryPoint.targetPath}`
+      },
+      requestId: request.id
+    };
   }
 );
 
