@@ -99,9 +99,9 @@ async function requireOrganizationMembership(
 
 const StoreBusinessTypeSchema = z.enum(['retail', 'restaurant', 'freelancer', 'services', 'digital', 'general']);
 const StoreExperienceSchema = z.enum(['commerce', 'menu', 'catalog', 'services']);
-const PublicStoreDomain = (process.env.PUBLIC_STORE_DOMAIN ?? 'dollareus.com').toLowerCase().replace(/^\\.+|\\.+$/g, '');
+const PublicStoreDomain = (process.env.PUBLIC_STORE_DOMAIN ?? 'dollareus.com').toLowerCase().replace(/^\.+|\.+$/g, '');
 const CreateStoreDomainSchema = z.object({
-  hostname: z.string().trim().min(3).max(253).transform((value) => value.toLowerCase().replace(/\\.$/, ''))
+  hostname: z.string().trim().min(3).max(253).transform((value) => value.toLowerCase().replace(/\.$/, ''))
     .refine((value) => value.includes('.') && value.split('.').every((part) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part)), 'Enter a valid fully qualified domain name')
 }).strict();
 const CreateStoreSchema = z.object({
@@ -907,7 +907,7 @@ app.post<{ Params: { organizationId: string; storeId: string; hostname: string }
   async (request, reply) => {
     const { organizationId, storeId } = request.params;
     if (!await requireOrganizationMembership(request, reply, organizationId)) return;
-    const hostname = request.params.hostname.toLowerCase().replace(/\\.$/, '');
+    const hostname = request.params.hostname.toLowerCase().replace(/\.$/, '');
     const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
     const domainRef = storeRef.collection('domains').doc(hostname);
     const domainSnapshot = await domainRef.get();
@@ -944,7 +944,7 @@ app.post<{ Params: { organizationId: string; storeId: string; hostname: string }
 app.get('/api/v1/public/resolve-host', async (request, reply) => {
   const rawHost = request.headers.host;
   if (!rawHost) return reply.code(400).send({ error: { code: 'HOST_REQUIRED', message: 'A host header is required.', requestId: request.id } });
-  const hostname = rawHost.toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const hostname = rawHost.toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   const domainSnapshot = await db.doc(`storeDomains/${hostname}`).get();
   if (!domainSnapshot.exists || !['active', 'verified'].includes(String(domainSnapshot.data()?.status))) return reply.code(404).send({ error: { code: 'STORE_HOST_NOT_FOUND', message: 'No published store is mapped to this hostname.', requestId: request.id } });
   const mapping = domainSnapshot.data()!;
@@ -1532,14 +1532,14 @@ app.get<{ Params: { storeSlug: string; experience: string } }>('/s/:storeSlug/:e
 });
 
 app.get('/', async (request, reply) => {
-  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   const resolved = await resolvePublicHost(hostname);
   if (!resolved) return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Dollareus</title><h1>No published store is configured for this hostname.</h1></html>');
   return renderPublicStorefront(request, reply, resolved, hostname);
 });
 
 app.get('/robots.txt', async (_request, reply) => {
-  return reply.type('text/plain; charset=utf-8').send(`User-agent: *\\nAllow: /\\nSitemap: https://${PublicStoreDomain}/sitemap.xml\\n`);
+  return reply.type('text/plain; charset=utf-8').send(`User-agent: *\nAllow: /\nSitemap: https://${PublicStoreDomain}/sitemap.xml\\n`);
 });
 
 app.get('/sitemap.xml', async (_request, reply) => {
@@ -1559,19 +1559,19 @@ app.get('/sitemap.xml', async (_request, reply) => {
 });
 
 app.get('/menu', async (request, reply) => {
-  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   const resolved = await resolvePublicHost(hostname);
   if (!resolved) return reply.code(404).send();
   return renderPublicStorefront(request, reply, resolved, hostname, 'menu', '/menu');
 });
 app.get('/catalog', async (request, reply) => {
-  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   const resolved = await resolvePublicHost(hostname);
   if (!resolved) return reply.code(404).send();
   return renderPublicStorefront(request, reply, resolved, hostname, 'catalog', '/catalog');
 });
 app.get('/services', async (request, reply) => {
-  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
   const resolved = await resolvePublicHost(hostname);
   if (!resolved) return reply.code(404).send();
   return renderPublicStorefront(request, reply, resolved, hostname, 'services', '/services');
