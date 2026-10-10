@@ -77,7 +77,7 @@ export interface PublicEntryPoint {
   createdAt: string;
 }
 export interface PublicImage { id: string; alt: string; width?: number; height?: number; position: number; /** Safe, delivery-ready URL when available; never expose private storage keys. */ url?: string; }
-export interface PublicCatalogItem extends Omit<Product, 'images' | 'organizationId' | 'storeId'> {
+export interface PublicCatalogItem extends Omit<Product, 'images' | 'organizationId' | 'storeId' | 'createdAt'> {
   images: PublicImage[];
 }
 export interface PublicStorefront {
