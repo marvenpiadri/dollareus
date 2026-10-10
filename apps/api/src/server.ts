@@ -129,6 +129,17 @@ const CreateProductSchema = z.object({
   variants: z.array(VariantSchema).min(1).max(100)
 }).strict();
 
+const UpdateProductSchema = z.object({
+  slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+  name: z.string().trim().min(1).max(180).optional(),
+  description: z.string().max(10000).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  kind: z.enum(['physical', 'digital', 'service', 'food']).optional(),
+  variants: z.array(VariantSchema).min(1).max(100).optional()
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: 'Provide at least one product field to update.'
+});
+
 const UploadIntentSchema = z.object({
   contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
 }).strict();
@@ -213,6 +224,77 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
     }
 
     return reply.code(201).send({ data: product, requestId: request.id });
+  }
+);
+
+app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/products/:productId',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, productId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+
+    const parsed = UpdateProductSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'The product update payload is invalid.',
+          details: parsed.error.flatten(),
+          requestId: request.id
+        }
+      });
+    }
+
+    const productRef = db.doc(`organizations/${organizationId}/products/${productId}`);
+    const requestedSlug = parsed.data.slug;
+    const requestedSlugRef = requestedSlug
+      ? db.doc(`organizations/${organizationId}/productSlugs/${requestedSlug}`)
+      : null;
+    const now = new Date().toISOString();
+
+    try {
+      const product = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(productRef);
+        if (!currentSnapshot.exists) throw new Error('PRODUCT_NOT_FOUND');
+
+        const current = currentSnapshot.data()!;
+        const currentSlug = String(current.slug ?? '');
+        const slugChanged = Boolean(requestedSlug && requestedSlug !== currentSlug);
+        const requestedSlugSnapshot = slugChanged && requestedSlugRef
+          ? await transaction.get(requestedSlugRef)
+          : null;
+
+        if (slugChanged && requestedSlugSnapshot?.exists) {
+          throw new Error('PRODUCT_SLUG_TAKEN');
+        }
+
+        const changes = { ...parsed.data, updatedAt: now };
+        transaction.update(productRef, changes);
+
+        if (slugChanged && requestedSlugRef) {
+          const oldSlugRef = db.doc(`organizations/${organizationId}/productSlugs/${currentSlug}`);
+          transaction.delete(oldSlugRef);
+          transaction.create(requestedSlugRef, { productId, createdAt: now });
+        }
+
+        return { ...current, ...changes, id: productId, organizationId };
+      });
+
+      return { data: product, requestId: request.id };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'PRODUCT_NOT_FOUND') {
+        return reply.code(404).send({
+          error: { code: 'PRODUCT_NOT_FOUND', message: 'The product does not exist.', requestId: request.id }
+        });
+      }
+      if (error instanceof Error && error.message === 'PRODUCT_SLUG_TAKEN') {
+        return reply.code(409).send({
+          error: { code: 'PRODUCT_SLUG_TAKEN', message: 'A product with this slug already exists.', requestId: request.id }
+        });
+      }
+      throw error;
+    }
   }
 );
 
