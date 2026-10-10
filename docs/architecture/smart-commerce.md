@@ -57,6 +57,10 @@ An integration must be explicitly connected by a store owner. Use narrowly scope
 
 Mageus may cache public data for performance, but Dollareus remains the source of truth. Use cache validators/revalidation and short freshness windows for volatile availability. Price and availability must be rechecked server-side at checkout; a stale public page must never be authoritative for an order total.
 
+## Store URLs and custom domains
+
+Each store receives a platform hostname derived from its unique store slug, `https://{slug}.{PUBLIC_STORE_DOMAIN}`. Merchants can register custom hostnames, prove DNS ownership using a TXT challenge, and resolve an incoming host to the same canonical store. See [hosted storefront domains](./storefront-domains.md). Wildcard DNS, hosting-project domain attachment, TLS, public HTML rendering and canonical redirects must be configured before these URLs are live; API support alone does not publish a working storefront.
+
 ## Publishing and public discovery
 
 Draft content must never leak through public endpoints. Publish state and timestamps should be explicit. Public pages should have stable canonical URLs, server-rendered or otherwise crawlable HTML, descriptive titles, canonical metadata, and sitemap support. QR access does not depend on search indexing. Search engines may choose whether and when to index a public page, so indexing cannot be guaranteed.
