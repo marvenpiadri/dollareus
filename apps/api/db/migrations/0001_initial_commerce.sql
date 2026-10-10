@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS inventory_locations (
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (store_id, organization_id) REFERENCES stores(id, organization_id) ON DELETE SET NULL
+  FOREIGN KEY (store_id, organization_id) REFERENCES stores(id, organization_id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS inventory_locations_org_idx ON inventory_locations(organization_id, status);
 
