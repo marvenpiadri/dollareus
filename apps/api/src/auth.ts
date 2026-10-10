@@ -72,6 +72,40 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   await pool.query('UPDATE auth_sessions SET last_seen_at=$1 WHERE id=$2', [new Date(), row.session_id]);
 }
 
+async function sendAuthEmail(to: string, subject: string, html: string): Promise<void> {
+  const apiKey = process.env.AUTH_EMAIL_API_KEY;
+  const from = process.env.AUTH_EMAIL_FROM;
+  if (!apiKey || !from) throw new Error('AUTH_EMAIL_API_KEY and AUTH_EMAIL_FROM are required for email authentication flows.');
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [to], subject, html })
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    console.error('[auth-email] Provider rejected message:', response.status, body.slice(0, 500));
+    throw new Error('Authentication email could not be delivered.');
+  }
+}
+
+function authPublicUrl(path: string, token: string): string {
+  const base = process.env.AUTH_PUBLIC_URL;
+  if (!base) throw new Error('AUTH_PUBLIC_URL is required for email authentication flows.');
+  const url = new URL(path, base);
+  url.searchParams.set('token', token);
+  return url.toString();
+}
+
+async function issueEmailToken(userId: string, purpose: 'verify_email' | 'reset_password', ttlMs: number): Promise<string> {
+  const token = randomToken(32);
+  const now = new Date();
+  await pool.query(
+    'INSERT INTO auth_email_tokens (id,user_id,token_hash,purpose,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)',
+    [randomUUID(), userId, hash(token), purpose, now, new Date(now.getTime() + ttlMs)]
+  );
+  return token;
+}
+
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.decorateRequest('identity', null);
 
@@ -79,6 +113,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
+    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
+      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Email verification is not configured yet.', requestId: request.id } });
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return reply.code(400).send({ error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.', requestId: request.id } });
     }
@@ -106,9 +143,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
       throw error;
     } finally { client.release(); }
-    const session = await createSession(userId);
-    setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
-    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false }, requestId: request.id });
+    const verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
+    const verificationUrl = authPublicUrl('/verify-email', verificationToken);
+    try {
+      await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Welcome to Dollareus.</p><p>Confirm your email address using the link below. This link expires in 24 hours.</p><p><a href="${verificationUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this message.</p>`);
+    } catch (error) {
+      await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(verificationToken)]);
+      await pool.query('DELETE FROM users WHERE id=$1', [userId]);
+      throw error;
+    }
+    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false, verificationRequired: true }, requestId: request.id });
   });
 
   app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -122,16 +166,115 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     let valid = false;
     if (row && row.status === 'active' && typeof row.password_hash === 'string') {
       const [algorithm, saltHex, expectedHex] = row.password_hash.split(':');
-      if (algorithm === 'scrypt' && saltHex && expectedHex) {
+      if (algorithm === 'scrypt' && saltHex && expectedHex && password.length <= 256) {
         const expected = Buffer.from(expectedHex, 'hex');
         const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
         valid = expected.length === actual.length && timingSafeEqual(expected, actual);
       }
     }
     if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
+    const verified = await pool.query('SELECT email_verified_at FROM users WHERE id=$1', [row.id]);
+    if (!verified.rows[0]?.email_verified_at) {
+      return reply.code(403).send({ error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before signing in.', requestId: request.id } });
+    }
     const session = await createSession(row.id);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
     return { data: { id: row.id, email: row.email, displayName: row.display_name }, requestId: request.id };
+  });
+
+  app.post<{ Body: { email?: unknown } }>('/api/v1/auth/email/verification/request', { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
+    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
+      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Email verification is not configured yet.', requestId: request.id } });
+    }
+    const result = await pool.query('SELECT id,email_verified_at FROM users WHERE email=$1 AND status=$2 LIMIT 1', [email, 'active']);
+    const user = result.rows[0];
+    if (user && !user.email_verified_at) {
+      const token = await issueEmailToken(user.id, 'verify_email', 1000 * 60 * 60 * 24);
+      try {
+        await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Confirm your Dollareus email address.</p><p><a href="${authPublicUrl('/verify-email', token)}">Verify email address</a></p><p>This link expires in 24 hours.</p>`);
+      } catch (error) {
+        await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(token)]);
+        throw error;
+      }
+    }
+    return { data: { message: 'If the account exists and needs verification, an email will be sent.' }, requestId: request.id };
+  });
+
+  app.post<{ Body: { token?: unknown } }>('/api/v1/auth/email/verification/confirm', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const token = typeof request.body?.token === 'string' ? request.body.token : '';
+    if (token.length < 32 || token.length > 256) return reply.code(400).send({ error: { code: 'INVALID_VERIFICATION_TOKEN', message: 'The verification link is invalid or expired.', requestId: request.id } });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const consumed = await client.query(
+        "UPDATE auth_email_tokens SET consumed_at=$1 WHERE token_hash=$2 AND purpose='verify_email' AND consumed_at IS NULL AND expires_at>$1 RETURNING user_id",
+        [new Date(), hash(token)]
+      );
+      if (!consumed.rowCount) {
+        await client.query('ROLLBACK');
+        return reply.code(400).send({ error: { code: 'INVALID_VERIFICATION_TOKEN', message: 'The verification link is invalid or expired.', requestId: request.id } });
+      }
+      await client.query('UPDATE users SET email_verified_at=COALESCE(email_verified_at,$1),updated_at=$1 WHERE id=$2', [new Date(), consumed.rows[0].user_id]);
+      await client.query('COMMIT');
+      return { data: { emailVerified: true }, requestId: request.id };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally { client.release(); }
+  });
+
+  app.post<{ Body: { email?: unknown } }>('/api/v1/auth/password/forgot', { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
+    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
+      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Password recovery is not configured yet.', requestId: request.id } });
+    }
+    const result = await pool.query('SELECT id FROM users WHERE email=$1 AND status=$2 LIMIT 1', [email, 'active']);
+    const user = result.rows[0];
+    if (user) {
+      const token = await issueEmailToken(user.id, 'reset_password', 1000 * 60 * 60);
+      try {
+        await sendAuthEmail(email, 'Reset your Dollareus password', `<p>A password reset was requested for your Dollareus account.</p><p><a href="${authPublicUrl('/reset-password', token)}">Reset password</a></p><p>This link expires in one hour. If you did not request this, ignore this message.</p>`);
+      } catch (error) {
+        await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(token)]);
+        throw error;
+      }
+    }
+    return { data: { message: 'If an account exists for that email, password reset instructions will be sent.' }, requestId: request.id };
+  });
+
+  app.post<{ Body: { token?: unknown; password?: unknown } }>('/api/v1/auth/password/reset', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const token = typeof request.body?.token === 'string' ? request.body.token : '';
+    const password = typeof request.body?.password === 'string' ? request.body.password : '';
+    if (password.length < 12 || password.length > 256) return reply.code(400).send({ error: { code: 'WEAK_PASSWORD', message: 'Password must contain between 12 and 256 characters.', requestId: request.id } });
+    if (token.length < 32 || token.length > 256) return reply.code(400).send({ error: { code: 'INVALID_RESET_TOKEN', message: 'The reset link is invalid or expired.', requestId: request.id } });
+    const salt = randomBytes(16);
+    const derived = await scrypt(password, salt, 64) as Buffer;
+    const passwordHash = `scrypt:${salt.toString('hex')}:${derived.toString('hex')}`;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const consumed = await client.query(
+        "UPDATE auth_email_tokens SET consumed_at=$1 WHERE token_hash=$2 AND purpose='reset_password' AND consumed_at IS NULL AND expires_at>$1 RETURNING user_id",
+        [new Date(), hash(token)]
+      );
+      if (!consumed.rowCount) {
+        await client.query('ROLLBACK');
+        return reply.code(400).send({ error: { code: 'INVALID_RESET_TOKEN', message: 'The reset link is invalid or expired.', requestId: request.id } });
+      }
+      const userId = consumed.rows[0].user_id;
+      await client.query(
+        'INSERT INTO auth_passwords (user_id,password_hash,created_at,updated_at) VALUES ($1,$2,$3,$3) ON CONFLICT (user_id) DO UPDATE SET password_hash=EXCLUDED.password_hash,updated_at=EXCLUDED.updated_at',
+        [userId, passwordHash, new Date()]
+      );
+      await client.query('DELETE FROM auth_sessions WHERE user_id=$1', [userId]);
+      await client.query("UPDATE auth_email_tokens SET consumed_at=$1 WHERE user_id=$2 AND consumed_at IS NULL", [new Date(), userId]);
+      await client.query('COMMIT');
+      return { data: { passwordReset: true, signInRequired: true }, requestId: request.id };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally { client.release(); }
   });
 
   app.post('/api/v1/auth/logout', async (request, reply) => {
