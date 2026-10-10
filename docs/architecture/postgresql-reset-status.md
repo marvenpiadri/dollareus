@@ -4,7 +4,7 @@ Last reviewed: 2026-10-10
 
 ## Product decision
 
-Dollareus is being treated as a new application. PostgreSQL is the source of truth for all business/application records. There is no Firestore data migration and no versioned SQL migration history. The existing Firebase Auth token verifier is retained for identity only; it must not be used to persist application data.
+Dollareus is being treated as a new application. PostgreSQL is the source of truth for all business/application records. There is no Firestore data migration and no versioned SQL migration history. Dollareus owns authentication: password credentials, sessions, OAuth account links, and token records are stored in PostgreSQL. Firebase is not part of the architecture.
 
 ## Phase 1 — database foundation
 
@@ -16,6 +16,10 @@ Status: in progress.
 - [x] Require `DATABASE_URL` when the API imports the PostgreSQL pool.
 - [x] Remove the old versioned migration runner and its two SQL migration files.
 - [x] Remove Firestore imports and Firestore configuration/rules/indexes.
+- [x] Remove Firebase Auth verification and the Firebase Admin SDK.
+- [x] Add first-party email/password registration, login, logout, and session endpoints.
+- [x] Add Google and Facebook OAuth authorization-code flows with state validation and Google PKCE.
+- [x] Add PostgreSQL tables for users, password credentials, sessions, OAuth accounts/state, and email-token purposes.
 - [ ] Execute the fresh schema against the intended empty Neon database.
 - [ ] Verify the created tables directly in Neon.
 
