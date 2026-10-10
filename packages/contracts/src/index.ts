@@ -49,6 +49,24 @@ export interface Store extends OrganizationRef {
   timeZone: string;
   status: 'setup' | 'active' | 'paused';
 }
+export type StoreDomainKind = 'platform_subdomain' | 'custom';
+export type StoreDomainStatus = 'pending' | 'verification_required' | 'verified' | 'active' | 'disabled' | 'failed';
+export interface StoreDomain {
+  id: string;
+  organizationId: string;
+  storeId: string;
+  hostname: string;
+  kind: StoreDomainKind;
+  status: StoreDomainStatus;
+  isPrimary: boolean;
+  verifiedAt?: string;
+  createdAt: string;
+}
+export interface StoreDomainDnsInstructions {
+  hostname: string;
+  status: 'pending';
+  dns: Array<{ type: 'TXT' | 'CNAME'; name: string; value: string }>;
+}
 export interface StorefrontConfiguration {
   storeId: string;
   /** A rendering choice over the same store/catalog, not a separate store type. */
