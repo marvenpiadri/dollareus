@@ -52,7 +52,7 @@ See [smart commerce architecture](smart-commerce.md) for the model and proposed 
 - Version breaking contract changes deliberately.
 
 ## Persistence and security
-Firestore is the current foundation for the existing API routes. Keep contracts independent of storage SDKs and validate inventory transactions, reporting, audit requirements, exportability, and cost before deciding when to migrate any domain.
+PostgreSQL is the sole persistence layer for application/business records. The fresh schema is defined in `apps/api/db/schema.sql`; the one-time `pnpm db:setup` command only creates tables in an empty public schema and refuses to modify a non-empty one. There is no Firestore data migration and no versioned migration runner. Firebase Auth is currently retained only for ID-token verification. The PostgreSQL API reset is in progress; consult [the reset status](postgresql-reset-status.md) for endpoint coverage and outstanding work.
 
 Deny access by default. Enforce organization isolation and roles on the server. Keep secrets out of source control and browser bundles. Apply rate limits, request validation, audit logs, and observability to sensitive operations. Storage paths are identifiers, not authorization by themselves. Public routes must never return raw organization documents or drafts.
 
