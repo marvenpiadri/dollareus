@@ -121,9 +121,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
-    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
-      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Email verification is not configured yet.', requestId: request.id } });
-    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return reply.code(400).send({ error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.', requestId: request.id } });
     }
@@ -132,6 +129,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
     if (displayName.length > 120) {
       return reply.code(400).send({ error: { code: 'INVALID_DISPLAY_NAME', message: 'Display name must be 120 characters or fewer.', requestId: request.id } });
+    }
+    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
+      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Email verification is not configured yet.', requestId: request.id } });
     }
     const salt = randomBytes(16);
     const derived = await scrypt(password, salt, 64) as Buffer;
