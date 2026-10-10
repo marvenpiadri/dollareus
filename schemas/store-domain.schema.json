@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dollareus.com/schemas/store-domain.schema.json",
+  "title": "Dollareus Store Domain",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "organizationId",
+    "storeId",
+    "hostname",
+    "kind",
+    "status",
+    "isPrimary",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organizationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hostname": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 253,
+      "format": "hostname"
+    },
+    "kind": {
+      "enum": [
+        "platform_subdomain",
+        "custom"
+      ]
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "verification_required",
+        "verified",
+        "active",
+        "disabled",
+        "failed"
+      ]
+    },
+    "isPrimary": {
+      "type": "boolean"
+    },
+    "verificationRecord": {
+      "type": "string"
+    },
+    "verifiedAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
