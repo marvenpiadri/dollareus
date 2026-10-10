@@ -144,7 +144,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     } finally { client.release(); }
     const verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
-    const verificationUrl = authPublicUrl('/verify-email', verificationToken);
+    const verificationUrl = authPublicUrl('/?auth=verify-email', verificationToken);
     try {
       await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Welcome to Dollareus.</p><p>Confirm your email address using the link below. This link expires in 24 hours.</p><p><a href="${verificationUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this message.</p>`);
     } catch (error) {
@@ -192,7 +192,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (user && !user.email_verified_at) {
       const token = await issueEmailToken(user.id, 'verify_email', 1000 * 60 * 60 * 24);
       try {
-        await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Confirm your Dollareus email address.</p><p><a href="${authPublicUrl('/verify-email', token)}">Verify email address</a></p><p>This link expires in 24 hours.</p>`);
+        await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Confirm your Dollareus email address.</p><p><a href="${authPublicUrl('/?auth=verify-email', token)}">Verify email address</a></p><p>This link expires in 24 hours.</p>`);
       } catch (error) {
         await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(token)]);
         throw error;
@@ -234,7 +234,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (user) {
       const token = await issueEmailToken(user.id, 'reset_password', 1000 * 60 * 60);
       try {
-        await sendAuthEmail(email, 'Reset your Dollareus password', `<p>A password reset was requested for your Dollareus account.</p><p><a href="${authPublicUrl('/reset-password', token)}">Reset password</a></p><p>This link expires in one hour. If you did not request this, ignore this message.</p>`);
+        await sendAuthEmail(email, 'Reset your Dollareus password', `<p>A password reset was requested for your Dollareus account.</p><p><a href="${authPublicUrl('/?auth=reset-password', token)}">Reset password</a></p><p>This link expires in one hour. If you did not request this, ignore this message.</p>`);
       } catch (error) {
         await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(token)]);
         throw error;
