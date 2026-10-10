@@ -18,7 +18,7 @@ const pool = new Pool({
     : undefined
 });
 
-const migrationsDirectory = fileURLToPath(new URL('./migrations/', import.meta.url));
+const migrationsDirectory = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
 const lockKey = 731904210;
 
 try {
