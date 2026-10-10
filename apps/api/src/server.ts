@@ -7,6 +7,7 @@ import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { randomUUID } from 'node:crypto';
+import { resolveTxt } from 'node:dns/promises';
 import { z } from 'zod';
 
 declare module 'fastify' {
@@ -98,6 +99,11 @@ async function requireOrganizationMembership(
 
 const StoreBusinessTypeSchema = z.enum(['retail', 'restaurant', 'freelancer', 'services', 'digital', 'general']);
 const StoreExperienceSchema = z.enum(['commerce', 'menu', 'catalog', 'services']);
+const PublicStoreDomain = (process.env.PUBLIC_STORE_DOMAIN ?? 'dollareus.com').toLowerCase().replace(/^\\.+|\\.+$/g, '');
+const CreateStoreDomainSchema = z.object({
+  hostname: z.string().trim().min(3).max(253).transform((value) => value.toLowerCase().replace(/\\.$/, ''))
+    .refine((value) => value.includes('.') && value.split('.').every((part) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(part)), 'Enter a valid fully qualified domain name')
+}).strict();
 const CreateStoreSchema = z.object({
   name: z.string().trim().min(1).max(180),
   slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -596,6 +602,9 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
     const storeRef = collection.doc();
     const slugRef = db.doc(`organizations/${organizationId}/storeSlugs/${parsed.data.slug}`);
     const publicSlugRef = db.doc(`publicStoreSlugs/${parsed.data.slug}`);
+    const hostedHostname = `${parsed.data.slug}.${PublicStoreDomain}`;
+    const hostedDomainRef = db.doc(`storeDomains/${hostedHostname}`);
+    const storeDomainRef = storeRef.collection('domains').doc(hostedHostname);
     const inferredExperience = parsed.data.businessType === 'restaurant' ? 'menu'
       : parsed.data.businessType === 'services' || parsed.data.businessType === 'freelancer' ? 'services'
       : 'commerce';
@@ -616,16 +625,19 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
       enabledExperiences,
       published: false,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      hostedUrl: `https://${hostedHostname}`
     };
 
     try {
       await db.runTransaction(async (transaction) => {
-        const [existingSlug, existingPublicSlug] = await Promise.all([transaction.get(slugRef), transaction.get(publicSlugRef)]);
-        if (existingSlug.exists || existingPublicSlug.exists) throw new Error('STORE_SLUG_TAKEN');
+        const [existingSlug, existingPublicSlug, existingHostedDomain] = await Promise.all([transaction.get(slugRef), transaction.get(publicSlugRef), transaction.get(hostedDomainRef)]);
+        if (existingSlug.exists || existingPublicSlug.exists || existingHostedDomain.exists) throw new Error('STORE_SLUG_TAKEN');
         transaction.create(storeRef, store);
         transaction.create(slugRef, { organizationId, storeId: storeRef.id, slug: parsed.data.slug, createdAt: now });
         transaction.create(publicSlugRef, { organizationId, storeId: storeRef.id, slug: parsed.data.slug, createdAt: now });
+        transaction.create(hostedDomainRef, { organizationId, storeId: storeRef.id, hostname: hostedHostname, kind: 'platform_subdomain', status: 'active', isPrimary: true, createdAt: now, updatedAt: now });
+        transaction.create(storeDomainRef, { id: hostedHostname, organizationId, storeId: storeRef.id, hostname: hostedHostname, kind: 'platform_subdomain', status: 'active', isPrimary: true, createdAt: now, updatedAt: now });
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'STORE_SLUG_TAKEN') {
@@ -824,6 +836,123 @@ app.get<{ Params: { entryPointId: string } }>(
   }
 );
 
+
+/**
+ * Store domains are owned by a store, not by a separate storefront record.
+ * Platform subdomains are allocated at store creation. Custom domains must
+ * prove DNS ownership before their hostname is mapped to a public store.
+ */
+app.get<{ Params: { organizationId: string; storeId: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/domains',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    if (!(await storeRef.get()).exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const snapshot = await storeRef.collection('domains').orderBy('createdAt', 'asc').limit(100).get();
+    return { data: snapshot.docs.map((document) => {
+      const value = document.data();
+      return { id: document.id, hostname: value.hostname, kind: value.kind, status: value.status, isPrimary: value.isPrimary === true, verifiedAt: value.verifiedAt ?? null, createdAt: value.createdAt };
+    }), requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/domains',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateStoreDomainSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Enter a valid hostname.', details: parsed.error.flatten(), requestId: request.id } });
+    const hostname = parsed.data.hostname;
+    if (hostname === PublicStoreDomain || hostname.endsWith(`.${PublicStoreDomain}`)) return reply.code(400).send({ error: { code: 'PLATFORM_DOMAIN_RESERVED', message: 'Use a custom domain you control; Dollareus subdomains are assigned automatically.', requestId: request.id } });
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    if (!(await storeRef.get()).exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const globalDomainRef = db.doc(`storeDomains/${hostname}`);
+    const domainRef = storeRef.collection('domains').doc(hostname);
+    const now = new Date().toISOString();
+    const verificationToken = `dollareus-verification=${randomUUID()}`;
+    const domain = { id: hostname, organizationId, storeId, hostname, kind: 'custom', status: 'pending', verificationToken, verificationRecord: `_dollareus-verification.${hostname}`, isPrimary: false, createdAt: now, updatedAt: now };
+    try {
+      await db.runTransaction(async (transaction) => {
+        const [globalSnapshot, localSnapshot] = await Promise.all([transaction.get(globalDomainRef), transaction.get(domainRef)]);
+        if (globalSnapshot.exists || localSnapshot.exists) throw new Error('DOMAIN_ALREADY_CLAIMED');
+        transaction.create(domainRef, domain);
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'DOMAIN_ALREADY_CLAIMED') return reply.code(409).send({ error: { code: 'DOMAIN_ALREADY_CLAIMED', message: 'This hostname is already registered or pending verification.', requestId: request.id } });
+      throw error;
+    }
+    return reply.code(201).send({
+      data: {
+        hostname, status: 'pending',
+        dns: [
+          { type: 'TXT', name: domain.verificationRecord, value: verificationToken },
+          { type: 'CNAME', name: hostname, value: process.env.CUSTOM_DOMAIN_CNAME_TARGET ?? `shops.${PublicStoreDomain}` }
+        ],
+        note: 'Add the DNS records, wait for propagation, then call the verification endpoint. Apex domains may require your DNS provider’s ALIAS/ANAME or flattening feature instead of CNAME.'
+      },
+      requestId: request.id
+    });
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string; hostname: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/domains/:hostname/verify',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const hostname = request.params.hostname.toLowerCase().replace(/\\.$/, '');
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const domainRef = storeRef.collection('domains').doc(hostname);
+    const domainSnapshot = await domainRef.get();
+    if (!domainSnapshot.exists || domainSnapshot.data()?.kind !== 'custom') return reply.code(404).send({ error: { code: 'DOMAIN_NOT_FOUND', message: 'The custom domain was not found for this store.', requestId: request.id } });
+    const domain = domainSnapshot.data()!;
+    const recordName = `_dollareus-verification.${hostname}`;
+    let verified = false;
+    try {
+      const records = await resolveTxt(recordName);
+      verified = records.some((parts) => parts.join('') === domain.verificationToken);
+    } catch {
+      verified = false;
+    }
+    if (!verified) return reply.code(409).send({ error: { code: 'DOMAIN_VERIFICATION_PENDING', message: 'The verification TXT record was not found yet. Check the DNS record and try again after propagation.', requestId: request.id } });
+    const globalDomainRef = db.doc(`storeDomains/${hostname}`);
+    const now = new Date().toISOString();
+    try {
+      await db.runTransaction(async (transaction) => {
+        const [currentDomain, globalDomain] = await Promise.all([transaction.get(domainRef), transaction.get(globalDomainRef)]);
+        if (!currentDomain.exists) throw new Error('DOMAIN_NOT_FOUND');
+        if (globalDomain.exists && (globalDomain.data()?.organizationId !== organizationId || globalDomain.data()?.storeId !== storeId)) throw new Error('DOMAIN_ALREADY_CLAIMED');
+        transaction.set(globalDomainRef, { organizationId, storeId, hostname, kind: 'custom', status: 'verified', verifiedAt: now, createdAt: globalDomain.data()?.createdAt ?? now, updatedAt: now });
+        transaction.update(domainRef, { status: 'verified', verifiedAt: now, updatedAt: now, verificationToken: null });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'DOMAIN_ALREADY_CLAIMED') return reply.code(409).send({ error: { code: 'DOMAIN_ALREADY_CLAIMED', message: 'This hostname is assigned to another store.', requestId: request.id } });
+      if (error instanceof Error && error.message === 'DOMAIN_NOT_FOUND') return reply.code(404).send({ error: { code: 'DOMAIN_NOT_FOUND', message: 'The custom domain was not found for this store.', requestId: request.id } });
+      throw error;
+    }
+    return { data: { hostname, status: 'verified', note: 'DNS ownership is verified. Attach this hostname to the production hosting project before expecting browser traffic to reach this store.' }, requestId: request.id };
+  }
+);
+
+app.get('/api/v1/public/resolve-host', async (request, reply) => {
+  const rawHost = request.headers.host;
+  if (!rawHost) return reply.code(400).send({ error: { code: 'HOST_REQUIRED', message: 'A host header is required.', requestId: request.id } });
+  const hostname = rawHost.toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const domainSnapshot = await db.doc(`storeDomains/${hostname}`).get();
+  if (!domainSnapshot.exists || !['active', 'verified'].includes(String(domainSnapshot.data()?.status))) return reply.code(404).send({ error: { code: 'STORE_HOST_NOT_FOUND', message: 'No published store is mapped to this hostname.', requestId: request.id } });
+  const mapping = domainSnapshot.data()!;
+  const storeSnapshot = await db.doc(`organizations/${mapping.organizationId}/stores/${mapping.storeId}`).get();
+  if (!storeSnapshot.exists) return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+  const store = storeSnapshot.data()!;
+  if (store.published !== true || store.status !== 'active') return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+  return { data: { id: mapping.storeId, name: store.name, slug: store.slug, hostname, canonicalUrl: `https://${hostname}`, businessType: store.businessType, defaultExperience: store.defaultExperience, enabledExperiences: store.enabledExperiences, defaultCurrency: store.defaultCurrency, locale: store.locale, timeZone: store.timeZone }, requestId: request.id };
+});
+
 async function resolvePublicStore(storeSlug: string) {
   const slugSnapshot = await db.doc(`publicStoreSlugs/${storeSlug}`).get();
   if (!slugSnapshot.exists) return null;
@@ -853,6 +982,7 @@ app.get<{ Params: { storeSlug: string } }>(
         defaultCurrency: store.defaultCurrency,
         locale: store.locale,
         timeZone: store.timeZone,
+        hostedUrl: store.hostedUrl ?? `https://${store.slug}.${PublicStoreDomain}`,
         defaultExperience: store.defaultExperience,
         enabledExperiences: store.enabledExperiences,
         updatedAt: store.updatedAt
