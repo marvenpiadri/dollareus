@@ -38,7 +38,11 @@ function cookieValue(request: FastifyRequest, name: string): string | null {
 
 function setSessionCookie(reply: FastifyReply, token: string, maxAgeSeconds: number): void {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  reply.header('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`);
+  const cookie = `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+  const existing = reply.getHeader('Set-Cookie');
+  if (Array.isArray(existing)) reply.header('Set-Cookie', [...existing.map(String), cookie]);
+  else if (typeof existing === 'string') reply.header('Set-Cookie', [existing, cookie]);
+  else reply.header('Set-Cookie', cookie);
 }
 
 async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
