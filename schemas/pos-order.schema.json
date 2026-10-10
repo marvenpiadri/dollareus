@@ -148,6 +148,46 @@
     "updatedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "statusUpdatedBy": {
+      "type": "string"
+    },
+    "statusUpdatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "statusHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "changedBy",
+          "changedAt"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "preparing",
+              "ready",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "changedBy": {
+            "type": "string"
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
     }
   },
   "$defs": {
