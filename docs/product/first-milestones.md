@@ -36,7 +36,8 @@
 - [x] Public published-menu projection.
 - [x] Initial POS sessions and server-priced order creation with immutable line snapshots.
 - [ ] Add update/archive workflows and menu modifier groups.
-- [ ] Add POS order state transitions, idempotency keys, staff roles and audit events.
+- [x] Add validated POS order status transitions with actor/time history.
+- [ ] Add idempotency keys, staff roles and audit events.
 - [ ] Add payment-provider adapters, tax/discount rules and payment reconciliation.
 - [ ] Add inventory ledger and stock reservation for retail; kitchen tickets and preparation workflow for restaurants.
 - [ ] Add POS integration tests, including tenant isolation and concurrent order numbering.
