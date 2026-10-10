@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dollareus.com/schemas/storefront.schema.json",
+  "title": "Dollareus Storefront Configuration",
+  "description": "Presentation and public entry-point settings for a store. This does not duplicate the store or its catalog.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["storeId", "defaultExperience", "enabledExperiences", "published", "updatedAt"],
+  "properties": {
+    "storeId": { "type": "string", "minLength": 1 },
+    "defaultExperience": { "enum": ["commerce", "menu", "catalog", "services"] },
+    "enabledExperiences": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": { "enum": ["commerce", "menu", "catalog", "services"] }
+    },
+    "published": { "type": "boolean" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "defaultExperience": { "const": "menu" } }, "required": ["defaultExperience"] },
+      "then": { "properties": { "enabledExperiences": { "contains": { "const": "menu" } } } }
+    }
+  ]
+}
