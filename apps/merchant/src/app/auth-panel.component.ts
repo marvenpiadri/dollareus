@@ -61,6 +61,7 @@ export class AuthPanelComponent {
   protected async confirmEmail(): Promise<void> {
     const token = new URLSearchParams(window.location.search).get('token') ?? '';
     await this.runAction('/api/v1/auth/email/verification/confirm', { token }, 'Your email is verified. You can now sign in.', 'The verification link is invalid or expired.');
+    if (!this.error()) this.mode.set('login');
   }
 
   protected async resetPassword(event: Event): Promise<void> {
