@@ -1539,7 +1539,7 @@ app.get('/', async (request, reply) => {
 });
 
 app.get('/robots.txt', async (_request, reply) => {
-  return reply.type('text/plain; charset=utf-8').send(`User-agent: *\nAllow: /\nSitemap: https://${PublicStoreDomain}/sitemap.xml\\n`);
+  return reply.type('text/plain; charset=utf-8').send('User-agent: *\\nAllow: /\\nSitemap: https://' + PublicStoreDomain + '/sitemap.xml\\n');
 });
 
 app.get('/sitemap.xml', async (_request, reply) => {
