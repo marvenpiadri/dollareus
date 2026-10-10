@@ -81,6 +81,10 @@ const ProductInput = z.object({
   availabilityNote: z.string().max(500).nullable(), attributes: z.record(z.string(), z.unknown()),
   categoryIds: z.array(z.string().min(1).max(100)), variants: z.array(VariantInput).min(1).max(100)
 }).strict();
+const ProductPatchInput = z.object({
+  slug: Slug.optional(), name: z.string().trim().min(1).max(180).optional(),
+  description: z.string().max(10000).nullable().optional(), status: z.enum(['draft', 'active', 'archived']).optional()
+}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one product field must be provided.' });
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
 app.get('/api/v1/health', async (request) => ({ data: { status: 'ok', service: 'dollareus-api', version: '0.2.0' }, requestId: request.id }));
@@ -147,6 +151,45 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     await client.query('ROLLBACK').catch(() => undefined);
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'PRODUCT_CONFLICT', 'The product slug or variant SKU is already in use.');
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') return fail(reply, request, 400, 'INVALID_RELATIONSHIP', 'A category or store reference does not belong to this organization and store.');
+    throw error;
+  } finally { client.release(); }
+});
+
+app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/products/:productId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, productId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = ProductPatchInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide at least one valid product field.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query<{ slug: string; name: string; description: string | null; status: string }>(
+      'SELECT slug, name, description, status FROM products WHERE id=$1 AND organization_id=$2 FOR UPDATE',
+      [productId, organizationId]
+    );
+    if (!existing.rowCount) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 404, 'PRODUCT_NOT_FOUND', 'The product does not exist in this organization.');
+    }
+    const current = existing.rows[0]!;
+    const slug = parsed.data.slug ?? current.slug;
+    const name = parsed.data.name ?? current.name;
+    const description = parsed.data.description === undefined ? current.description : parsed.data.description;
+    const status = parsed.data.status ?? current.status;
+    await client.query(
+      'UPDATE products SET slug=$1,name=$2,description=$3,status=$4,updated_by=$5,updated_at=$6 WHERE id=$7 AND organization_id=$8',
+      [slug, name, description, status, request.identity!.uid, now, productId, organizationId]
+    );
+    await client.query('COMMIT');
+    const result = await pool.query(
+      "SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'sku',v.sku,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency,'status',v.status) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), '[]'::jsonb) AS variants FROM products p WHERE p.id=$1 AND p.organization_id=$2",
+      [productId, organizationId]
+    );
+    return { data: camelize(result.rows[0]), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'PRODUCT_SLUG_TAKEN', 'A product with this slug already exists in this organization.');
     throw error;
   } finally { client.release(); }
 });
