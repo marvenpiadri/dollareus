@@ -43,6 +43,10 @@ function setSessionCookie(reply: FastifyReply, token: string, maxAgeSeconds: num
 
 async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
   const token = randomToken(32);
+  const cleanupBefore = new Date();
+  await pool.query('DELETE FROM auth_sessions WHERE expires_at <= $1', [cleanupBefore]);
+  await pool.query('DELETE FROM auth_oauth_states WHERE expires_at <= $1', [cleanupBefore]);
+  await pool.query('DELETE FROM auth_email_tokens WHERE expires_at <= $1 OR consumed_at IS NOT NULL', [cleanupBefore]);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
   await pool.query(
