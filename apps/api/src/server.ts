@@ -837,6 +837,7 @@ app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?:
         id: document.id,
         slug: value.slug,
         name: value.name,
+        status: 'active',
         description: value.description,
         kind: value.kind,
         categoryIds: value.categoryIds ?? [],
