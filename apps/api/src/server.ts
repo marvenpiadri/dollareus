@@ -233,6 +233,8 @@ const CreatePosSessionSchema = z.object({
   locationId: z.string().min(1).max(100).optional()
 }).strict();
 
+const UpdatePosOrderStatusSchema = z.object({ status: z.enum(['preparing', 'ready', 'completed', 'cancelled']) }).strict();
+
 const CreatePosOrderSchema = z.object({
   sessionId: z.string().min(1).max(100),
   channel: z.enum(['pos', 'qr']).default('pos'),
@@ -1212,6 +1214,45 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         const failure = known[error.message];
         if (failure) return reply.code(failure.status).send({ error: { code: error.message, message: failure.message, requestId: request.id } });
       }
+      throw error;
+    }
+  }
+);
+
+app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/orders/:orderId/status',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId, orderId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = UpdatePosOrderStatusSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The POS order status is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    const orderRef = db.doc(`organizations/${organizationId}/stores/${storeId}/orders/${orderId}`);
+    const now = new Date().toISOString();
+    try {
+      const updated = await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(orderRef);
+        if (!snapshot.exists) throw new Error('POS_ORDER_NOT_FOUND');
+        const order = snapshot.data()!;
+        const current = String(order.status);
+        const allowed: Record<string, string[]> = {
+          confirmed: ['preparing', 'ready', 'completed', 'cancelled'],
+          preparing: ['ready', 'cancelled'],
+          ready: ['completed', 'cancelled'],
+          completed: [],
+          cancelled: []
+        };
+        if (!(allowed[current] ?? []).includes(parsed.data.status)) throw new Error('POS_ORDER_TRANSITION_INVALID');
+        const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
+        const transition = { from: current, to: parsed.data.status, changedBy: request.identity?.uid ?? 'unknown', changedAt: now };
+        const changes = { status: parsed.data.status, statusUpdatedBy: request.identity?.uid, statusUpdatedAt: now, statusHistory: [...history, transition], updatedAt: now };
+        transaction.update(orderRef, changes);
+        return { ...order, ...changes, id: orderId };
+      });
+      return { data: updated, requestId: request.id };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'POS_ORDER_NOT_FOUND') return reply.code(404).send({ error: { code: 'POS_ORDER_NOT_FOUND', message: 'The POS order does not exist.', requestId: request.id } });
+      if (error instanceof Error && error.message === 'POS_ORDER_TRANSITION_INVALID') return reply.code(409).send({ error: { code: 'POS_ORDER_TRANSITION_INVALID', message: 'This order cannot transition from its current status to the requested status.', requestId: request.id } });
       throw error;
     }
   }
