@@ -25,7 +25,7 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 ## Repository structure
 
 - `apps/merchant`: Angular merchant dashboard.
-- `apps/api`: Fastify API backed by PostgreSQL, with Firebase Auth and object storage.
+- `apps/api`: Fastify API backed by PostgreSQL, with Firebase Auth token verification.
 - `packages/contracts`: shared TypeScript transport contracts.
 - `schemas`: JSON Schemas for API/domain records.
 - `docs/architecture`: architecture, API and media-storage decisions.
@@ -43,7 +43,7 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firestore data migration and no versioned migration runner. Firebase is used only for identity verification and object storage; all application records belong in PostgreSQL. Never commit credentials. The dashboard currently uses sample data and is not connected to the API yet. The PostgreSQL reset is underway: current API coverage is intentionally limited to organization onboarding/listing, store creation/listing, product listing/creation, and public store/catalog reads. The remaining category, menu, POS, QR/entry-point, domain, media, inventory, customer, order, and payment API routes must be reimplemented against PostgreSQL. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md). Protected API routes require a valid Firebase ID token and an active organization membership stored in PostgreSQL.
+Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firestore data migration and no versioned migration runner. Firebase is used only for identity-token verification; all application records belong in PostgreSQL. Object-storage upload routes are not yet reimplemented. Never commit credentials. The dashboard currently uses sample data and is not connected to the API yet. The PostgreSQL reset is underway: current API coverage is intentionally limited to organization onboarding/listing, store creation/listing, product listing/creation, and public store/catalog reads. The remaining category, menu, POS, QR/entry-point, domain, media, inventory, customer, order, and payment API routes must be reimplemented against PostgreSQL. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md). Protected API routes require a valid Firebase ID token and an active organization membership stored in PostgreSQL.
 
 ## Product images
 
