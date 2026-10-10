@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/c
 import { AuthPanelComponent } from './auth-panel.component';
 
 type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'Online store' | 'Integrations' | 'Settings';
-type ProductStatus = 'Active' | 'Draft' | 'Out of stock';
+type ProductStatus = 'Active' | 'Draft' | 'Archived';
 interface ProductRow { id: string; name: string; category: string; sku: string; priceMinor: number; currency: 'MAD' | 'EUR' | 'USD'; stock: number; status: ProductStatus; initials: string; tone: string; }
 interface OrderRow { id: string; customer: string; channel: string; totalMinor: number; currency: 'MAD' | 'EUR' | 'USD'; status: 'Paid' | 'Processing' | 'Pending'; }
 
@@ -15,11 +15,28 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
       <main class="auth-loading"><span class="brand-mark">d.</span><p>Preparing your workspace…</p></main>
     } @else if (!authenticated()) {
       <dlr-auth-panel (signedIn)="onSignedIn()" />
+    } @else if (workspaceLoading()) {
+      <main class="auth-loading"><span class="brand-mark">d.</span><p>Loading your workspace…</p></main>
+    } @else if (workspaceError()) {
+      <main style="min-height:100vh;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:#f7f8f6;color:#30382e"><span class="brand-mark">d.</span><h1 style="font-size:24px;margin:0">We couldn’t load your workspace</h1><p style="max-width:460px;text-align:center;color:#81897d">{{ workspaceError() }}</p><button class="button primary" type="button" (click)="retryWorkspace()">Try again</button><button type="button" style="border:0;background:none;color:#4b7848" (click)="signOut()">Sign out</button></main>
+    } @else if (onboardingStage() !== 'ready') {
+      <main style="min-height:100vh;display:grid;place-content:center;padding:24px;background:#f7f8f6;color:#252b24">
+        <section style="width:min(100%,480px);padding:34px;background:white;border:1px solid #e6ebe2;border-radius:18px;box-shadow:0 18px 60px #253b1b0b">
+          <a class="brand" href="#" style="padding:0 0 24px" (click)="$event.preventDefault()"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
+          @if (onboardingStage() === 'organization') {
+            <p class="eyebrow">STEP 1 OF 2</p><h1 style="font-size:26px;margin:0 0 8px">Create your workspace</h1><p style="color:#81897d;font-size:13px;line-height:1.6">Start with your business or organization. You can configure more details later.</p>
+            <form style="display:grid;gap:13px;margin-top:22px" (submit)="createOrganization($event)"><label style="display:grid;gap:7px;font-size:12px">Business name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label><label style="display:grid;gap:7px;font-size:12px">Workspace URL slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="atlas-atelier" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"><small style="color:#81897d">Lowercase letters, numbers and hyphens only.</small></label>@if (onboardingError()) { <p role="alert" style="color:#a44737;font-size:12px">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create workspace' }}</button></form>
+          } @else {
+            <p class="eyebrow">STEP 2 OF 2</p><h1 style="font-size:26px;margin:0 0 8px">Create your first store</h1><p style="color:#81897d;font-size:13px;line-height:1.6">Your workspace is ready. Give your first store a name and a unique URL slug.</p>
+            <form style="display:grid;gap:13px;margin-top:22px" (submit)="createStore($event)"><label style="display:grid;gap:7px;font-size:12px">Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label><label style="display:grid;gap:7px;font-size:12px">Store URL slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="atlas-atelier" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"><small style="color:#81897d">Your store is private until publishing is implemented.</small></label>@if (onboardingError()) { <p role="alert" style="color:#a44737;font-size:12px">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></form>
+          }
+        </section>
+      </main>
     } @else {
     <div class="shell">
       <aside class="sidebar">
         <a class="brand" href="#" (click)="$event.preventDefault(); selectNav('Overview')"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
-        <button class="store-switch" type="button" (click)="notify('Store switching will be connected to organization accounts.')"><span class="store-avatar">A</span><span><b>Atlas Atelier</b><small>atlas-atelier.store</small></span><span class="chevron">⌄</span></button>
+        <button class="store-switch" type="button" (click)="notify('Multiple-store switching is not available yet.')"><span class="store-avatar">{{ storeName().slice(0,1).toUpperCase() }}</span><span><b>{{ storeName() }}</b><small>{{ storeSlug() }}</small></span><span class="chevron">⌄</span></button>
         <p class="nav-heading">WORKSPACE</p>
         @for (item of primaryNav; track item.label) {
           <button class="nav-item" [class.active]="activeNav() === item.label" (click)="selectNav(item.label)" type="button"><span class="nav-symbol">{{ item.symbol }}</span>{{ item.label }}@if(item.label === 'Orders'){<span class="count">4</span>}</button>
@@ -31,21 +48,21 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
         <div class="sidebar-bottom"><div class="help-card"><span>✳</span><b>Building something?</b><p>Your store, your way. More tools are on the way.</p><button type="button" (click)="notify('The product roadmap will be published soon.')">Explore the roadmap ↗</button></div><button class="nav-item" type="button" (click)="selectNav('Settings')"><span class="nav-symbol">⚙</span>Settings</button><div class="user"><span class="user-avatar">MY</span><span><b>Store owner</b><small>Owner account</small></span><button type="button" aria-label="Account options" (click)="signOut()" aria-label="Sign out">↪</button></div></div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="breadcrumbs"><span>Atlas Atelier</span><span>/</span><b>{{ activeNav() }}</b></div><div class="top-actions"><label class="global-search"><span>⌕</span><input aria-label="Search products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"><kbd>⌘ K</kbd></label><button class="icon-button" aria-label="Notifications" type="button" (click)="notify('You are all caught up.')">♧<i></i></button><span class="demo-pill"><i></i> Demo workspace</span></div></header>
+        <header class="topbar"><div class="breadcrumbs"><span>{{ storeName() }}</span><span>/</span><b>{{ activeNav() }}</b></div><div class="top-actions"><label class="global-search"><span>⌕</span><input aria-label="Search products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"><kbd>⌘ K</kbd></label><button class="icon-button" aria-label="Notifications" type="button" (click)="notify('You are all caught up.')">♧<i></i></button><span class="demo-pill"><i></i> Connected workspace</span></div></header>
         <div class="content">
-          <section class="welcome"><div><p class="eyebrow">— &nbsp; SATURDAY, OCTOBER 10</p><h1>{{ activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav() }}</h1><p class="subtitle">{{ activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription() }}</p></div><div class="actions"><button class="button secondary" type="button" (click)="notify('Store preview will be available after publishing is implemented.')">◉ &nbsp; Preview store</button><button class="button primary" type="button" (click)="addProduct()">＋ &nbsp; Add product</button></div></section>
-          <section class="setup-banner"><span class="banner-icon">◇</span><div class="banner-copy"><b>Your store is taking shape</b><p>This is a preview workspace with sample data. Connect your account to manage real products and orders.</p></div><span class="progress"><i></i> 2 of 5 steps</span><button type="button" (click)="notify('Guided setup is planned with authentication and store creation.')">Continue setup →</button></section>
+          <section class="welcome"><div><p class="eyebrow">— &nbsp; YOUR BUSINESS WORKSPACE</p><h1>{{ activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav() }}</h1><p class="subtitle">{{ activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription() }}</p></div><div class="actions"><button class="button secondary" type="button" (click)="notify('Store preview will be available after publishing is implemented.')">◉ &nbsp; Preview store</button><button class="button primary" type="button" (click)="addProduct()">＋ &nbsp; Add product</button></div></section>
+          <section class="setup-banner"><span class="banner-icon">◇</span><div class="banner-copy"><b>Your workspace is connected</b><p>Products below are loaded from your account. Orders, sales analytics, publishing and inventory are not connected yet.</p></div><span class="progress"><i></i> Core setup</span><button type="button" (click)="notify('Store publishing is not implemented yet; your store remains private.')">Publishing status →</button></section>
           <section class="metrics">
-            <article class="metric"><div class="metric-top"><span>Total sales</span><span class="metric-icon green">↗</span></div><strong>MAD 24,680 <em>↗ 12.8%</em></strong><footer>Compared to last month <span class="spark green-spark">▂▄▃▅▄▆▅▇</span></footer></article>
-            <article class="metric"><div class="metric-top"><span>Orders</span><span class="metric-icon purple">▤</span></div><strong>148 <em>↗ 8.2%</em></strong><footer>Across all sales channels <span class="spark purple-spark">▂▃▅▄▆▄▇▆</span></footer></article>
+            <article class="metric"><div class="metric-top"><span>Total sales</span><span class="metric-icon green">↗</span></div><strong>—</strong><footer>Sales analytics not connected</footer></article>
+            <article class="metric"><div class="metric-top"><span>Orders</span><span class="metric-icon purple">▤</span></div><strong>{{ orders.length }}</strong><footer>Order API not implemented</footer></article>
             <article class="metric"><div class="metric-top"><span>Products</span><span class="metric-icon peach">◇</span></div><strong>{{ products().length }} <small>in your catalog</small></strong><footer>{{ activeCount() }} active products <button type="button" (click)="selectNav('Products')">View catalog →</button></footer></article>
             <article class="metric"><div class="metric-top"><span>Low stock alerts</span><span class="metric-icon amber">△</span></div><strong>{{ lowStockCount() }} <small>need attention</small></strong><footer>Across tracked products <button type="button" (click)="selectNav('Inventory')">Review stock →</button></footer></article>
           </section>
           <section class="two-column">
             <article class="panel"><div class="panel-heading"><div><h2>Recent orders</h2><p>A quick look at your latest sales.</p></div><button type="button" (click)="selectNav('Orders')">View all orders →</button></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>CHANNEL</th><th>TOTAL</th><th>STATUS</th></tr></thead><tbody>@for(order of orders;track order.id){<tr><td class="order-id">{{ order.id }}</td><td>{{ order.customer }}</td><td><span class="channel-dot" [class.mageus]="order.channel === 'Mageus'" [class.pos]="order.channel === 'POS'"></span>{{ order.channel }}</td><td class="total">{{ money(order.totalMinor,order.currency) }}</td><td><span class="status" [class]="statusClass(order.status)">{{ order.status }}</span></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ orders.length }} recent orders <button type="button" (click)="selectNav('Orders')">Open order manager →</button></div></article>
-            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Online store</b><small>atlas-atelier.store</small></span><em class="connected">● Connected</em></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus</b><small>Creator storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="notify('The QR Engine will be a reusable free service.')">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
+            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Online store</b><small>{{ storeSlug() }}</small></span><em>Not published</em></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus</b><small>Creator storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="notify('The QR Engine will be a reusable free service.')">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
           </section>
-          <section class="panel product-panel"><div class="panel-heading product-heading"><div><h2>Products</h2><p>Keep your catalog organized and ready to sell.</p></div><div class="product-actions"><label class="product-search">⌕ <input aria-label="Filter products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"></label><button class="button primary small" type="button" (click)="addProduct()">＋ Add product</button></div></div><div class="filters">@for(filter of filters;track filter){<button type="button" [class.selected]="productFilter() === filter" (click)="productFilter.set(filter)">{{ filter }} <span>{{ filterCount(filter) }}</span></button>}</div><div class="table-wrap"><table class="products-table"><thead><tr><th>PRODUCT</th><th>STATUS</th><th>INVENTORY</th><th>CATEGORY</th><th>PRICE</th><th></th></tr></thead><tbody>@for(product of filteredProducts();track product.id){<tr><td><div class="product-cell"><span class="product-art" [class]="product.tone">{{ product.initials }}</span><span><b>{{ product.name }}</b><small>SKU: {{ product.sku }}</small></span></div></td><td><span class="status" [class]="product.status === 'Active' ? 'paid' : product.status === 'Draft' ? 'draft' : 'pending'">{{ product.status }}</span></td><td [class.low]="product.stock > 0 && product.stock < 10" [class.empty]="product.stock === 0">{{ product.stock === 0 ? 'Out of stock' : product.stock + ' in stock' }}</td><td class="muted">{{ product.category }}</td><td class="total">{{ money(product.priceMinor,product.currency) }}</td><td><button class="more" type="button" [attr.aria-label]="'More options for ' + product.name" (click)="notify('Product actions will be available when the catalog API is connected.')">···</button></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No products match your search. <button type="button" (click)="search.set('');productFilter.set('All')">Clear filters</button></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ filteredProducts().length }} of {{ products().length }} products · Sample data <button type="button" (click)="selectNav('Products')">View product catalog →</button></div></section>
+          <section class="panel product-panel"><div class="panel-heading product-heading"><div><h2>Products</h2><p>Keep your catalog organized and ready to sell.</p></div><div class="product-actions"><label class="product-search">⌕ <input aria-label="Filter products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"></label><button class="button primary small" type="button" (click)="addProduct()">＋ Add product</button></div></div><div class="filters">@for(filter of filters;track filter){<button type="button" [class.selected]="productFilter() === filter" (click)="productFilter.set(filter)">{{ filter }} <span>{{ filterCount(filter) }}</span></button>}</div><div class="table-wrap"><table class="products-table"><thead><tr><th>PRODUCT</th><th>STATUS</th><th>INVENTORY</th><th>CATEGORY</th><th>PRICE</th><th></th></tr></thead><tbody>@for(product of filteredProducts();track product.id){<tr><td><div class="product-cell"><span class="product-art" [class]="product.tone">{{ product.initials }}</span><span><b>{{ product.name }}</b><small>SKU: {{ product.sku }}</small></span></div></td><td><span class="status" [class]="product.status === 'Active' ? 'paid' : product.status === 'Draft' ? 'draft' : 'pending'">{{ product.status }}</span></td><td [class.low]="product.stock !== null && product.stock > 0 && product.stock < 10" [class.empty]="product.stock === 0">{{ product.stock === null ? 'Not tracked' : product.stock === 0 ? 'Out of stock' : product.stock + ' in stock' }}</td><td class="muted">{{ product.category }}</td><td class="total">{{ money(product.priceMinor,product.currency) }}</td><td><button class="more" type="button" [attr.aria-label]="'More options for ' + product.name" (click)="notify('Product actions will be available when the catalog API is connected.')">···</button></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No products match your search. <button type="button" (click)="search.set('');productFilter.set('All')">Clear filters</button></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ filteredProducts().length }} of {{ products().length }} database products <button type="button" (click)="selectNav('Products')">View product catalog →</button></div></section>
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
         </div>
       </main>
@@ -60,6 +77,15 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
 export class AppComponent {
   protected readonly authReady = signal(false);
   protected readonly authenticated = signal(false);
+  protected readonly workspaceLoading = signal(true);
+  protected readonly workspaceError = signal('');
+  protected readonly onboardingError = signal('');
+  protected readonly onboardingBusy = signal(false);
+  protected readonly onboardingStage = signal<'organization' | 'store' | 'ready'>('organization');
+  protected readonly organizationId = signal('');
+  protected readonly storeId = signal('');
+  protected readonly storeName = signal('');
+  protected readonly storeSlug = signal('');
 
   constructor() {
     void this.checkSession();
@@ -76,6 +102,7 @@ export class AppComponent {
     try {
       const response = await fetch(apiBase + '/api/v1/auth/session', { credentials: 'include' });
       this.authenticated.set(response.ok);
+      if (response.ok) await this.loadWorkspace();
     } catch {
       this.authenticated.set(false);
     } finally {
@@ -85,6 +112,9 @@ export class AppComponent {
 
   protected onSignedIn(): void {
     this.authenticated.set(true);
+    this.authReady.set(true);
+    this.workspaceLoading.set(true);
+    void this.loadWorkspace();
   }
 
   protected async signOut(): Promise<void> {
@@ -93,8 +123,101 @@ export class AppComponent {
       await fetch(apiBase + '/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
     } finally {
       this.authenticated.set(false);
+      this.products.set([]);
+      this.organizationId.set('');
+      this.storeId.set('');
+      this.storeName.set('');
+      this.storeSlug.set('');
+      this.onboardingStage.set('organization');
     }
   }
+  private apiBase(): string { return ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\\/$/, ''); }
+
+  private async apiRequest(path: string, init: RequestInit = {}): Promise<any> {
+    const response = await fetch(this.apiBase() + path, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
+    const payload = await response.json().catch(() => ({})) as { data?: any; error?: { message?: string } };
+    if (!response.ok) throw new Error(payload.error?.message ?? `Request failed (${response.status}).`);
+    return payload.data;
+  }
+
+  private async loadWorkspace(): Promise<void> {
+    this.workspaceLoading.set(true);
+    this.workspaceError.set('');
+    this.onboardingError.set('');
+    try {
+      const organizations = await this.apiRequest('/api/v1/organizations');
+      const organization = Array.isArray(organizations) ? organizations[0] : null;
+      if (!organization) {
+        this.organizationId.set('');
+        this.onboardingStage.set('organization');
+        this.products.set([]);
+        return;
+      }
+      this.organizationId.set(organization.id);
+      const stores = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`);
+      const store = Array.isArray(stores) ? stores[0] : null;
+      if (!store) {
+        this.onboardingStage.set('store');
+        this.products.set([]);
+        return;
+      }
+      this.storeId.set(store.id);
+      this.storeName.set(store.name);
+      this.storeSlug.set(store.slug);
+      this.onboardingStage.set('ready');
+      const rows = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
+      const products = Array.isArray(rows) ? rows : [];
+      this.products.set(products.filter((p: any) => p.storeId === store.id).map((p: any): ProductRow => {
+        const variant = Array.isArray(p.variants) ? p.variants[0] : null;
+        const status: ProductStatus = p.status === 'active' ? 'Active' : p.status === 'archived' ? 'Archived' : 'Draft';
+        const name = String(p.name ?? 'Untitled product');
+        return {
+          id: String(p.id), name, category: 'Uncategorized', sku: String(variant?.sku ?? '—'),
+          priceMinor: Number(variant?.amountMinor ?? 0), currency: (variant?.currency ?? 'MAD') as ProductRow['currency'],
+          stock: null, status, initials: name.split(/\\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
+          tone: 'sage'
+        };
+      }));
+    } catch (error) {
+      this.workspaceError.set(error instanceof Error ? error.message : 'An unexpected error occurred while loading your workspace.');
+    } finally {
+      this.workspaceLoading.set(false);
+    }
+  }
+
+  protected retryWorkspace(): void { void this.loadWorkspace(); }
+
+  protected async createOrganization(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    this.onboardingBusy.set(true); this.onboardingError.set('');
+    try {
+      const organization = await this.apiRequest('/api/v1/organizations', { method: 'POST', body: JSON.stringify({ name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim() }) });
+      this.organizationId.set(organization.id);
+      this.onboardingStage.set('store');
+    } catch (error) {
+      this.onboardingError.set(error instanceof Error ? error.message : 'Could not create your workspace.');
+    } finally { this.onboardingBusy.set(false); }
+  }
+
+  protected async createStore(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    this.onboardingBusy.set(true); this.onboardingError.set('');
+    try {
+      const store = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
+        name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim(), description: null,
+        businessType: 'general', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
+        defaultExperience: 'commerce', enabledExperiences: ['commerce'], published: false, theme: {}
+      }) });
+      this.storeId.set(store.id); this.storeName.set(store.name); this.storeSlug.set(store.slug);
+      this.onboardingStage.set('ready');
+      await this.loadWorkspace();
+    } catch (error) {
+      this.onboardingError.set(error instanceof Error ? error.message : 'Could not create your store.');
+    } finally { this.onboardingBusy.set(false); }
+  }
+
   protected readonly activeNav = signal<NavItem>('Overview');
   protected readonly search = signal('');
   protected readonly productFilter = signal<'All' | ProductStatus>('All');
@@ -103,32 +226,21 @@ export class AppComponent {
     {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'Products',symbol:'◇'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
   ];
   protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'Online store',symbol:'▣'},{label:'Integrations',symbol:'⌘'}];
-  protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Out of stock'];
-  protected readonly products = signal<ProductRow[]>([
-    {id:'p1',name:'Atlas ceramic bowl',category:'Home & living',sku:'ATL-CER-01',priceMinor:18900,currency:'MAD',stock:42,status:'Active',initials:'AC',tone:'clay'},
-    {id:'p2',name:'Argan oil · 100 ml',category:'Beauty & care',sku:'ARG-100',priceMinor:9500,currency:'MAD',stock:18,status:'Active',initials:'AO',tone:'sage'},
-    {id:'p3',name:'Handwoven market tote',category:'Accessories',sku:'HMT-008',priceMinor:3200,currency:'EUR',stock:0,status:'Out of stock',initials:'HT',tone:'sand'},
-    {id:'p4',name:'Ceramic espresso set',category:'Home & living',sku:'CES-002',priceMinor:5400,currency:'USD',stock:7,status:'Active',initials:'ES',tone:'blue'},
-    {id:'p5',name:'Olive wood serving board',category:'Home & living',sku:'OWB-011',priceMinor:24500,currency:'MAD',stock:12,status:'Draft',initials:'OW',tone:'olive'}
-  ]);
-  protected readonly orders: OrderRow[] = [
-    {id:'#DL-1048',customer:'Salma Bennani',channel:'Online store',totalMinor:18900,currency:'MAD',status:'Paid'},
-    {id:'#DL-1047',customer:'Thomas Laurent',channel:'Mageus',totalMinor:3200,currency:'EUR',status:'Processing'},
-    {id:'#DL-1046',customer:'Amira Haddad',channel:'Online store',totalMinor:9500,currency:'MAD',status:'Paid'},
-    {id:'#DL-1045',customer:'James Carter',channel:'POS',totalMinor:5400,currency:'USD',status:'Pending'}
-  ];
+  protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
+  protected readonly products = signal<ProductRow[]>([]);
+  protected readonly orders: OrderRow[] = [];
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
     const filter = this.productFilter();
     return this.products().filter(p => (!query || [p.name,p.sku,p.category].some(v => v.toLowerCase().includes(query))) && (filter === 'All' || p.status === filter));
   });
   protected activeCount(): number { return this.products().filter(p => p.status === 'Active').length; }
-  protected lowStockCount(): number { return this.products().filter(p => p.stock > 0 && p.stock < 10).length; }
+  protected lowStockCount(): number { return 0; }
   protected filterCount(filter: 'All' | ProductStatus): number { return filter === 'All' ? this.products().length : this.products().filter(p => p.status === filter).length; }
   protected money(minor: number, currency: string): string { return new Intl.NumberFormat('en', {style:'currency',currency,maximumFractionDigits:2}).format(minor / 100); }
   protected statusClass(status: string): string { return status.toLowerCase(); }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices, images and product availability.' : this.activeNav() === 'Orders' ? 'Review incoming orders and keep fulfillment moving.' : 'This workspace section will be connected as the platform grows.'; }
   protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Orders'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
-  protected addProduct(): void { this.activeNav.set('Products'); this.notify('The product editor is the next catalog milestone.'); }
+  protected addProduct(): void { this.activeNav.set('Products'); this.notify('Product creation UI is not implemented yet.'); }
   protected notify(message: string): void { this.toast.set(message); globalThis.setTimeout(() => { if (this.toast() === message) this.toast.set(''); }, 3000); }
 }
