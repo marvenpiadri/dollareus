@@ -147,12 +147,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
       throw error;
     } finally { client.release(); }
-    const verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
-    const verificationUrl = authPublicUrl('/?auth=verify-email', verificationToken);
+    let verificationToken = '';
     try {
+      verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
+      const verificationUrl = authPublicUrl('/?auth=verify-email', verificationToken);
       await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Welcome to Dollareus.</p><p>Confirm your email address using the link below. This link expires in 24 hours.</p><p><a href="${verificationUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this message.</p>`);
     } catch (error) {
-      await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(verificationToken)]);
+      if (verificationToken) await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(verificationToken)]);
       await pool.query('DELETE FROM users WHERE id=$1', [userId]);
       throw error;
     }
@@ -167,15 +168,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       [email]
     );
     const row = result.rows[0];
-    let valid = false;
-    if (row && row.status === 'active' && typeof row.password_hash === 'string') {
+    let passwordMatches = false;
+    if (typeof row?.password_hash === 'string' && password.length <= 256) {
       const [algorithm, saltHex, expectedHex] = row.password_hash.split(':');
-      if (algorithm === 'scrypt' && saltHex && expectedHex && password.length <= 256) {
+      if (algorithm === 'scrypt' && saltHex && expectedHex) {
         const expected = Buffer.from(expectedHex, 'hex');
         const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
-        valid = expected.length === actual.length && timingSafeEqual(expected, actual);
+        passwordMatches = expected.length === actual.length && timingSafeEqual(expected, actual);
       }
+    } else if (password.length <= 256) {
+      await scrypt(password, Buffer.alloc(16), 64);
     }
+    const valid = Boolean(row && row.status === 'active' && passwordMatches);
     if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
     const verified = await pool.query('SELECT email_verified_at FROM users WHERE id=$1', [row.id]);
     if (!verified.rows[0]?.email_verified_at) {
