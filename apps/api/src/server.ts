@@ -1024,6 +1024,10 @@ app.get<{ Params: { storeSlug: string } }>(
   async (request, reply) => {
     const resolved = await resolvePublicStore(request.params.storeSlug);
     if (!resolved) return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+    const enabledExperiences = (resolved.store.enabledExperiences ?? []) as string[];
+    if (!enabledExperiences.includes('menu')) {
+      return reply.code(404).send({ error: { code: 'PUBLIC_EXPERIENCE_NOT_ENABLED', message: 'The menu experience is not published for this store.', requestId: request.id } });
+    }
     const menusSnapshot = await db.collection(`organizations/${resolved.organizationId}/stores/${resolved.storeId}/menus`)
       .where('status', '==', 'active').orderBy('updatedAt', 'desc').limit(50).get();
     const menus = await Promise.all(menusSnapshot.docs.map(async (document) => {
