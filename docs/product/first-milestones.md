@@ -19,8 +19,9 @@
 ## Merchant identity and stores
 - [x] Add PostgreSQL-backed email/password registration, login, logout, and session endpoints.
 - [x] Add Google and Facebook OAuth API flows.
-- [ ] Connect merchant UI to authentication and build sign-in/register screens.
-- [ ] Implement email verification, password reset, and account security management.
+- [x] Connect merchant UI to authentication and build sign-in/register, verification, and recovery screens.
+- [x] Implement email verification and password reset API flows (provider configuration and live testing still required).
+- [ ] Add account security management, session revocation UI, and resend-verification action.
 - [x] PostgreSQL organization creation and owner membership API.
 - [ ] Merchant UI organization onboarding, staff memberships, roles and invitations.
 - [ ] Server-side role-based authorization and audit events.
