@@ -6,12 +6,20 @@
 - [x] Define shared commerce transport contracts.
 - [x] Document media-storage conventions.
 - [x] Add CI build and API typecheck.
-- [x] Select API runtime and persistence strategy (Fastify + Firebase Admin/Firestore foundation; reassess as transactional commerce needs are validated).
+- [x] Select API runtime and persistence strategy (Fastify + PostgreSQL; Firebase Auth only for identity verification).
 - [x] Define the smart-commerce boundary: one Dollareus catalog, multiple public experiences and connected channels.
+
+## PostgreSQL reset
+- [x] Create a fresh schema without column defaults.
+- [x] Add guarded one-time schema setup and remove versioned migrations.
+- [x] Remove Firestore persistence and configuration.
+- [ ] Execute the schema in the empty Neon database and verify tables.
+- [ ] Complete PostgreSQL route parity and integration tests.
 
 ## Merchant identity and stores
 - [ ] Authentication provider and secure session handling in the merchant UI.
-- [ ] Organization creation, memberships, roles and invitations.
+- [x] PostgreSQL organization creation and owner membership API.
+- [ ] Merchant UI organization onboarding, staff memberships, roles and invitations.
 - [ ] Server-side role-based authorization and audit events.
 - [ ] Emulator/integration tests for tenant isolation and security rules.
 - [x] Initial store creation, business-type selection, and storefront publish configuration API.
@@ -19,9 +27,9 @@
 
 ## Shared catalog and public experiences
 - [x] Product create/list API with schema validation.
-- [x] Product update API with transactional slug changes.
-- [x] Upload intents and initial object-storage workflow.
-- [x] Store-scoped product association and basic catalog category creation API.
+- [ ] PostgreSQL product update API with transactional slug changes.
+- [ ] Reimplement upload intents and media verification against the new PostgreSQL data model and object storage.
+- [ ] Reimplement store-scoped product association and catalog category APIs against PostgreSQL.
 - [x] Public store and published catalog read API foundation.
 - [ ] Product/category/variant editor in the merchant UI connected to the API.
 - [ ] Public storefront renderer with commerce, menu, catalog, and services presentation modes.
@@ -31,12 +39,12 @@
 - [ ] Verify store slug changes preserve printed QR links through managed redirects.
 
 ## Restaurant domain and smart POS
-- [x] Separate restaurant menu and menu-item schemas/contracts from retail products.
-- [x] Authenticated menu creation/listing and menu-item creation/listing APIs.
-- [x] Public published-menu projection.
-- [x] Initial POS sessions and server-priced order creation with immutable line snapshots.
+- [x] Define separate PostgreSQL tables for restaurant menus/menu items and retail products.
+- [ ] Reimplement authenticated menu and menu-item APIs against PostgreSQL.
+- [ ] Reimplement the public published-menu projection against PostgreSQL.
+- [ ] Reimplement POS sessions and server-priced order creation with immutable line snapshots against PostgreSQL.
 - [ ] Add update/archive workflows and menu modifier groups.
-- [x] Add validated POS order status transitions with actor/time history.
+- [ ] Reimplement validated POS order status transitions with actor/time history against PostgreSQL.
 - [ ] Add idempotency keys, staff roles and audit events.
 - [ ] Add payment-provider adapters, tax/discount rules and payment reconciliation.
 - [ ] Add inventory ledger and stock reservation for retail; kitchen tickets and preparation workflow for restaurants.
