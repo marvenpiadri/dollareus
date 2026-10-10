@@ -2,12 +2,89 @@
 export type CurrencyCode = 'MAD' | 'EUR' | 'USD' | (string & {});
 export type LocaleCode = 'en' | 'fr' | 'ar' | (string & {});
 export type ResourceStatus = 'draft' | 'active' | 'archived';
+export type BusinessType = 'retail' | 'restaurant' | 'freelancer' | 'services' | 'digital' | 'general';
+export type StoreExperience = 'commerce' | 'menu' | 'catalog' | 'services';
+export type ChannelType = 'dollareus' | 'mageus' | 'external';
+export type EntryPointType = 'direct-link' | 'qr' | 'embed';
 export interface Money { /** Integer minor units; 25000 represents MAD 250.00. */ amountMinor: number; currency: CurrencyCode; }
 export interface OrganizationRef { organizationId: string; }
 export interface ProductImage { id: string; /** Object-storage key, never base64 image data. */ storageKey: string; alt: string; width?: number; height?: number; position: number; }
 export interface ProductVariant { id: string; sku?: string; title: string; options: Record<string, string>; price: Money; status: ResourceStatus; }
-export interface Product extends OrganizationRef { id: string; slug: string; name: string; description?: string; status: ResourceStatus; kind: 'physical' | 'digital' | 'service' | 'food'; images: ProductImage[]; variants: ProductVariant[]; createdAt: string; updatedAt: string; }
-export interface Store extends OrganizationRef { id: string; name: string; slug: string; businessType: 'retail' | 'restaurant' | 'freelancer' | 'services' | 'digital' | 'general'; defaultCurrency: CurrencyCode; locale: LocaleCode; timeZone: string; status: 'setup' | 'active' | 'paused'; }
+export interface ProductAvailability { status: 'available' | 'unavailable' | 'limited' | 'preorder'; /** Optional customer-facing explanation, e.g. "Available after 18:00". */ note?: string; }
+export interface Product extends OrganizationRef {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  status: ResourceStatus;
+  /** Describes what is offered, not which application or page renders it. */
+  kind: 'physical' | 'digital' | 'service' | 'food';
+  categoryIds?: string[];
+  images: ProductImage[];
+  variants: ProductVariant[];
+  availability?: ProductAvailability;
+  /** Optional item-specific details; use namespaced keys for module-specific fields. */
+  attributes?: Record<string, string | number | boolean | string[]>;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CatalogCategory extends OrganizationRef {
+  id: string;
+  storeId: string;
+  name: string;
+  slug: string;
+  description?: string;
+  position: number;
+  status: ResourceStatus;
+}
+export interface Store extends OrganizationRef {
+  id: string;
+  name: string;
+  slug: string;
+  businessType: BusinessType;
+  defaultCurrency: CurrencyCode;
+  locale: LocaleCode;
+  timeZone: string;
+  status: 'setup' | 'active' | 'paused';
+}
+export interface StorefrontConfiguration {
+  storeId: string;
+  /** A rendering choice over the same store/catalog, not a separate store type. */
+  defaultExperience: StoreExperience;
+  enabledExperiences: StoreExperience[];
+  published: boolean;
+  updatedAt: string;
+}
+export interface ConnectedChannel {
+  id: string;
+  storeId: string;
+  type: ChannelType;
+  /** External identity only; never use this to create a second catalog. */
+  externalAccountId?: string;
+  status: 'pending' | 'connected' | 'revoked';
+  scopes: string[];
+  connectedAt?: string;
+}
+export interface PublicEntryPoint {
+  id: string;
+  storeId: string;
+  type: EntryPointType;
+  /** Stable path within the canonical public store, e.g. /menu or /products. */
+  targetPath: string;
+  status: 'active' | 'disabled';
+  createdAt: string;
+}
+export interface PublicStorefront {
+  store: Pick<Store, 'id' | 'name' | 'slug' | 'businessType' | 'defaultCurrency' | 'locale' | 'timeZone'>;
+  experience: StoreExperience;
+  description?: string;
+  logo?: ProductImage;
+  coverImage?: ProductImage;
+  categories: CatalogCategory[];
+  items: Product[];
+  canonicalUrl: string;
+  updatedAt: string;
+}
 export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'processing' | 'ready' | 'fulfilled' | 'cancelled' | 'refunded';
 export interface OrderLine { productId: string; variantId?: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money; }
 export interface Order extends OrganizationRef { id: string; storeId: string; number: string; status: OrderStatus; channel: 'online' | 'pos' | 'mageus' | 'qr' | 'api'; currency: CurrencyCode; subtotal: Money; taxTotal: Money; discountTotal: Money; grandTotal: Money; lines: OrderLine[]; createdAt: string; }
