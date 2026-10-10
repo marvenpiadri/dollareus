@@ -42,7 +42,7 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure the Firebase project/emulators. The dashboard currently uses sample data and is not connected to the API yet. Protected API routes require a valid Firebase ID token and an active membership record.
+Copy `.env.example` to `.env` and configure Firebase Auth/emulators plus a development-only Neon `DATABASE_URL` when testing PostgreSQL migrations. Run `pnpm db:migrate` to apply versioned SQL migrations. Never commit real credentials. The initial commerce schema is in `apps/api/db/migrations`; the existing product routes still use Firestore until the API data-access migration is completed. The dashboard currently uses sample data and is not connected to the API yet. Protected API routes require a valid Firebase ID token and an active membership record.
 
 ## Product images
 
