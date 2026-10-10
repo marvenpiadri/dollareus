@@ -94,6 +94,76 @@ export interface PublicStorefront {
 export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'processing' | 'ready' | 'fulfilled' | 'cancelled' | 'refunded';
 export interface OrderLine { productId: string; variantId?: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money; }
 export interface Order extends OrganizationRef { id: string; storeId: string; number: string; status: OrderStatus; channel: 'online' | 'pos' | 'mageus' | 'qr' | 'api'; currency: CurrencyCode; subtotal: Money; taxTotal: Money; discountTotal: Money; grandTotal: Money; lines: OrderLine[]; createdAt: string; }
+
+export type MenuAvailability = 'available' | 'unavailable' | 'limited';
+export interface RestaurantMenu extends OrganizationRef {
+  id: string;
+  storeId: string;
+  slug: string;
+  name: string;
+  description?: string;
+  servicePeriods: string[];
+  status: ResourceStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface RestaurantMenuItem extends OrganizationRef {
+  id: string;
+  storeId: string;
+  menuId: string;
+  slug: string;
+  name: string;
+  description?: string;
+  price: Money;
+  status: ResourceStatus;
+  categoryId?: string;
+  allergens: string[];
+  dietaryLabels: string[];
+  availability: MenuAvailability;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export type PosTerminalType = 'retail' | 'restaurant' | 'service' | 'general';
+export interface PosSession extends OrganizationRef {
+  id: string;
+  storeId: string;
+  label: string;
+  terminalType: PosTerminalType;
+  locationId?: string;
+  status: 'open' | 'closed';
+  openedBy: string;
+  openedAt: string;
+  closedBy?: string;
+  closedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export type PosFulfillment = 'counter' | 'takeaway' | 'dine_in' | 'delivery' | 'service';
+export type PosOrderLine =
+  | { sourceType: 'product'; itemId: string; variantId: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money }
+  | { sourceType: 'menuItem'; itemId: string; menuId: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money };
+export interface PosOrder extends OrganizationRef {
+  id: string;
+  storeId: string;
+  sessionId: string;
+  number: string;
+  status: 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  channel: 'pos' | 'qr';
+  fulfillment: PosFulfillment;
+  tableLabel?: string;
+  customerNote?: string;
+  currency: CurrencyCode;
+  subtotal: Money;
+  taxTotal: Money;
+  discountTotal: Money;
+  grandTotal: Money;
+  lines: PosOrderLine[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PageResult<T> { items: T[]; nextCursor?: string; }
 export interface ApiError { code: string; message: string; requestId?: string; details?: unknown; }
 export interface ApiResponse<T> { data: T; requestId: string; }
