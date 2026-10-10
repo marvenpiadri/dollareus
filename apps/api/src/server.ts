@@ -1404,6 +1404,157 @@ app.get<{ Params: { organizationId: string; storeId: string }; Querystring: { li
 );
 
 
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]!);
+}
+
+function formatPublicPrice(amountMinor: unknown, currency: string): string {
+  if (typeof amountMinor !== 'number' || !Number.isSafeInteger(amountMinor) || amountMinor < 0) return '';
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency }).format(amountMinor / 100);
+  } catch {
+    return `${(amountMinor / 100).toFixed(2)} ${currency}`;
+  }
+}
+
+async function renderPublicStorefront(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  resolved: { organizationId: string; storeId: string; store: Record<string, any> },
+  hostname: string,
+  experienceOverride?: string,
+  basePath = ''
+) {
+  const store = resolved.store;
+  const enabled = (store.enabledExperiences ?? []) as string[];
+  const experience = experienceOverride ?? String(store.defaultExperience ?? 'commerce');
+  if (!enabled.includes(experience)) {
+    return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Page not found</title><h1>This store experience is not published.</h1></html>');
+  }
+  const canonicalUrl = `https://${hostname}${basePath}`;
+  const currency = String(store.defaultCurrency ?? 'MAD');
+  const isMenu = experience === 'menu';
+  const entries: Array<{ name: string; description: string; price: string; group?: string; labels?: string[] }> = [];
+
+  if (isMenu) {
+    const menusSnapshot = await db.collection(`organizations/${resolved.organizationId}/stores/${resolved.storeId}/menus`)
+      .where('status', '==', 'active').orderBy('updatedAt', 'desc').limit(50).get();
+    for (const menuDoc of menusSnapshot.docs) {
+      const menu = menuDoc.data();
+      const itemSnapshot = await menuDoc.ref.collection('items').where('status', '==', 'active').orderBy('position', 'asc').limit(200).get();
+      for (const itemDoc of itemSnapshot.docs) {
+        const item = itemDoc.data();
+        if (item.availability === 'unavailable' || item.price?.currency !== currency) continue;
+        entries.push({
+          name: String(item.name ?? ''),
+          description: String(item.description ?? ''),
+          price: formatPublicPrice(item.price?.amountMinor, currency),
+          group: String(menu.name ?? ''),
+          labels: [...(Array.isArray(item.dietaryLabels) ? item.dietaryLabels : []), ...(Array.isArray(item.allergens) && item.allergens.length ? [`Allergens: ${item.allergens.join(', ')}`] : [])]
+        });
+      }
+    }
+  } else {
+    const productsSnapshot = await db.collection(`organizations/${resolved.organizationId}/products`)
+      .where('storeId', '==', resolved.storeId).where('status', '==', 'active')
+      .orderBy('updatedAt', 'desc').limit(100).get();
+    for (const productDoc of productsSnapshot.docs) {
+      const product = productDoc.data();
+      const variants = (product.variants ?? []).filter((variant: { status?: string; price?: { currency?: string; amountMinor?: number } }) => variant.status === 'active' && variant.price?.currency === currency);
+      if (variants.length === 0) continue;
+      entries.push({
+        name: String(product.name ?? ''),
+        description: String(product.description ?? ''),
+        price: variants.length === 1 ? formatPublicPrice(variants[0].price?.amountMinor, currency) : `From ${formatPublicPrice(Math.min(...variants.map((variant: { price: { amountMinor: number } }) => variant.price.amountMinor)), currency)}`
+      });
+    }
+  }
+
+  const language = String(store.locale ?? 'en');
+  const title = `${String(store.name ?? 'Store')} — ${experience === 'menu' ? 'Menu' : experience === 'services' ? 'Services' : 'Store'}`;
+  const nav = enabled.map((item) => {
+    const href = item === String(store.defaultExperience) ? '/' : `/${item === 'commerce' ? 'catalog' : item}`;
+    const label = item === 'commerce' ? 'Shop' : item === 'menu' ? 'Menu' : item === 'catalog' ? 'Catalog' : 'Services';
+    return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+  }).join('');
+  const cards = entries.length ? entries.map((item) => `<article class="item">${item.group ? `<p class="eyebrow">${escapeHtml(item.group)}</p>` : ''}<div class="item-top"><h2>${escapeHtml(item.name)}</h2>${item.price ? `<strong>${escapeHtml(item.price)}</strong>` : ''}</div>${item.description ? `<p>${escapeHtml(item.description)}</p>` : ''}${item.labels?.length ? `<p class="labels">${item.labels.map(escapeHtml).join(' · ')}</p>` : ''}</article>`).join('')
+    : '<p class="empty">Nothing is published here yet. Please check back soon.</p>';
+  const html = `<!doctype html>
+<html lang="${escapeHtml(language)}">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(store.description ?? `${store.name} on Dollareus`)}">
+<link rel="canonical" href="${escapeHtml(canonicalUrl)}"><meta name="robots" content="index,follow">
+<meta property="og:title" content="${escapeHtml(title)}"><meta property="og:type" content="website"><meta property="og:url" content="${escapeHtml(canonicalUrl)}">
+<style>
+:root{color-scheme:light;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#20231f;background:#f8f8f4}
+*{box-sizing:border-box}body{margin:0}header{background:#fff;border-bottom:1px solid #e8e8e2;padding:24px max(24px,calc((100vw - 1000px)/2)) 20px}
+.brand{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#777b72}h1{font-size:clamp(30px,5vw,48px);line-height:1.08;letter-spacing:-.04em;margin:12px 0}header p{color:#676b63;max-width:680px;line-height:1.6}nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:22px}a{color:inherit;text-decoration:none}nav a{font-size:14px;color:#51564d}nav a:hover{text-decoration:underline}
+main{max-width:1000px;margin:0 auto;padding:34px 24px 70px}.section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:16px}.section-heading h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:#6e7369}
+.items{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}.item{background:white;border:1px solid #e7e8e0;border-radius:14px;padding:20px}.item-top{display:flex;gap:14px;align-items:flex-start;justify-content:space-between}.item h2{font-size:18px;line-height:1.3;margin:0;font-weight:650}.item strong{white-space:nowrap;font-size:15px}.item p{font-size:14px;line-height:1.6;color:#6c7168;margin:12px 0 0}.item .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin:0 0 10px;color:#8b6a36}.item .labels{font-size:12px}.empty{background:white;border:1px dashed #d5d8ce;border-radius:14px;padding:32px;color:#676b63}footer{border-top:1px solid #e8e8e2;padding:20px 24px;text-align:center;color:#858980;font-size:12px}footer a{text-decoration:underline}
+</style></head>
+<body><header><div class="brand">Dollareus storefront</div><h1>${escapeHtml(store.name)}</h1>${store.description ? `<p>${escapeHtml(store.description)}</p>` : ''}<nav>${nav}</nav></header>
+<main><div class="section-heading"><h2>${experience === 'menu' ? 'Today’s menu' : experience === 'services' ? 'Services' : 'Available items'}</h2><span>${entries.length} ${entries.length === 1 ? 'item' : 'items'}</span></div><section class="items">${cards}</section></main>
+<footer>Powered by <a href="https://dollareus.com">Dollareus</a></footer></body></html>`;
+  return reply.type('text/html; charset=utf-8').header('X-Robots-Tag', 'index, follow').send(html);
+}
+
+async function resolvePublicHost(hostname: string) {
+  const domainSnapshot = await db.doc(`storeDomains/${hostname}`).get();
+  if (!domainSnapshot.exists || !['active', 'verified'].includes(String(domainSnapshot.data()?.status))) return null;
+  const mapping = domainSnapshot.data()!;
+  const storeSnapshot = await db.doc(`organizations/${mapping.organizationId}/stores/${mapping.storeId}`).get();
+  if (!storeSnapshot.exists) return null;
+  const store = storeSnapshot.data()!;
+  if (store.published !== true || store.status !== 'active') return null;
+  return { organizationId: String(mapping.organizationId), storeId: String(mapping.storeId), store };
+}
+
+app.get<{ Params: { storeSlug: string } }>('/s/:storeSlug', async (request, reply) => {
+  const resolved = await resolvePublicStore(request.params.storeSlug);
+  if (!resolved) return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Store not found</title><h1>Store not found</h1></html>');
+  const hostname = `${resolved.store.slug}.${PublicStoreDomain}`;
+  return renderPublicStorefront(request, reply, resolved, hostname);
+});
+
+app.get<{ Params: { storeSlug: string; experience: string } }>('/s/:storeSlug/:experience', async (request, reply) => {
+  const { storeSlug, experience } = request.params;
+  if (!['commerce', 'menu', 'catalog', 'services'].includes(experience)) return reply.code(404).send();
+  const resolved = await resolvePublicStore(storeSlug);
+  if (!resolved) return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Store not found</title><h1>Store not found</h1></html>');
+  const hostname = `${resolved.store.slug}.${PublicStoreDomain}`;
+  return renderPublicStorefront(request, reply, resolved, hostname, experience, `/${experience}`);
+});
+
+app.get('/', async (request, reply) => {
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const resolved = await resolvePublicHost(hostname);
+  if (!resolved) return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Dollareus</title><h1>No published store is configured for this hostname.</h1></html>');
+  return renderPublicStorefront(request, reply, resolved, hostname);
+});
+
+app.get('/menu', async (request, reply) => {
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const resolved = await resolvePublicHost(hostname);
+  if (!resolved) return reply.code(404).send();
+  return renderPublicStorefront(request, reply, resolved, hostname, 'menu', '/menu');
+});
+app.get('/catalog', async (request, reply) => {
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const resolved = await resolvePublicHost(hostname);
+  if (!resolved) return reply.code(404).send();
+  return renderPublicStorefront(request, reply, resolved, hostname, 'catalog', '/catalog');
+});
+app.get('/services', async (request, reply) => {
+  const hostname = String(request.headers.host ?? '').toLowerCase().replace(/:\\d+$/, '').replace(/\\.$/, '');
+  const resolved = await resolvePublicHost(hostname);
+  if (!resolved) return reply.code(404).send();
+  return renderPublicStorefront(request, reply, resolved, hostname, 'services', '/services');
+});
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 
