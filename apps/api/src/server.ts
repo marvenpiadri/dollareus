@@ -96,6 +96,43 @@ async function requireOrganizationMembership(
   return true;
 }
 
+const StoreBusinessTypeSchema = z.enum(['retail', 'restaurant', 'freelancer', 'services', 'digital', 'general']);
+const StoreExperienceSchema = z.enum(['commerce', 'menu', 'catalog', 'services']);
+const CreateStoreSchema = z.object({
+  name: z.string().trim().min(1).max(180),
+  slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  businessType: StoreBusinessTypeSchema,
+  defaultCurrency: z.string().regex(/^[A-Z]{3}$/).default('MAD'),
+  locale: z.enum(['en', 'fr', 'ar']).default('en'),
+  timeZone: z.string().min(1).max(100).default('Africa/Casablanca'),
+  defaultExperience: StoreExperienceSchema.optional(),
+  enabledExperiences: z.array(StoreExperienceSchema).min(1).optional()
+}).strict().superRefine((value, context) => {
+  const inferredExperience = value.businessType === 'restaurant' ? 'menu'
+    : value.businessType === 'services' || value.businessType === 'freelancer' ? 'services'
+    : 'commerce';
+  const enabled = value.enabledExperiences ?? [value.defaultExperience ?? inferredExperience];
+  const defaultExperience = value.defaultExperience ?? inferredExperience;
+  if (!enabled.includes(defaultExperience)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['enabledExperiences'], message: 'The default experience must be enabled.' });
+  }
+});
+const UpdateStorefrontSchema = z.object({
+  defaultExperience: StoreExperienceSchema,
+  enabledExperiences: z.array(StoreExperienceSchema).min(1),
+  published: z.boolean()
+}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), {
+  message: 'The default experience must be enabled.',
+  path: ['enabledExperiences']
+});
+const CreateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  slug: z.string().min(1).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  description: z.string().max(2000).optional(),
+  position: z.number().int().nonnegative().default(0),
+  status: z.enum(['draft', 'active', 'archived']).default('active')
+}).strict();
+
 const MoneySchema = z.object({
   amountMinor: z.number().int().nonnegative(),
   currency: z.string().regex(/^[A-Z]{3}$/)
@@ -120,21 +157,29 @@ const ImageSchema = z.object({
 }).strict();
 
 const CreateProductSchema = z.object({
+  storeId: z.string().min(1).max(100).optional(),
   slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   name: z.string().trim().min(1).max(180),
   description: z.string().max(10000).optional(),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   kind: z.enum(['physical', 'digital', 'service', 'food']),
+  categoryIds: z.array(z.string().min(1).max(100)).max(100).default([]),
+  availability: z.object({ status: z.enum(['available', 'unavailable', 'limited', 'preorder']), note: z.string().max(500).optional() }).strict().optional(),
+  attributes: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional(),
   images: z.array(ImageSchema).max(0).default([]),
   variants: z.array(VariantSchema).min(1).max(100)
 }).strict();
 
 const UpdateProductSchema = z.object({
+  storeId: z.string().min(1).max(100).optional(),
   slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
   name: z.string().trim().min(1).max(180).optional(),
   description: z.string().max(10000).optional(),
   status: z.enum(['draft', 'active', 'archived']).optional(),
   kind: z.enum(['physical', 'digital', 'service', 'food']).optional(),
+  categoryIds: z.array(z.string().min(1).max(100)).max(100).optional(),
+  availability: z.object({ status: z.enum(['available', 'unavailable', 'limited', 'preorder']), note: z.string().max(500).optional() }).strict().optional(),
+  attributes: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])).optional(),
   variants: z.array(VariantSchema).min(1).max(100).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, {
   message: 'Provide at least one product field to update.'
@@ -453,6 +498,240 @@ app.post<{ Params: { organizationId: string; productId: string; assetId: string 
     });
 
     return reply.code(201).send({ data: image, requestId: request.id });
+  }
+);
+
+
+/**
+ * Stores and public experiences share the same catalog records. A menu is a
+ * rendering mode, not a separate store or a second catalog.
+ */
+app.post<{ Params: { organizationId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateStoreSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'The store payload is invalid.', details: parsed.error.flatten(), requestId: request.id }
+      });
+    }
+
+    const collection = db.collection(`organizations/${organizationId}/stores`);
+    const storeRef = collection.doc();
+    const slugRef = db.doc(`organizations/${organizationId}/storeSlugs/${parsed.data.slug}`);
+    const inferredExperience = parsed.data.businessType === 'restaurant' ? 'menu'
+      : parsed.data.businessType === 'services' || parsed.data.businessType === 'freelancer' ? 'services'
+      : 'commerce';
+    const defaultExperience = parsed.data.defaultExperience ?? inferredExperience;
+    const enabledExperiences = parsed.data.enabledExperiences ?? [defaultExperience];
+    const now = new Date().toISOString();
+    const store = {
+      id: storeRef.id,
+      organizationId,
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      businessType: parsed.data.businessType,
+      defaultCurrency: parsed.data.defaultCurrency,
+      locale: parsed.data.locale,
+      timeZone: parsed.data.timeZone,
+      status: 'setup',
+      defaultExperience,
+      enabledExperiences,
+      published: false,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const existingSlug = await transaction.get(slugRef);
+        if (existingSlug.exists) throw new Error('STORE_SLUG_TAKEN');
+        transaction.create(storeRef, store);
+        transaction.create(slugRef, { organizationId, storeId: storeRef.id, slug: parsed.data.slug, createdAt: now });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'STORE_SLUG_TAKEN') {
+        return reply.code(409).send({ error: { code: 'STORE_SLUG_TAKEN', message: 'A store with this slug already exists.', requestId: request.id } });
+      }
+      throw error;
+    }
+    return reply.code(201).send({ data: store, requestId: request.id });
+  }
+);
+
+app.get<{ Params: { organizationId: string } }>(
+  '/api/v1/organizations/:organizationId/stores',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const snapshot = await db.collection(`organizations/${organizationId}/stores`).orderBy('updatedAt', 'desc').limit(100).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data() })), requestId: request.id };
+  }
+);
+
+app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/storefront',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = UpdateStorefrontSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The storefront configuration is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    }
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) {
+      return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    }
+    const now = new Date().toISOString();
+    const updated = {
+      ...parsed.data,
+      published: parsed.data.published,
+      status: parsed.data.published ? 'active' : (storeSnapshot.data()?.status === 'active' ? 'setup' : storeSnapshot.data()?.status ?? 'setup'),
+      updatedAt: now
+    };
+    await storeRef.update(updated);
+    return { data: { ...storeSnapshot.data(), ...updated, id: storeId, organizationId }, requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/categories',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The category payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    }
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) {
+      return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    }
+    const categoryRef = storeRef.collection('categories').doc();
+    const categorySlugRef = storeRef.collection('categorySlugs').doc(parsed.data.slug);
+    const now = new Date().toISOString();
+    const category = { ...parsed.data, id: categoryRef.id, organizationId, storeId, createdAt: now, updatedAt: now };
+    try {
+      await db.runTransaction(async (transaction) => {
+        const slugSnapshot = await transaction.get(categorySlugRef);
+        if (slugSnapshot.exists) throw new Error('CATEGORY_SLUG_TAKEN');
+        transaction.create(categoryRef, category);
+        transaction.create(categorySlugRef, { categoryId: categoryRef.id, createdAt: now });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'CATEGORY_SLUG_TAKEN') {
+        return reply.code(409).send({ error: { code: 'CATEGORY_SLUG_TAKEN', message: 'A category with this slug already exists in this store.', requestId: request.id } });
+      }
+      throw error;
+    }
+    return reply.code(201).send({ data: category, requestId: request.id });
+  }
+);
+
+async function resolvePublicStore(storeSlug: string) {
+  const slugSnapshot = await db.collectionGroup('storeSlugs').where('slug', '==', storeSlug).limit(1).get();
+  if (slugSnapshot.empty) return null;
+  const slugData = slugSnapshot.docs[0].data();
+  if (typeof slugData.organizationId !== 'string' || typeof slugData.storeId !== 'string') return null;
+  const storeSnapshot = await db.doc(`organizations/${slugData.organizationId}/stores/${slugData.storeId}`).get();
+  if (!storeSnapshot.exists) return null;
+  const store = storeSnapshot.data()!;
+  if (store.published !== true || store.status !== 'active') return null;
+  return { organizationId: slugData.organizationId, storeId: slugData.storeId, store };
+}
+
+app.get<{ Params: { storeSlug: string } }>(
+  '/api/v1/public/stores/:storeSlug',
+  async (request, reply) => {
+    const resolved = await resolvePublicStore(request.params.storeSlug);
+    if (!resolved) {
+      return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+    }
+    const store = resolved.store;
+    return {
+      data: {
+        id: resolved.storeId,
+        name: store.name,
+        slug: store.slug,
+        businessType: store.businessType,
+        defaultCurrency: store.defaultCurrency,
+        locale: store.locale,
+        timeZone: store.timeZone,
+        defaultExperience: store.defaultExperience,
+        enabledExperiences: store.enabledExperiences,
+        updatedAt: store.updatedAt
+      },
+      requestId: request.id
+    };
+  }
+);
+
+app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?: string } }>(
+  '/api/v1/public/stores/:storeSlug/catalog',
+  async (request, reply) => {
+    const resolved = await resolvePublicStore(request.params.storeSlug);
+    if (!resolved) {
+      return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+    }
+    const requestedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 100)) : 50;
+    let productsQuery = db.collection(`organizations/${resolved.organizationId}/products`)
+      .where('storeId', '==', resolved.storeId)
+      .where('status', '==', 'active')
+      .orderBy('updatedAt', 'desc')
+      .limit(limit + 1);
+    if (request.query.cursor) {
+      const cursorSnapshot = await db.doc(`organizations/${resolved.organizationId}/products/${request.query.cursor}`).get();
+      if (cursorSnapshot.exists && cursorSnapshot.data()?.storeId === resolved.storeId) productsQuery = productsQuery.startAfter(cursorSnapshot);
+    }
+    const productSnapshot = await productsQuery.get();
+    const hasMore = productSnapshot.docs.length > limit;
+    const visibleDocs = productSnapshot.docs.slice(0, limit);
+    const categoriesSnapshot = await db.doc(`organizations/${resolved.organizationId}/stores/${resolved.storeId}`).collection('categories')
+      .where('status', '==', 'active').orderBy('position', 'asc').limit(100).get();
+    const items = visibleDocs.map((document) => {
+      const value = document.data();
+      return {
+        id: document.id,
+        slug: value.slug,
+        name: value.name,
+        description: value.description,
+        kind: value.kind,
+        categoryIds: value.categoryIds ?? [],
+        images: value.images ?? [],
+        variants: (value.variants ?? []).filter((variant: { status?: string }) => variant.status === 'active'),
+        availability: value.availability ?? { status: 'available' },
+        attributes: value.attributes ?? [],
+        updatedAt: value.updatedAt
+      };
+    }).filter((item) => item.variants.length > 0);
+    return {
+      data: {
+        store: {
+          id: resolved.storeId,
+          name: resolved.store.name,
+          slug: resolved.store.slug,
+          businessType: resolved.store.businessType,
+          defaultCurrency: resolved.store.defaultCurrency,
+          locale: resolved.store.locale,
+          timeZone: resolved.store.timeZone,
+          defaultExperience: resolved.store.defaultExperience,
+          enabledExperiences: resolved.store.enabledExperiences
+        },
+        categories: categoriesSnapshot.docs.map((document) => ({ id: document.id, ...document.data() })),
+        items,
+        nextCursor: hasMore ? visibleDocs[visibleDocs.length - 1]?.id : undefined
+      },
+      requestId: request.id
+    };
   }
 );
 
