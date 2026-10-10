@@ -42,7 +42,7 @@ try {
   const authHeaders = { cookie: `dollareus_session=${token}`, 'content-type': 'application/json' };
 
   const session = await request('/api/v1/auth/session', 200, { headers: authHeaders });
-  if (session.payload?.data?.user?.id !== userId) throw new Error('Authenticated session did not return the seeded user.');
+  if (session.payload?.data?.id !== userId) throw new Error('Authenticated session did not return the seeded user.');
   checks.push('session authentication');
 
   const organization = await request('/api/v1/organizations', 201, {
