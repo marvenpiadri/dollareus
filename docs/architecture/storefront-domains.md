@@ -20,7 +20,7 @@ Before promising live public storefronts, configure all of the following in the 
 4. Provision TLS for wildcard subdomains.
 5. Add server-rendered/crawlable storefront HTML, canonical metadata, sitemap, and redirects.
 
-The API returns hosted URLs and includes a host-resolution endpoint, but this repository change does not itself configure DNS, TLS, a hosting project, or a public storefront renderer. Do not consider a URL live until those infrastructure steps are verified.
+The API returns hosted URLs and includes host resolution plus a basic server-rendered HTML storefront. This repository change does not itself configure DNS, TLS, or a hosting project. Do not consider a URL live until those infrastructure steps are verified.
 
 ## Custom domain connection
 
@@ -30,6 +30,9 @@ The authenticated merchant API supports:
 - `POST /api/v1/organizations/:organizationId/stores/:storeId/domains` with `{ "hostname": "shop.example.com" }`
 - `POST /api/v1/organizations/:organizationId/stores/:storeId/domains/:hostname/verify`
 - `GET /api/v1/public/resolve-host` — maps the incoming Host header to a published store.
+- `GET /`, `GET /menu`, `GET /catalog`, `GET /services` — server-rendered public storefront routes when the request host maps to a published store.
+- `GET /s/:storeSlug` and `GET /s/:storeSlug/:experience` — server-rendered fallback routes.
+- `GET /robots.txt` and `GET /sitemap.xml` — basic crawl discovery.
 
 The create response returns a unique TXT ownership-verification record and a CNAME target. The merchant must add the requested DNS records. The verification endpoint checks the TXT challenge; unverified hostnames are not added to the global host map. DNS ownership verification is not the same as attaching the domain to the hosting project—hosting configuration and TLS still need to be completed.
 
