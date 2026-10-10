@@ -6,7 +6,7 @@
 - [x] Define shared commerce transport contracts.
 - [x] Document media-storage conventions.
 - [x] Add CI build and API typecheck.
-- [x] Select API runtime and persistence strategy (Fastify + PostgreSQL; Firebase Auth only for identity verification).
+- [x] Select API runtime and persistence strategy (Fastify + PostgreSQL; first-party authentication).
 - [x] Define the smart-commerce boundary: one Dollareus catalog, multiple public experiences and connected channels.
 
 ## PostgreSQL reset
@@ -17,7 +17,10 @@
 - [ ] Complete PostgreSQL route parity and integration tests.
 
 ## Merchant identity and stores
-- [ ] Authentication provider and secure session handling in the merchant UI.
+- [x] Add PostgreSQL-backed email/password registration, login, logout, and session endpoints.
+- [x] Add Google and Facebook OAuth API flows.
+- [ ] Connect merchant UI to authentication and build sign-in/register screens.
+- [ ] Implement email verification, password reset, and account security management.
 - [x] PostgreSQL organization creation and owner membership API.
 - [ ] Merchant UI organization onboarding, staff memberships, roles and invitations.
 - [ ] Server-side role-based authorization and audit events.
