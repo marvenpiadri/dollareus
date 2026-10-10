@@ -90,14 +90,21 @@ try {
   }
   checks.push('product listing');
 
+  const variantId = product.payload?.data?.variants?.[0]?.id;
+  if (!variantId) throw new Error('Product creation did not return its variant id.');
   const updated = await request(`/api/v1/organizations/${organizationId}/products/${createdProductId}`, 200, {
     method: 'PATCH', headers: authHeaders,
-    body: JSON.stringify({ name: 'Updated CI Smoke Product', status: 'archived' })
+    body: JSON.stringify({
+      name: 'Updated CI Smoke Product', status: 'archived',
+      variant: { id: variantId, sku: `SMOKE-UPDATED-${suffix}`, title: 'Updated CI Smoke Product', amountMinor: 2499, currency: 'MAD' }
+    })
   });
-  if (updated.payload?.data?.name !== 'Updated CI Smoke Product' || updated.payload?.data?.status !== 'archived') {
-    throw new Error('Product update did not persist the new name and archived status.');
+  const updatedVariant = updated.payload?.data?.variants?.[0];
+  if (updated.payload?.data?.name !== 'Updated CI Smoke Product' || updated.payload?.data?.status !== 'archived'
+      || Number(updatedVariant?.amountMinor) !== 2499 || updatedVariant?.sku !== `SMOKE-UPDATED-${suffix}`) {
+    throw new Error('Product details, variant price/SKU, or archived status did not persist.');
   }
-  checks.push('product update and archive');
+  checks.push('product details, default variant price/SKU, and archive');
 
   await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
   await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 404);
