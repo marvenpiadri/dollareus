@@ -75,7 +75,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.decorateRequest('identity', null);
 
-  app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown } }>('/api/v1/auth/register', async (request, reply) => {
+  app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown } }>('/api/v1/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
@@ -111,7 +111,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false }, requestId: request.id });
   });
 
-  app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', async (request, reply) => {
+  app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const result = await pool.query(
@@ -151,7 +151,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     requestId: request.id
   }));
 
-  app.get<{ Params: { provider: string } }>('/api/v1/auth/oauth/:provider/start', async (request, reply) => {
+  app.get<{ Params: { provider: string } }>('/api/v1/auth/oauth/:provider/start', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const provider = request.params.provider;
     if (provider !== 'google' && provider !== 'facebook') {
       return reply.code(404).send({ error: { code: 'OAUTH_PROVIDER_UNSUPPORTED', message: 'This social sign-in provider is not supported.', requestId: request.id } });
@@ -182,7 +182,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     return reply.redirect(url.toString());
   });
 
-  app.get<{ Params: { provider: string }; Querystring: { code?: string; state?: string; error?: string } }>('/api/v1/auth/oauth/:provider/callback', async (request, reply) => {
+  app.get<{ Params: { provider: string }; Querystring: { code?: string; state?: string; error?: string } }>('/api/v1/auth/oauth/:provider/callback', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const provider = request.params.provider;
     if (provider !== 'google' && provider !== 'facebook') return reply.code(404).send({ error: 'Unsupported provider.' });
     if (request.query.error || !request.query.code || !request.query.state) return reply.code(400).send({ error: { code: 'OAUTH_CANCELLED', message: 'Social sign-in was cancelled or could not be completed.', requestId: request.id } });
@@ -237,9 +237,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         await client.query('UPDATE users SET email=COALESCE($1,email),email_verified_at=CASE WHEN $2 THEN COALESCE(email_verified_at,$3) ELSE email_verified_at END,display_name=COALESCE(display_name,$4),avatar_url=COALESCE(avatar_url,$5),updated_at=$3 WHERE id=$6', [email, emailVerified, now, displayName, avatarUrl, userId]);
       } else {
         let existing = null;
-        if (email && emailVerified) {
+        if (email) {
           const found = await client.query('SELECT id FROM users WHERE email=$1 FOR UPDATE', [email]);
           existing = found.rows[0] ?? null;
+          if (existing && !emailVerified) {
+            await client.query('ROLLBACK');
+            return reply.code(409).send({ error: { code: 'OAUTH_EMAIL_LINK_REQUIRED', message: 'Sign in with your existing account before linking this social provider.', requestId: request.id } });
+          }
         }
         userId = existing?.id ?? randomUUID();
         if (existing) {
