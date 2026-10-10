@@ -18,8 +18,9 @@ export class AuthPanelComponent {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      if (window.location.pathname.endsWith('/verify-email')) this.mode.set('verify');
-      if (window.location.pathname.endsWith('/reset-password')) this.mode.set('reset');
+      const action = new URLSearchParams(window.location.search).get('auth');
+      if (action === 'verify-email') this.mode.set('verify');
+      if (action === 'reset-password') this.mode.set('reset');
     }
   }
 
