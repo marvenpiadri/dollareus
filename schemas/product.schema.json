@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dollareus.com/schemas/product.schema.json",
+  "title": "Dollareus Product",
+  "description": "Canonical transport shape for a product owned by an organization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "organizationId", "slug", "name", "status", "kind", "images", "variants", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 180 },
+    "description": { "type": "string", "maxLength": 10000 },
+    "status": { "enum": ["draft", "active", "archived"] },
+    "kind": { "enum": ["physical", "digital", "service", "food"] },
+    "images": { "type": "array", "maxItems": 30, "items": { "$ref": "#/$defs/image" } },
+    "variants": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/variant" } },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amountMinor", "currency"],
+      "properties": {
+        "amountMinor": { "type": "integer", "minimum": 0 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "storageKey", "alt", "position"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "storageKey": { "type": "string", "minLength": 1, "description": "Object-storage key; never embed image bytes or base64 here." },
+        "alt": { "type": "string", "maxLength": 500 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "position": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "options", "price", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sku": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "options": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 100 } },
+        "price": { "$ref": "#/$defs/money" },
+        "status": { "enum": ["draft", "active", "archived"] }
+      }
+    }
+  }
+}

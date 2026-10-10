@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [
+      "node"
+    ],
+    "outDir": "../../dist/out-tsc/api",
+    "noPropertyAccessFromIndexSignature": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

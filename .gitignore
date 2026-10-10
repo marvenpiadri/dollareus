@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.angular/
+coverage/
+.env
+.env.*
+!.env.example
+.firebase/
+.firebaserc
+*.log
+.DS_Store
+.idea/

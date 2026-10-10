@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "apps",
+  "projects": {
+    "merchant": {
+      "projectType": "application",
+      "root": "apps/merchant",
+      "sourceRoot": "apps/merchant/src",
+      "prefix": "dlr",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/merchant",
+            "index": "apps/merchant/src/index.html",
+            "browser": "apps/merchant/src/main.ts",
+            "polyfills": ["zone.js"],
+            "tsConfig": "apps/merchant/tsconfig.app.json",
+            "styles": ["apps/merchant/src/styles.css"]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                { "type": "initial", "maximumWarning": "650kB", "maximumError": "1MB" },
+                { "type": "anyComponentStyle", "maximumWarning": "16kB", "maximumError": "20kB" }
+              ],
+              "outputHashing": "all"
+            },
+            "development": { "optimization": false, "extractLicenses": false, "sourceMap": true }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "merchant:build:production" },
+            "development": { "buildTarget": "merchant:build:development" }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  }
+}
