@@ -240,6 +240,13 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
       });
     }
 
+    if (parsed.data.storeId) {
+      const storeSnapshot = await db.doc(`organizations/${organizationId}/stores/${parsed.data.storeId}`).get();
+      if (!storeSnapshot.exists) {
+        return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The selected store does not exist in this organization.', requestId: request.id } });
+      }
+    }
+
     const collection = db.collection(`organizations/${organizationId}/products`);
     const productRef = collection.doc();
     const slugRef = db.doc(`organizations/${organizationId}/productSlugs/${parsed.data.slug}`);
@@ -289,6 +296,13 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
           requestId: request.id
         }
       });
+    }
+
+    if (parsed.data.storeId) {
+      const storeSnapshot = await db.doc(`organizations/${organizationId}/stores/${parsed.data.storeId}`).get();
+      if (!storeSnapshot.exists) {
+        return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The selected store does not exist in this organization.', requestId: request.id } });
+      }
     }
 
     const productRef = db.doc(`organizations/${organizationId}/products/${productId}`);
@@ -709,7 +723,7 @@ app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?:
         images: value.images ?? [],
         variants: (value.variants ?? []).filter((variant: { status?: string }) => variant.status === 'active'),
         availability: value.availability ?? { status: 'available' },
-        attributes: value.attributes ?? [],
+        attributes: value.attributes ?? {},
         updatedAt: value.updatedAt
       };
     }).filter((item) => item.variants.length > 0);
