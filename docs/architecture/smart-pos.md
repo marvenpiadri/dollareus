@@ -40,6 +40,7 @@ The POS is **smart because it adapts to the store's enabled domains and fulfillm
 - `GET/POST /api/v1/organizations/:organizationId/stores/:storeId/pos/sessions`
 - `PATCH /api/v1/organizations/:organizationId/stores/:storeId/pos/sessions/:sessionId/close`
 - `GET/POST /api/v1/organizations/:organizationId/stores/:storeId/pos/orders`
+- `PATCH /api/v1/organizations/:organizationId/stores/:storeId/pos/orders/:orderId/status` — validated order transitions with actor/time history.
 
 The current order-creation route re-reads canonical item prices on the server, rejects inactive or cross-store items, checks the session is open, snapshots line names/prices, and assigns an order number. It creates an order in a confirmed state; it does **not** capture a payment, calculate jurisdictional taxes, apply discounts, decrement inventory, or send kitchen tickets. Do not present those capabilities as implemented.
 
@@ -49,7 +50,7 @@ The current order-creation route re-reads canonical item prices on the server, r
 2. Add explicit staff roles/permissions, audit events, idempotency keys and session ownership rules.
 3. Add payment adapters and a durable payment state machine; an order must not imply a card payment succeeded.
 4. Add inventory ledger/reservation semantics for retail and kitchen ticket state for restaurants.
-5. Make order status transitions explicit and validated, with timestamps and actor IDs.
+5. Extend the initial validated order status transitions with domain-specific policies, payment-aware completion rules and audited actor IDs.
 6. Support offline POS only after defining local persistence, conflict handling, replay protection and safe reconciliation.
 7. Add modifiers and tax/discount calculation as domain-specific pricing extensions, not client-trusted totals.
 8. Keep payment card data out of Dollareus; use a compliant payment provider and store only provider references and non-sensitive status.
