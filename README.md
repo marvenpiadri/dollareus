@@ -25,7 +25,7 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 ## Repository structure
 
 - `apps/merchant`: Angular merchant dashboard.
-- `apps/api`: Fastify API with Firebase Admin integration.
+- `apps/api`: Fastify API backed by PostgreSQL, with Firebase Auth and object storage.
 - `packages/contracts`: shared TypeScript transport contracts.
 - `schemas`: JSON Schemas for API/domain records.
 - `docs/architecture`: architecture, API and media-storage decisions.
@@ -43,11 +43,11 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure Firebase Auth/emulators plus a development-only Neon `DATABASE_URL` when testing PostgreSQL migrations. Run `pnpm db:migrate` to apply versioned SQL migrations after setting a real `DATABASE_URL`. Never commit real credentials. SQL migrations live in `apps/api/db/migrations` and now include the initial commerce schema plus store domains, restaurant menus, and POS tables. The current API routes still use Firestore; PostgreSQL is not yet the live API database. A real PostgreSQL database must be provisioned and its connection string supplied before migrations can be applied. The dashboard currently uses sample data and is not connected to the API yet. The API now has store creation/publishing, public catalog and restaurant-menu projections, QR entry-point management, initial POS endpoints, platform-subdomain allocation, custom-domain DNS verification, and host resolution. Public storefront HTML/SSR, production wildcard DNS/TLS/hosting setup, primary-domain redirects, complete merchant UI workflows, and Mageus channel authorization remain to be built. Protected API routes require a valid Firebase ID token and an active membership record.
+Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firestore data migration and no versioned migration runner. Firebase is used only for identity verification and object storage; all application records belong in PostgreSQL. Never commit credentials. The dashboard currently uses sample data and is not connected to the API yet. The API now has store creation/publishing, public catalog and restaurant-menu projections, QR entry-point management, initial POS endpoints, platform-subdomain allocation, custom-domain DNS verification, and host resolution. Public storefront HTML/SSR, production wildcard DNS/TLS/hosting setup, primary-domain redirects, complete merchant UI workflows, and Mageus channel authorization remain to be built. Protected API routes require a valid Firebase ID token and an active organization membership stored in PostgreSQL.
 
 ## Product images
 
-Image bytes belong in Firebase Cloud Storage (or a compatible object store), not Git or JSON. Product JSON stores a key such as `organizations/{organizationId}/products/{productId}/{assetId}/original.webp`, plus alt text, dimensions, and ordering. See [media storage](docs/architecture/media-storage.md), [the product schema](schemas/product.schema.json), and [hosted storefront domains](docs/architecture/storefront-domains.md).
+Image bytes belong in object storage, not PostgreSQL rows or JSON. Product JSON stores a key such as `organizations/{organizationId}/products/{productId}/{assetId}/original.webp`, plus alt text, dimensions, and ordering. See [media storage](docs/architecture/media-storage.md), [the product schema](schemas/product.schema.json), and [hosted storefront domains](docs/architecture/storefront-domains.md).
 
 ## Current status
 
