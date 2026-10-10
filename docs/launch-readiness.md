@@ -28,9 +28,9 @@ Last reviewed: 2026-10-11
 ## P0 — required before accepting real commerce data
 
 ### Connect the merchant UI to real data
-- [ ] Replace hard-coded dashboard metrics, sample orders, sample products, and demo store identity with API-backed state.
-- [ ] Implement onboarding after registration: create organization, create first store, configure storefront, and show empty/loading/error states.
-- [ ] Implement real product create/edit/publish/archive flows, categories, variants, images, and inventory changes.
+- [x] Replace hard-coded sample products and demo store identity with API-backed workspace/catalog state; show unavailable indicators instead of fabricated sales and inventory metrics.
+- [x] Implement first-run organization/store creation and draft product creation through the API, with loading/error states.
+- [ ] Finish onboarding and storefront configuration; implement product edit/publish/archive flows, categories, variant editing, images, and inventory changes.
 - [ ] Implement customer records, carts, orders, order items, payment states, fulfillment, cancellations/refunds, and transactional emails.
 - [ ] Implement and test restaurant menus/menu items, POS sessions/orders, QR/entry points, custom domains, and inventory endpoints if those modules are included in the first launch.
 - [ ] Implement object-storage uploads with server-side authorization, file type/size limits, and safe public/private access rules.
