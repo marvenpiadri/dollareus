@@ -25,7 +25,7 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 ## Repository structure
 
 - `apps/merchant`: Angular merchant dashboard.
-- `apps/api`: Fastify API backed by PostgreSQL, with Firebase Auth token verification.
+- `apps/api`: Fastify API backed by PostgreSQL, with first-party authentication.
 - `packages/contracts`: shared TypeScript transport contracts.
 - `schemas`: JSON Schemas for API/domain records.
 - `docs/architecture`: architecture, API and media-storage decisions.
@@ -43,7 +43,7 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firestore data migration and no versioned migration runner. Firebase is used only for identity-token verification; all application records belong in PostgreSQL. Object-storage upload routes are not yet reimplemented. Never commit credentials. The dashboard currently uses sample data and is not connected to the API yet. The PostgreSQL reset is underway: current API coverage is intentionally limited to organization onboarding/listing, store creation/listing, product listing/creation, and public store/catalog reads. The remaining category, menu, POS, QR/entry-point, domain, media, inventory, customer, order, and payment API routes must be reimplemented against PostgreSQL. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md). Protected API routes require a valid Firebase ID token and an active organization membership stored in PostgreSQL.
+Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firestore data migration, Firebase dependency, or versioned migration runner. Dollareus owns password credentials, OAuth account links, and sessions in PostgreSQL. Object-storage upload routes are not yet reimplemented. Never commit credentials. The dashboard currently uses sample data and is not connected to the API yet. The PostgreSQL reset is underway: current API coverage is intentionally limited to organization onboarding/listing, store creation/listing, product listing/creation, and public store/catalog reads. The remaining category, menu, POS, QR/entry-point, domain, media, inventory, customer, order, and payment API routes must be reimplemented against PostgreSQL. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md). Protected API routes require a valid Dollareus session and an active organization membership stored in PostgreSQL.
 
 ## Product images
 
@@ -51,4 +51,4 @@ Image bytes belong in object storage, not PostgreSQL rows or JSON. Product JSON 
 
 ## Current status
 
-Early foundation, not production-ready. The PostgreSQL API cutover and endpoint parity are incomplete. Authentication UI, role management, media upload verification, payments, taxes, complete order processing, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md) and the [smart-commerce architecture](docs/architecture/smart-commerce.md).
+Early foundation, not production-ready. The PostgreSQL API cutover and endpoint parity are incomplete. The merchant authentication UI, email verification and recovery flows, role management, media upload verification, payments, taxes, complete order processing, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md) and the [smart-commerce architecture](docs/architecture/smart-commerce.md).
