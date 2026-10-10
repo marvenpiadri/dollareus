@@ -1,39 +1,39 @@
-# Local API development
+# Dollareus API
 
-## Start
-1. Install Node.js 20.19+ and pnpm 10.
-2. Copy `.env.example` to `.env` and configure a Firebase project or local emulators.
+The API is a Fastify service backed by PostgreSQL and first-party Dollareus authentication. Firebase Authentication, Firestore, and Firebase Storage are not used by the current implementation.
+
+## Local development
+
+Requirements: Node.js 20.19+ and pnpm 10.
+
+1. Copy `.env.example` to `.env` and configure a server-side `DATABASE_URL`.
+2. Use an empty development PostgreSQL database and run `pnpm db:setup` to create the schema from `apps/api/db/schema.sql`.
 3. Install dependencies with `pnpm install`.
 4. Start the API with `pnpm api:dev`.
-5. Start the Angular dashboard in a second terminal with `pnpm start`.
+5. Start the Angular merchant workspace in another terminal with `pnpm start`.
 
-The health endpoint is `GET http://localhost:3000/api/v1/health`.
+The API health endpoint is `GET http://localhost:3000/api/v1/health`. Never expose `DATABASE_URL` to the browser.
 
-## Current routes
-- `GET /api/v1/organizations/:organizationId/products` — list products for an authenticated active organization member.
-- `POST /api/v1/organizations/:organizationId/products` — validate and create a product. Product slugs are reserved transactionally.
-- `PATCH /api/v1/organizations/:organizationId/products/:productId` — update supported product fields; slug changes reserve the new slug and release the old slug in the same Firestore transaction.
-- `POST /api/v1/organizations/:organizationId/products/:productId/media/upload-intents` — issue a short-lived signed upload policy for supported image types.
-- `POST /api/v1/organizations/:organizationId/products/:productId/media/:assetId/complete` — verify uploaded object metadata and attach its storage key to the product.
+## Authentication
 
-Product updates accept a non-empty subset of `slug`, `name`, `description`, `status`, `kind`, and `variants`. Image metadata cannot be written through product create/update payloads; images must use the upload workflow. Set `status: "archived"` to retire a product without physically deleting its record.
+Protected endpoints use the first-party Dollareus session cookie. Password registration requires email verification before password sign-in. Email verification and password-reset links require the configured email sender and `AUTH_PUBLIC_URL`. Google and Facebook OAuth require their respective client credentials and callback URLs to be configured in the deployment environment.
 
-Protected routes expect `Authorization: Bearer <Firebase ID token>`. The API verifies token revocation and checks the active membership document at `organizations/{organizationId}/members/{uid}`. A membership record must be provisioned before protected routes can be used; organization onboarding is not implemented yet.
+## Implemented commerce endpoints
 
-## Firestore shape
-- `organizations/{organizationId}/members/{uid}`: membership and active status.
-- `organizations/{organizationId}/products/{productId}`: product JSON.
-- `organizations/{organizationId}/productSlugs/{slug}`: transactionally reserved slug.
-- `organizations/{organizationId}/products/{productId}/mediaAssets/{assetId}`: upload state and server-verified object metadata.
+- `POST /api/v1/organizations` — create an organization and make the signed-in user its owner.
+- `GET /api/v1/organizations` — list organizations where the signed-in user has active membership.
+- `POST /api/v1/organizations/:organizationId/stores` — create a store and its storefront configuration.
+- `GET /api/v1/organizations/:organizationId/stores` — list stores in an organization.
+- `GET /api/v1/organizations/:organizationId/products` — list products in an organization.
+- `POST /api/v1/organizations/:organizationId/products` — create a product with variants.
+- `GET /api/v1/public/stores/:storeSlug` — read a published, active store.
+- `GET /api/v1/public/stores/:storeSlug/catalog` — list active products and active variants for a published store.
+- `GET /health` and `GET /api/v1/health` — health checks.
 
-The API is the trusted data boundary. Firestore client rules deny direct access by default. Admin SDK calls bypass Firestore rules, so every protected endpoint must verify identity, membership, and resource ownership.
+Protected organization routes verify active membership server-side. The API does not yet provide full role/permission management.
 
-## Media notes
-Image bytes are stored in Cloud Storage. Product JSON contains storage keys and metadata only. The signed upload policy is short-lived and bound to the expected content type. Size and declared MIME metadata are checked during completion, but file-signature validation, malware scanning, image processing, and safe public delivery remain to be implemented before production use.
+## Known gaps
 
-## Current limitations
-- No organization creation, invitation, or role-management endpoints yet.
-- No frontend Firebase sign-in flow or API client yet; the merchant dashboard still displays demo data.
-- Product listing does not yet provide cursor pagination.
-- The upload-intent route requires `FIREBASE_STORAGE_BUCKET` to be configured and its signed POST policy should be tested against the configured Cloud Storage environment.
-- Firebase credentials, project setup, storage lifecycle policies, and production CORS origins must be configured per environment.
+The merchant workspace now loads organizations, stores, and products from the API and guides a signed-in user through initial organization/store creation. However, product create/edit/publish UI, categories, variants editing, media upload/storage, inventory, customers, carts, orders, payments, refunds, fulfillment, POS, restaurant menus, QR entry points, custom domains, and integration management remain incomplete or unimplemented. Sales analytics are not available until order/payment data and reporting endpoints exist.
+
+Do not use this API for real commerce transactions until the relevant launch-readiness items have been implemented, configured, and tested end to end. See [the launch-readiness checklist](../../docs/launch-readiness.md).
