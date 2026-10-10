@@ -536,6 +536,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
     const collection = db.collection(`organizations/${organizationId}/stores`);
     const storeRef = collection.doc();
     const slugRef = db.doc(`organizations/${organizationId}/storeSlugs/${parsed.data.slug}`);
+    const publicSlugRef = db.doc(`publicStoreSlugs/${parsed.data.slug}`);
     const inferredExperience = parsed.data.businessType === 'restaurant' ? 'menu'
       : parsed.data.businessType === 'services' || parsed.data.businessType === 'freelancer' ? 'services'
       : 'commerce';
@@ -561,10 +562,11 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
 
     try {
       await db.runTransaction(async (transaction) => {
-        const existingSlug = await transaction.get(slugRef);
-        if (existingSlug.exists) throw new Error('STORE_SLUG_TAKEN');
+        const [existingSlug, existingPublicSlug] = await Promise.all([transaction.get(slugRef), transaction.get(publicSlugRef)]);
+        if (existingSlug.exists || existingPublicSlug.exists) throw new Error('STORE_SLUG_TAKEN');
         transaction.create(storeRef, store);
         transaction.create(slugRef, { organizationId, storeId: storeRef.id, slug: parsed.data.slug, createdAt: now });
+        transaction.create(publicSlugRef, { organizationId, storeId: storeRef.id, slug: parsed.data.slug, createdAt: now });
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'STORE_SLUG_TAKEN') {
@@ -651,9 +653,9 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
 );
 
 async function resolvePublicStore(storeSlug: string) {
-  const slugSnapshot = await db.collectionGroup('storeSlugs').where('slug', '==', storeSlug).limit(1).get();
-  if (slugSnapshot.empty) return null;
-  const slugData = slugSnapshot.docs[0].data();
+  const slugSnapshot = await db.doc(`publicStoreSlugs/${storeSlug}`).get();
+  if (!slugSnapshot.exists) return null;
+  const slugData = slugSnapshot.data()!;
   if (typeof slugData.organizationId !== 'string' || typeof slugData.storeId !== 'string') return null;
   const storeSnapshot = await db.doc(`organizations/${slugData.organizationId}/stores/${slugData.storeId}`).get();
   if (!storeSnapshot.exists) return null;
@@ -720,7 +722,7 @@ app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?:
         description: value.description,
         kind: value.kind,
         categoryIds: value.categoryIds ?? [],
-        images: value.images ?? [],
+        images: ((value.images ?? []) as Array<{ id: string; alt?: string; width?: number; height?: number; position: number }>).map((image) => ({ id: image.id, alt: image.alt ?? '', ...(image.width ? { width: image.width } : {}), ...(image.height ? { height: image.height } : {}), position: image.position })),
         variants: (value.variants ?? []).filter((variant: { status?: string }) => variant.status === 'active'),
         availability: value.availability ?? { status: 'available' },
         attributes: value.attributes ?? {},
@@ -740,7 +742,10 @@ app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?:
           defaultExperience: resolved.store.defaultExperience,
           enabledExperiences: resolved.store.enabledExperiences
         },
-        categories: categoriesSnapshot.docs.map((document) => ({ id: document.id, ...document.data() })),
+        categories: categoriesSnapshot.docs.map((document) => {
+          const category = document.data();
+          return { id: document.id, name: category.name, slug: category.slug, description: category.description, position: category.position };
+        }),
         items,
         nextCursor: hasMore ? visibleDocs[visibleDocs.length - 1]?.id : undefined
       },
