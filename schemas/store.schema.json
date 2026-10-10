@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dollareus.com/schemas/store.schema.json",
+  "title": "Dollareus Store",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "organizationId", "name", "slug", "businessType", "defaultCurrency", "locale", "timeZone", "status"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 180 },
+    "slug": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "businessType": { "enum": ["retail", "restaurant", "freelancer", "services", "digital", "general"] },
+    "defaultCurrency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "locale": { "type": "string", "minLength": 2, "maxLength": 20 },
+    "timeZone": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["setup", "active", "paused"] }
+  }
+}

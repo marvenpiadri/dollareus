@@ -2,7 +2,7 @@
 
 **An API-first commerce platform for independent businesses.**
 
-Dollareus is being built as a standalone commerce engine that can power its own merchant workspace and integrate deeply with Mageus. It aims to serve retailers, restaurants, freelancers, creators, and service businesses without forcing them into one rigid workflow.
+Dollareus is being built as a standalone commerce engine that powers its own merchant workspace and integrates deeply with Mageus. It aims to serve retailers, restaurants, freelancers, creators, and service businesses without forcing them into one rigid workflow.
 
 ## Product principles
 
@@ -11,22 +11,43 @@ Dollareus is being built as a standalone commerce engine that can power its own 
 - **One source of truth:** catalogs, orders, inventory, and fulfillment have explicit ownership.
 - **Secure by default:** organizations are isolated; access is authenticated, authorized, audited, and validated on the server.
 - **Media is not JSON:** product images live in object storage. JSON records store storage keys and image metadata, not base64 files.
-- **International by design:** model currency, locale, timezone, tax treatment, addresses, and payment methods explicitly for markets such as Morocco, France, and the United States.
+- **International by design:** model currency, locale, timezone, tax treatment, addresses, and payment methods explicitly for Morocco, France, and the United States.
 - **Build carefully:** prioritize reliable domain models and core commerce workflows before expanding into every feature of a large commerce suite.
 
-## Planned platform boundaries
+## Product boundaries
 
-- **Dollareus Commerce Core:** stores, catalogs, products, variants, prices, carts, orders, checkout, and fulfillment.
+- **Dollareus Commerce Core:** stores, catalogs, products, variants, carts, orders, checkout, and fulfillment.
 - **Business modules:** inventory, purchasing, POS, CRM, restaurant service, appointments, and digital products.
-- **Shared engines:** QR generation/management and integrations with the X-Facture document engine.
+- **Shared engines:** QR generation/management and integration with the X-Facture document engine.
 - **Mageus integration:** authorized storefront and commerce APIs; Mageus remains focused on publishing, communities, audience, and discovery.
 
-## Repository direction
+## Repository structure
 
-This repository will evolve into a TypeScript monorepo with separate applications and shared contracts. The exact persistence and deployment adapters must remain replaceable rather than leaking vendor-specific details into domain logic.
+- `apps/merchant`: Angular merchant dashboard.
+- `apps/api`: Fastify API with Firebase Admin integration.
+- `packages/contracts`: shared TypeScript transport contracts.
+- `schemas`: JSON Schemas for API/domain records.
+- `docs/architecture`: architecture, API and media-storage decisions.
 
-See [the architecture notes](docs/architecture/overview.md) and [the media storage guide](docs/architecture/media-storage.md).
+## Local development
 
-## Status
+Requirements: Node.js 20.19+ and pnpm 10.
 
-Early foundation. Not production-ready. Authentication, authorization, payments, taxes, order processing, storage rules, observability, tests, and deployment hardening must be completed before real businesses rely on it.
+```bash
+pnpm install
+pnpm start       # Angular dashboard: http://localhost:4200
+pnpm api:dev     # API: http://localhost:3000
+pnpm build
+pnpm api:typecheck
+pnpm ci
+```
+
+Copy `.env.example` to `.env` and configure Firebase Auth/emulators plus a development-only Neon `DATABASE_URL` when testing PostgreSQL migrations. Run `pnpm db:migrate` to apply versioned SQL migrations. Never commit real credentials. The initial commerce schema is in `apps/api/db/migrations`; the existing product routes still use Firestore until the API data-access migration is completed. The dashboard currently uses sample data and is not connected to the API yet. Protected API routes require a valid Firebase ID token and an active membership record.
+
+## Product images
+
+Image bytes belong in Firebase Cloud Storage (or a compatible object store), not Git or JSON. Product JSON stores a key such as `organizations/{organizationId}/products/{productId}/{assetId}/original.webp`, plus alt text, dimensions, and ordering. See [media storage](docs/architecture/media-storage.md) and [the product schema](schemas/product.schema.json).
+
+## Current status
+
+Early foundation, not production-ready. Authentication UI, organization onboarding, role management, production storage validation/image processing, payments, taxes, complete order processing, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md).
