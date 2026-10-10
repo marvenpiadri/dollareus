@@ -143,6 +143,7 @@ export type PosFulfillment = 'counter' | 'takeaway' | 'dine_in' | 'delivery' | '
 export type PosOrderLine =
   | { sourceType: 'product'; itemId: string; variantId: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money }
   | { sourceType: 'menuItem'; itemId: string; menuId: string; nameSnapshot: string; quantity: number; unitPrice: Money; lineTotal: Money };
+export interface PosOrderStatusTransition { from: string; to: string; changedBy: string; changedAt: string; }
 export interface PosOrder extends OrganizationRef {
   id: string;
   storeId: string;
@@ -159,6 +160,9 @@ export interface PosOrder extends OrganizationRef {
   discountTotal: Money;
   grandTotal: Money;
   lines: PosOrderLine[];
+  statusHistory?: PosOrderStatusTransition[];
+  statusUpdatedBy?: string;
+  statusUpdatedAt?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
