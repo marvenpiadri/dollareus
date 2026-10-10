@@ -17,7 +17,7 @@ app.addHook('onRequest', async (request, reply) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
   const origin = request.headers.origin;
   if (origin && !allowedOrigins.includes(origin)) {
-    await reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This request origin is not allowed.', requestId: request.id } });
+    return reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This request origin is not allowed.', requestId: request.id } });
   }
 });
 await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
