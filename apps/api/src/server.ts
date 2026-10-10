@@ -83,7 +83,11 @@ const ProductInput = z.object({
 }).strict();
 const ProductPatchInput = z.object({
   slug: Slug.optional(), name: z.string().trim().min(1).max(180).optional(),
-  description: z.string().max(10000).nullable().optional(), status: z.enum(['draft', 'active', 'archived']).optional()
+  description: z.string().max(10000).nullable().optional(), status: z.enum(['draft', 'active', 'archived']).optional(),
+  variant: z.object({
+    id: z.string().min(1).max(100), sku: z.string().max(100).nullable(), title: z.string().trim().min(1).max(180),
+    amountMinor: z.number().int().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/)
+  }).strict().optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one product field must be provided.' });
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
@@ -181,6 +185,17 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
       'UPDATE products SET slug=$1,name=$2,description=$3,status=$4,updated_by=$5,updated_at=$6 WHERE id=$7 AND organization_id=$8',
       [slug, name, description, status, request.identity!.uid, now, productId, organizationId]
     );
+    if (parsed.data.variant) {
+      const variant = parsed.data.variant;
+      const updatedVariant = await client.query(
+        'UPDATE product_variants SET sku=$1,title=$2,price_amount_minor=$3,currency=$4,updated_at=$5 WHERE id=$6 AND product_id=$7 AND organization_id=$8 RETURNING id',
+        [variant.sku, variant.title, variant.amountMinor, variant.currency, now, variant.id, productId, organizationId]
+      );
+      if (!updatedVariant.rowCount) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The selected variant does not belong to this product.');
+      }
+    }
     await client.query('COMMIT');
     const result = await pool.query(
       "SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'sku',v.sku,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency,'status',v.status) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), '[]'::jsonb) AS variants FROM products p WHERE p.id=$1 AND p.organization_id=$2",
@@ -189,7 +204,7 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
     return { data: camelize(result.rows[0]), requestId: request.id };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'PRODUCT_SLUG_TAKEN', 'A product with this slug already exists in this organization.');
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'PRODUCT_CONFLICT', 'The product slug or variant SKU is already in use.');
     throw error;
   } finally { client.release(); }
 });
