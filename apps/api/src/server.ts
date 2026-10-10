@@ -106,6 +106,7 @@ const CreateStoreDomainSchema = z.object({
 }).strict();
 const CreateStoreSchema = z.object({
   name: z.string().trim().min(1).max(180),
+  description: z.string().max(5000).optional(),
   slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
   businessType: StoreBusinessTypeSchema,
   defaultCurrency: z.string().regex(/^[A-Z]{3}$/).default('MAD'),
@@ -615,6 +616,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>(
       id: storeRef.id,
       organizationId,
       name: parsed.data.name,
+      ...(parsed.data.description ? { description: parsed.data.description } : {}),
       slug: parsed.data.slug,
       businessType: parsed.data.businessType,
       defaultCurrency: parsed.data.defaultCurrency,
@@ -1478,7 +1480,7 @@ async function renderPublicStorefront(
   const nav = enabled.map((item) => {
     const href = item === String(store.defaultExperience) ? '/' : `/${item === 'commerce' ? 'catalog' : item}`;
     const label = item === 'commerce' ? 'Shop' : item === 'menu' ? 'Menu' : item === 'catalog' ? 'Catalog' : 'Services';
-    return `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`;
+    return `<a href="${escapeHtml(`https://${hostname}${href === '/' ? '' : href}`)}">${escapeHtml(label)}</a>`;
   }).join('');
   const cards = entries.length ? entries.map((item) => `<article class="item">${item.group ? `<p class="eyebrow">${escapeHtml(item.group)}</p>` : ''}<div class="item-top"><h2>${escapeHtml(item.name)}</h2>${item.price ? `<strong>${escapeHtml(item.price)}</strong>` : ''}</div>${item.description ? `<p>${escapeHtml(item.description)}</p>` : ''}${item.labels?.length ? `<p class="labels">${item.labels.map(escapeHtml).join(' · ')}</p>` : ''}</article>`).join('')
     : '<p class="empty">Nothing is published here yet. Please check back soon.</p>';
@@ -1534,6 +1536,26 @@ app.get('/', async (request, reply) => {
   const resolved = await resolvePublicHost(hostname);
   if (!resolved) return reply.code(404).type('text/html; charset=utf-8').send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Dollareus</title><h1>No published store is configured for this hostname.</h1></html>');
   return renderPublicStorefront(request, reply, resolved, hostname);
+});
+
+app.get('/robots.txt', async (_request, reply) => {
+  return reply.type('text/plain; charset=utf-8').send(`User-agent: *\\nAllow: /\\nSitemap: https://${PublicStoreDomain}/sitemap.xml\\n`);
+});
+
+app.get('/sitemap.xml', async (_request, reply) => {
+  const slugs = await db.collection('publicStoreSlugs').limit(10000).get();
+  const urls: string[] = [];
+  for (const document of slugs.docs) {
+    const data = document.data();
+    if (typeof data.slug !== 'string' || typeof data.organizationId !== 'string' || typeof data.storeId !== 'string') continue;
+    const storeSnapshot = await db.doc(`organizations/${data.organizationId}/stores/${data.storeId}`).get();
+    if (!storeSnapshot.exists) continue;
+    const store = storeSnapshot.data()!;
+    if (store.published !== true || store.status !== 'active') continue;
+    const experience = String(store.defaultExperience ?? 'commerce');
+    urls.push(`<url><loc>${escapeHtml(`https://${store.slug}.${PublicStoreDomain}`)}${experience === 'commerce' ? '' : `/${escapeHtml(experience)}`}</loc><lastmod>${escapeHtml(store.updatedAt ?? new Date().toISOString())}</lastmod></url>`);
+  }
+  return reply.type('application/xml; charset=utf-8').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`);
 });
 
 app.get('/menu', async (request, reply) => {
