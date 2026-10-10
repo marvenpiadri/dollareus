@@ -19,7 +19,7 @@ These are orthogonal dimensions. Do not create a separate store type for QR, Mag
 ## Example: restaurant
 
 1. A merchant creates a restaurant store in Dollareus.
-2. They add menu items as catalog items, assign categories such as Coffee or Breakfast, set prices, images, availability, and publication state.
+2. They create restaurant-domain menus and menu items, with their own pricing, allergens, dietary labels, availability, service periods and publication state. Retail products remain in the product domain.
 3. The store enables the 'menu' experience. That changes the public presentation; it does not create another menu database or a second store.
 4. Dollareus issues a stable public entry point such as '/s/cafe-atlas/menu'. Its QR code encodes that URL.
 5. Mageus connects to the same store through an authorized integration and renders the menu in the Mageus store page.
@@ -39,7 +39,10 @@ The public read API exposes a deliberately published projection, not raw merchan
 - PATCH /api/v1/organizations/:organizationId/stores/:storeId/storefront — configure experiences and publish/unpublish the public storefront.
 - POST /api/v1/organizations/:organizationId/stores/:storeId/categories — create store-scoped catalog categories.
 - GET /api/v1/public/stores/:storeSlug — public store identity and active storefront configuration.
-- GET /api/v1/public/stores/:storeSlug/catalog — published categories and items.
+- GET /api/v1/public/stores/:storeSlug/catalog — published retail/general catalog items.
+- GET/POST /api/v1/organizations/:organizationId/stores/:storeId/menus and GET/POST /api/v1/organizations/:organizationId/stores/:storeId/menus/:menuId/items — restaurant-specific menu domain APIs.
+- GET /api/v1/public/stores/:storeSlug/menus — published restaurant menu projection.
+- GET/POST /api/v1/organizations/:organizationId/stores/:storeId/pos/sessions, POST /api/v1/organizations/:organizationId/stores/:storeId/pos/orders and GET /api/v1/organizations/:organizationId/stores/:storeId/pos/orders — initial smart POS session/order foundation.
 - GET and POST /api/v1/organizations/:organizationId/stores/:storeId/entry-points — manage stable QR/link targets.
 - PATCH /api/v1/organizations/:organizationId/stores/:storeId/entry-points/:entryPointId — enable or disable an entry point.
 - GET /api/v1/public/entry-points/:entryPointId — resolve a stable entry-point ID to its canonical public path.
@@ -60,10 +63,10 @@ Draft content must never leak through public endpoints. Publish state and timest
 
 ## Boundaries and future modules
 
-The shared core owns stores, catalog identity, prices, media references, publication state, entry points, channels, and future orders. Optional modules add domain-specific behavior without forking the core:
+The shared core owns stores, catalog identity, prices, media references, publication state, entry points, channels, and future orders. The smart POS uses a shared transaction/session core with separate domain workflows. See [Smart POS architecture](./smart-pos.md). Optional modules add domain-specific behavior without forking the core:
 
-- Restaurant: menu categories, availability windows, dietary/allergen labels, tables, ordering and kitchen workflows.
-- Retail: inventory, variants, stock locations and point of sale.
+- Restaurant: menus and menu items, availability windows, dietary/allergen labels, tables, ordering and kitchen workflows.
+- Retail: products and variants, inventory, stock locations and point of sale.
 - Services: service options, duration, scheduling and booking.
 - Digital goods: delivery entitlements and downloads.
 
