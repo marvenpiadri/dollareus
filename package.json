@@ -11,7 +11,7 @@
     "api:start": "tsx apps/api/src/server.ts",
     "api:typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
     "ci": "pnpm build && pnpm api:typecheck",
-    "db:migrate": "tsx apps/api/src/db/migrate.ts"
+    "db:setup": "tsx apps/api/src/db/setup.ts"
   },
   "engines": {
     "node": ">=20.19.0"
