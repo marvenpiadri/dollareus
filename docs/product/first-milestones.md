@@ -30,6 +30,17 @@
 - [ ] Stable QR/link entry-point management and QR generation; entry points must reference the canonical public store, never duplicate catalog data.
 - [ ] Verify store slug changes preserve printed QR links through managed redirects.
 
+## Restaurant domain and smart POS
+- [x] Separate restaurant menu and menu-item schemas/contracts from retail products.
+- [x] Authenticated menu creation/listing and menu-item creation/listing APIs.
+- [x] Public published-menu projection.
+- [x] Initial POS sessions and server-priced order creation with immutable line snapshots.
+- [ ] Add update/archive workflows and menu modifier groups.
+- [ ] Add POS order state transitions, idempotency keys, staff roles and audit events.
+- [ ] Add payment-provider adapters, tax/discount rules and payment reconciliation.
+- [ ] Add inventory ledger and stock reservation for retail; kitchen tickets and preparation workflow for restaurants.
+- [ ] Add POS integration tests, including tenant isolation and concurrent order numbering.
+
 ## Mageus and external channels
 - [ ] Scoped integration connection and authorization.
 - [ ] Mageus store page renders the same Dollareus catalog through an authorized API.
@@ -44,4 +55,4 @@
 - [ ] Payment provider abstraction; Dollareus must not store card data.
 
 ## Later modules
-Restaurant-specific availability windows, dietary/allergen information, tables, POS, kitchen display and ordering; retail inventory/POS; appointments and scheduling; digital-goods delivery; shipping; reporting; and X-Facture document integration. These should extend the shared commerce core rather than introduce parallel store/catalog systems.
+Restaurant table management, modifier groups, kitchen display and preparation workflows; retail inventory ledger, barcode scanning and returns; appointments and scheduling; digital-goods delivery; shipping; reporting; payments, refunds, fiscal receipt requirements, offline POS sync; and X-Facture document integration. These should extend the shared commerce core rather than introduce parallel store/catalog systems.
