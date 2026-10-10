@@ -20,7 +20,12 @@ Status: in progress.
 - [x] Add first-party email/password registration, login, logout, and session endpoints.
 - [x] Add Google and Facebook OAuth authorization-code flows with state validation and Google PKCE.
 - [x] Add PostgreSQL tables for users, password credentials, sessions, OAuth accounts/state, and email-token purposes.
+- [x] Add email verification and password recovery API flows using a Resend-compatible email API.
+- [x] Add merchant sign-in/register, social login, email verification, and password recovery screens.
+- [x] Bind OAuth state to a short-lived HttpOnly cookie to mitigate login CSRF.
 - [ ] Execute the fresh schema against the intended empty Neon database.
+- [ ] Run `pnpm ci` after the authentication changes; GitHub could not be cloned in this environment, so compile/test status is not confirmed.
+- [ ] Configure and test Google/Facebook OAuth, email delivery, production API URL, and secure cookie behavior.
 - [ ] Verify the created tables directly in Neon.
 
 ## Phase 2 — PostgreSQL API
