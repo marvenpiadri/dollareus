@@ -4,6 +4,74 @@
 
 BEGIN;
 
+CREATE TABLE users (
+  id text PRIMARY KEY,
+  email text UNIQUE,
+  email_verified_at timestamptz,
+  display_name text,
+  avatar_url text,
+  status text NOT NULL CHECK (status IN ('active', 'suspended', 'deleted')),
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  CHECK (email IS NULL OR (length(email) BETWEEN 3 AND 254 AND email = lower(btrim(email))))
+);
+CREATE INDEX users_status_created_idx ON users(status, created_at DESC);
+
+CREATE TABLE auth_passwords (
+  user_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  password_hash text NOT NULL,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL
+);
+
+CREATE TABLE auth_sessions (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL,
+  last_seen_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  CHECK (expires_at > created_at)
+);
+CREATE INDEX auth_sessions_user_expiry_idx ON auth_sessions(user_id, expires_at);
+CREATE INDEX auth_sessions_expiry_idx ON auth_sessions(expires_at);
+
+CREATE TABLE auth_oauth_accounts (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider text NOT NULL CHECK (provider IN ('google', 'facebook')),
+  provider_subject text NOT NULL,
+  provider_email text,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  UNIQUE (provider, provider_subject),
+  UNIQUE (user_id, provider)
+);
+CREATE INDEX auth_oauth_accounts_user_idx ON auth_oauth_accounts(user_id);
+
+CREATE TABLE auth_oauth_states (
+  id text PRIMARY KEY,
+  provider text NOT NULL CHECK (provider IN ('google', 'facebook')),
+  state_hash text NOT NULL UNIQUE,
+  code_verifier text NOT NULL,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  CHECK (expires_at > created_at)
+);
+CREATE INDEX auth_oauth_states_expiry_idx ON auth_oauth_states(expires_at);
+
+CREATE TABLE auth_email_tokens (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  purpose text NOT NULL CHECK (purpose IN ('verify_email', 'reset_password')),
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  CHECK (expires_at > created_at)
+);
+CREATE INDEX auth_email_tokens_user_purpose_idx ON auth_email_tokens(user_id, purpose, expires_at);
+
 CREATE TABLE organizations (
   id text PRIMARY KEY,
   name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 180),
@@ -15,7 +83,7 @@ CREATE TABLE organizations (
 
 CREATE TABLE organization_memberships (
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id text NOT NULL,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role text NOT NULL CHECK (role IN ('owner', 'admin', 'manager', 'staff', 'viewer')),
   status text NOT NULL CHECK (status IN ('invited', 'active', 'suspended', 'removed')),
   created_at timestamptz NOT NULL,
