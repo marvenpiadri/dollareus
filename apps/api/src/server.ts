@@ -2,27 +2,18 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pool } from './db/pool.js';
-
-declare module 'fastify' {
-  interface FastifyRequest { identity: DecodedIdToken | null; }
-}
-
-const projectId = process.env.FIREBASE_PROJECT_ID;
-if (!projectId) throw new Error('FIREBASE_PROJECT_ID is required for identity verification.');
-if (getApps().length === 0) initializeApp({ projectId });
+import { authenticate, registerAuthRoutes } from './auth.js';
 
 const app = Fastify({ logger: true, trustProxy: process.env.NODE_ENV === 'production', bodyLimit: 1_048_576, genReqId: () => randomUUID() });
-app.decorateRequest('identity', null);
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').split(',').map((origin) => origin.trim()).filter(Boolean);
 
 await app.register(helmet, { contentSecurityPolicy: false });
 await app.register(cors, { origin: allowedOrigins, credentials: true });
 await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+await registerAuthRoutes(app);
 
 app.setErrorHandler((error, request, reply) => {
   const normalized = error instanceof Error ? error : new Error('Unknown request error');
@@ -31,16 +22,6 @@ app.setErrorHandler((error, request, reply) => {
   const statusCode = typeof candidate === 'number' && candidate >= 400 && candidate < 600 ? candidate : 500;
   return reply.code(statusCode).send({ error: { code: statusCode >= 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR', message: statusCode >= 500 ? 'An unexpected error occurred.' : normalized.message, requestId: request.id } });
 });
-
-async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const authorization = request.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) {
-    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'A valid bearer token is required.', requestId: request.id } });
-    return;
-  }
-  try { request.identity = await getAuth().verifyIdToken(authorization.slice(7), true); }
-  catch { await reply.code(401).send({ error: { code: 'INVALID_TOKEN', message: 'The session token is invalid or expired.', requestId: request.id } }); }
-}
 
 async function requireMembership(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
   if (!request.identity) {
