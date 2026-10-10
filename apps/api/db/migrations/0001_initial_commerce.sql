@@ -2,8 +2,6 @@
 -- IDs are text so Firebase Auth UIDs and existing opaque IDs can be preserved.
 -- Money is stored in integer minor units; do not use floating-point currency values.
 
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS organizations (
   id text PRIMARY KEY,
   name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 180),
@@ -302,4 +300,3 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at timestamptz NOT NULL DEFAULT now()
 );
 
-COMMIT;
