@@ -131,7 +131,7 @@ export class AppComponent {
       this.onboardingStage.set('organization');
     }
   }
-  private apiBase(): string { return ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\\/$/, ''); }
+  private apiBase(): string { return ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, ''); }
 
   private async apiRequest(path: string, init: RequestInit = {}): Promise<any> {
     const response = await fetch(this.apiBase() + path, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
@@ -174,7 +174,7 @@ export class AppComponent {
         return {
           id: String(p.id), name, category: 'Uncategorized', sku: String(variant?.sku ?? '—'),
           priceMinor: Number(variant?.amountMinor ?? 0), currency: (variant?.currency ?? 'MAD') as ProductRow['currency'],
-          stock: null, status, initials: name.split(/\\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
+          stock: null, status, initials: name.split(/\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
           tone: 'sage'
         };
       }));
