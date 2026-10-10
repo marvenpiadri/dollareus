@@ -26,7 +26,7 @@ Protected endpoints use the first-party Dollareus session cookie. Password regis
 - `GET /api/v1/organizations/:organizationId/stores` — list stores in an organization.
 - `GET /api/v1/organizations/:organizationId/products` — list products in an organization.
 - `POST /api/v1/organizations/:organizationId/products` — create a product with variants.
-- `PATCH /api/v1/organizations/:organizationId/products/:productId` — update product name, slug, description, and lifecycle status (including archive).
+- `PATCH /api/v1/organizations/:organizationId/products/:productId` — update product name, slug, description, lifecycle status (including archive), and the selected primary variant's price/SKU.
 - `GET /api/v1/public/stores/:storeSlug` — read a published, active store.
 - `GET /api/v1/public/stores/:storeSlug/catalog` — list active products and active variants for a published store.
 - `GET /health` and `GET /api/v1/health` — health checks.
