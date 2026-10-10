@@ -66,6 +66,7 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
         </div>
       </main>
+      @if (productEditorOpen()) { <div role="presentation" style="position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:#17201680" (click)="closeProductEditor()"><section role="dialog" aria-modal="true" aria-labelledby="product-editor-title" style="width:min(100%,520px);padding:28px;background:white;border:1px solid #e6ebe2;border-radius:16px;box-shadow:0 24px 80px #0002" (click)="$event.stopPropagation()"><div style="display:flex;justify-content:space-between;align-items:start;gap:16px"><div><p class="eyebrow">PRODUCT CATALOG</p><h2 id="product-editor-title" style="margin:0 0 8px;font-size:24px">Add a product</h2><p style="margin:0 0 20px;color:#81897d;font-size:12px;line-height:1.6">Create a draft product in your database. Publishing and inventory are not available yet.</p></div><button type="button" aria-label="Close product editor" (click)="closeProductEditor()" style="border:0;background:none;font-size:24px;color:#81897d">×</button></div><form style="display:grid;gap:13px" (submit)="saveProduct($event)"><label style="display:grid;gap:6px;font-size:12px">Product name<input name="name" required maxlength="180" placeholder="e.g. Handmade ceramic bowl" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label><label style="display:grid;gap:6px;font-size:12px">Product URL slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="handmade-ceramic-bowl" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label><label style="display:grid;gap:6px;font-size:12px">Description<textarea name="description" maxlength="10000" rows="3" placeholder="Describe your product" style="padding:10px 12px;border:1px solid #dfe5da;border-radius:8px;resize:vertical"></textarea></label><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label style="display:grid;gap:6px;font-size:12px">Price (<escape>{{</escape> storeCurrency() }})<input name="price" type="number" min="0" step="0.01" required value="0.00" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label><label style="display:grid;gap:6px;font-size:12px">SKU (optional)<input name="sku" maxlength="100" placeholder="SKU-001" style="height:42px;padding:0 12px;border:1px solid #dfe5da;border-radius:8px"></label></div>@if (productSaveError()) { <p role="alert" style="margin:0;color:#a44737;font-size:12px">{{ productSaveError() }}</p> }<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px"><button type="button" class="button secondary" (click)="closeProductEditor()">Cancel</button><button type="submit" class="button primary" [disabled]="productSaveBusy()">{{ productSaveBusy() ? 'Saving…' : 'Save draft product' }}</button></div></form></section></div> }
       @if (toast()) { <div class="toast" role="status"><span>✓</span>{{ toast() }}<button type="button" aria-label="Dismiss" (click)="toast.set('')">×</button></div> }
     </div>
     }
@@ -81,6 +82,10 @@ export class AppComponent {
   protected readonly workspaceError = signal('');
   protected readonly onboardingError = signal('');
   protected readonly onboardingBusy = signal(false);
+  protected readonly productEditorOpen = signal(false);
+  protected readonly productSaveBusy = signal(false);
+  protected readonly productSaveError = signal('');
+  protected readonly storeCurrency = signal('MAD');
   protected readonly onboardingStage = signal<'organization' | 'store' | 'ready'>('organization');
   protected readonly organizationId = signal('');
   protected readonly storeId = signal('');
@@ -162,6 +167,7 @@ export class AppComponent {
         return;
       }
       this.storeId.set(store.id);
+      this.storeCurrency.set(String(store.defaultCurrency ?? 'MAD'));
       this.storeName.set(store.name);
       this.storeSlug.set(store.slug);
       this.onboardingStage.set('ready');
@@ -210,7 +216,7 @@ export class AppComponent {
         businessType: 'general', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
         defaultExperience: 'commerce', enabledExperiences: ['commerce'], published: false, theme: {}
       }) });
-      this.storeId.set(store.id); this.storeName.set(store.name); this.storeSlug.set(store.slug);
+      this.storeId.set(store.id); this.storeCurrency.set('MAD'); this.storeName.set(store.name); this.storeSlug.set(store.slug);
       this.onboardingStage.set('ready');
       await this.loadWorkspace();
     } catch (error) {
@@ -241,6 +247,28 @@ export class AppComponent {
   protected statusClass(status: string): string { return status.toLowerCase(); }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices, images and product availability.' : this.activeNav() === 'Orders' ? 'Review incoming orders and keep fulfillment moving.' : 'This workspace section will be connected as the platform grows.'; }
   protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Orders'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
-  protected addProduct(): void { this.activeNav.set('Products'); this.notify('Product creation UI is not implemented yet.'); }
+  protected addProduct(): void { this.activeNav.set('Products'); this.productSaveError.set(''); this.productEditorOpen.set(true); }
+  protected closeProductEditor(): void { if (!this.productSaveBusy()) this.productEditorOpen.set(false); }
+  protected async saveProduct(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const name = String(values.get('name') ?? '').trim();
+    const price = Number(values.get('price'));
+    if (!Number.isFinite(price) || price < 0) { this.productSaveError.set('Enter a valid non-negative price.'); return; }
+    this.productSaveBusy.set(true); this.productSaveError.set('');
+    try {
+      await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products`, { method: 'POST', body: JSON.stringify({
+        storeId: this.storeId(), slug: String(values.get('slug') ?? '').trim(), name,
+        description: String(values.get('description') ?? '').trim() || null, status: 'draft', kind: 'physical',
+        availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: [],
+        variants: [{ id: crypto.randomUUID(), sku: String(values.get('sku') ?? '').trim() || null, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
+      }) });
+      this.productEditorOpen.set(false);
+      await this.loadWorkspace();
+      this.notify('Draft product saved to your catalog.');
+    } catch (error) {
+      this.productSaveError.set(error instanceof Error ? error.message : 'Could not save this product.');
+    } finally { this.productSaveBusy.set(false); }
+  }
   protected notify(message: string): void { this.toast.set(message); globalThis.setTimeout(() => { if (this.toast() === message) this.toast.set(''); }, 3000); }
 }
