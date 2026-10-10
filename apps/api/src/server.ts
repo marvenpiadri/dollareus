@@ -12,6 +12,14 @@ const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').spl
 
 await app.register(helmet, { contentSecurityPolicy: false });
 await app.register(cors, { origin: allowedOrigins, credentials: true });
+app.addHook('onRequest', async (request, reply) => {
+  const method = request.method.toUpperCase();
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
+  const origin = request.headers.origin;
+  if (origin && !allowedOrigins.includes(origin)) {
+    await reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This request origin is not allowed.', requestId: request.id } });
+  }
+});
 await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
 await registerAuthRoutes(app);
 
