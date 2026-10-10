@@ -13,6 +13,8 @@ export interface ProductVariant { id: string; sku?: string; title: string; optio
 export interface ProductAvailability { status: 'available' | 'unavailable' | 'limited' | 'preorder'; /** Optional customer-facing explanation, e.g. "Available after 18:00". */ note?: string; }
 export interface Product extends OrganizationRef {
   id: string;
+  /** Optional until the product is assigned to a specific store. */
+  storeId?: string;
   slug: string;
   name: string;
   description?: string;
@@ -74,14 +76,18 @@ export interface PublicEntryPoint {
   status: 'active' | 'disabled';
   createdAt: string;
 }
+export interface PublicImage { id: string; alt: string; width?: number; height?: number; position: number; /** Safe, delivery-ready URL when available; never expose private storage keys. */ url?: string; }
+export interface PublicCatalogItem extends Omit<Product, 'images' | 'organizationId' | 'storeId'> {
+  images: PublicImage[];
+}
 export interface PublicStorefront {
   store: Pick<Store, 'id' | 'name' | 'slug' | 'businessType' | 'defaultCurrency' | 'locale' | 'timeZone'>;
   experience: StoreExperience;
   description?: string;
-  logo?: ProductImage;
-  coverImage?: ProductImage;
+  logo?: PublicImage;
+  coverImage?: PublicImage;
   categories: CatalogCategory[];
-  items: Product[];
+  items: PublicCatalogItem[];
   canonicalUrl: string;
   updatedAt: string;
 }
