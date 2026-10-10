@@ -5,20 +5,22 @@
 - [x] Establish Angular merchant workspace scaffold and first dashboard.
 - [x] Define shared commerce transport contracts.
 - [x] Document media-storage conventions.
-- [ ] Add CI build and automated tests.
-- [ ] Select API runtime and persistence strategy.
+- [x] Add CI build and API typecheck.
+- [x] Select API runtime and persistence strategy (Fastify + Firebase Admin/Firestore foundation; reassess as transactional commerce needs are validated).
 
 ## Merchant identity
-- [ ] Authentication provider and secure session handling.
+- [ ] Authentication provider and secure session handling in the merchant UI.
 - [ ] Organization creation, memberships, roles and invitations.
-- [ ] Server-side authorization and audit events.
-- [ ] Emulator/integration tests for security rules.
+- [ ] Server-side role-based authorization and audit events.
+- [ ] Emulator/integration tests for tenant isolation and security rules.
 
 ## Catalog and media
-- [ ] Product/category/variant API with schema validation.
-- [ ] Upload intents and object-storage adapter.
-- [ ] Image processing and safe delivery URLs.
-- [ ] Draft/published product states and public storefront projection.
+- [x] Product create/list API with schema validation.
+- [x] Product update API with transactional slug changes.
+- [x] Upload intents and initial object-storage workflow.
+- [ ] Product/category/variant editor in the merchant UI connected to the API.
+- [ ] Image file-signature validation, processing and safe delivery URLs.
+- [ ] Cursor pagination and public storefront projection for draft/published products.
 
 ## Commerce
 - [ ] Cart, checkout session, orders, refunds and order history.
