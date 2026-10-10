@@ -1110,73 +1110,106 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
     if (!await requireOrganizationMembership(request, reply, organizationId)) return;
     const parsed = CreatePosOrderSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The POS order payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
-    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
-    const storeSnapshot = await storeRef.get();
-    if (!storeSnapshot.exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
-    const sessionRef = storeRef.collection('posSessions').doc(parsed.data.sessionId);
-    const sessionSnapshot = await sessionRef.get();
-    if (!sessionSnapshot.exists || sessionSnapshot.data()?.status !== 'open') return reply.code(409).send({ error: { code: 'POS_SESSION_NOT_OPEN', message: 'Open a POS session before creating an order.', requestId: request.id } });
 
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const sessionRef = storeRef.collection('posSessions').doc(parsed.data.sessionId);
+    const orderRef = storeRef.collection('orders').doc();
+    const counterRef = storeRef.collection('system').doc('orderCounter');
     const lineRefs = parsed.data.lines.map((line) => line.sourceType === 'product'
       ? db.doc(`organizations/${organizationId}/products/${line.itemId}`)
       : db.doc(`organizations/${organizationId}/stores/${storeId}/menus/${line.menuId}/items/${line.itemId}`));
     const uniqueRefs = [...new Map(lineRefs.map((ref) => [ref.path, ref])).values()];
-    const snapshots = await Promise.all(uniqueRefs.map((ref) => ref.get()));
-    const snapshotByPath = new Map(uniqueRefs.map((ref, index) => [ref.path, snapshots[index]]));
-    const currency = String(storeSnapshot.data()?.defaultCurrency ?? 'MAD');
-    const lines: Array<Record<string, unknown>> = [];
-    let subtotalMinor = 0;
-    for (let index = 0; index < parsed.data.lines.length; index += 1) {
-      const line = parsed.data.lines[index];
-      const ref = lineRefs[index];
-      const itemSnapshot = snapshotByPath.get(ref.path);
-      if (!itemSnapshot?.exists) return reply.code(404).send({ error: { code: 'POS_ITEM_NOT_FOUND', message: 'One of the selected items no longer exists.', requestId: request.id } });
-      const item = itemSnapshot.data()!;
-      if (item.storeId !== storeId || item.status !== 'active') return reply.code(409).send({ error: { code: 'POS_ITEM_UNAVAILABLE', message: 'One of the selected items is not active in this store.', requestId: request.id } });
-      let unitPriceMinor: number;
-      let itemName = String(item.name ?? '');
-      let variantId: string | undefined;
-      if (line.sourceType === 'product') {
-        const variant = (item.variants ?? []).find((candidate: { id?: string; status?: string }) => candidate.id === line.variantId && candidate.status === 'active');
-        if (!variant || variant.price?.currency !== currency || !Number.isSafeInteger(variant.price?.amountMinor)) return reply.code(409).send({ error: { code: 'POS_VARIANT_UNAVAILABLE', message: 'The selected product variant is unavailable or uses a different currency.', requestId: request.id } });
-        unitPriceMinor = variant.price.amountMinor;
-        itemName = `${itemName} — ${variant.title}`;
-        variantId = line.variantId;
-      } else {
-        if (item.availability === 'unavailable' || item.price?.currency !== currency || !Number.isSafeInteger(item.price?.amountMinor)) return reply.code(409).send({ error: { code: 'POS_MENU_ITEM_UNAVAILABLE', message: 'The selected menu item is unavailable or uses a different currency.', requestId: request.id } });
-        unitPriceMinor = item.price.amountMinor;
-      }
-      const lineTotalMinor = unitPriceMinor * line.quantity;
-      if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(subtotalMinor + lineTotalMinor)) return reply.code(400).send({ error: { code: 'POS_TOTAL_INVALID', message: 'The order total is too large.', requestId: request.id } });
-      subtotalMinor += lineTotalMinor;
-      lines.push({ sourceType: line.sourceType, itemId: line.itemId, ...(line.sourceType === 'menuItem' ? { menuId: line.menuId } : {}), ...(variantId ? { variantId } : {}), nameSnapshot: itemName, quantity: line.quantity, unitPrice: { amountMinor: unitPriceMinor, currency }, lineTotal: { amountMinor: lineTotalMinor, currency } });
-    }
-    const orderRef = storeRef.collection('orders').doc();
-    const counterRef = storeRef.collection('system').doc('orderCounter');
+    const menuRefs = [...new Map(parsed.data.lines.filter((line) => line.sourceType === 'menuItem').map((line) => {
+      const ref = storeRef.collection('menus').doc(line.menuId);
+      return [ref.path, ref] as const;
+    })).values()];
     const now = new Date().toISOString();
-    const order = {
-      id: orderRef.id, organizationId, storeId, sessionId: parsed.data.sessionId,
-      number: '', status: 'confirmed', channel: parsed.data.channel, fulfillment: parsed.data.fulfillment,
-      ...(parsed.data.tableLabel ? { tableLabel: parsed.data.tableLabel } : {}),
-      ...(parsed.data.customerNote ? { customerNote: parsed.data.customerNote } : {}),
-      currency, subtotal: { amountMinor: subtotalMinor, currency }, taxTotal: { amountMinor: 0, currency },
-      discountTotal: { amountMinor: 0, currency }, grandTotal: { amountMinor: subtotalMinor, currency },
-      lines, createdBy: request.identity?.uid, createdAt: now, updatedAt: now
-    };
-    const finalOrder = await db.runTransaction(async (transaction) => {
-      const [currentSession, counterSnapshot] = await Promise.all([transaction.get(sessionRef), transaction.get(counterRef)]);
-      if (!currentSession.exists || currentSession.data()?.status !== 'open') throw new Error('POS_SESSION_NOT_OPEN');
-      const nextNumber = Number(counterSnapshot.data()?.value ?? 0) + 1;
-      const number = `POS-${String(nextNumber).padStart(6, '0')}`;
-      transaction.set(counterRef, { value: nextNumber, updatedAt: now }, { merge: true });
-      transaction.create(orderRef, { ...order, number });
-      return { ...order, number };
-    }).catch((error) => {
-      if (error instanceof Error && error.message === 'POS_SESSION_NOT_OPEN') return null;
+
+    try {
+      const finalOrder = await db.runTransaction(async (transaction) => {
+        // Read every authoritative value before any writes. This makes the
+        // session, current item prices/status and order sequence part of one
+        // atomic decision rather than trusting prices from the client.
+        const [storeSnapshot, sessionSnapshot, counterSnapshot, itemSnapshots, menuSnapshots] = await Promise.all([
+          transaction.get(storeRef),
+          transaction.get(sessionRef),
+          transaction.get(counterRef),
+          Promise.all(uniqueRefs.map((ref) => transaction.get(ref))),
+          Promise.all(menuRefs.map((ref) => transaction.get(ref)))
+        ]);
+        if (!storeSnapshot.exists) throw new Error('STORE_NOT_FOUND');
+        if (!sessionSnapshot.exists || sessionSnapshot.data()?.status !== 'open') throw new Error('POS_SESSION_NOT_OPEN');
+        const store = storeSnapshot.data()!;
+        const currency = String(store.defaultCurrency ?? 'MAD');
+        const itemByPath = new Map(uniqueRefs.map((ref, index) => [ref.path, itemSnapshots[index]]));
+        const menuByPath = new Map(menuRefs.map((ref, index) => [ref.path, menuSnapshots[index]]));
+        const lines: Array<Record<string, unknown>> = [];
+        let subtotalMinor = 0;
+
+        for (let index = 0; index < parsed.data.lines.length; index += 1) {
+          const line = parsed.data.lines[index];
+          const ref = lineRefs[index];
+          const itemSnapshot = itemByPath.get(ref.path);
+          if (!itemSnapshot?.exists) throw new Error('POS_ITEM_NOT_FOUND');
+          const item = itemSnapshot.data()!;
+          if (item.storeId !== storeId || item.status !== 'active') throw new Error('POS_ITEM_UNAVAILABLE');
+
+          let unitPriceMinor: number;
+          let itemName = String(item.name ?? '');
+          let variantId: string | undefined;
+          if (line.sourceType === 'product') {
+            const variant = (item.variants ?? []).find((candidate: { id?: string; status?: string }) => candidate.id === line.variantId && candidate.status === 'active');
+            if (!variant || variant.price?.currency !== currency || !Number.isSafeInteger(variant.price?.amountMinor)) throw new Error('POS_VARIANT_UNAVAILABLE');
+            unitPriceMinor = variant.price.amountMinor;
+            itemName = `${itemName} — ${variant.title}`;
+            variantId = line.variantId;
+          } else {
+            const menuSnapshot = menuByPath.get(storeRef.collection('menus').doc(line.menuId).path);
+            if (!menuSnapshot?.exists || menuSnapshot.data()?.status !== 'active' || item.menuId !== line.menuId) throw new Error('POS_MENU_UNAVAILABLE');
+            if (item.availability === 'unavailable' || item.price?.currency !== currency || !Number.isSafeInteger(item.price?.amountMinor)) throw new Error('POS_MENU_ITEM_UNAVAILABLE');
+            unitPriceMinor = item.price.amountMinor;
+          }
+          const lineTotalMinor = unitPriceMinor * line.quantity;
+          if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(subtotalMinor + lineTotalMinor)) throw new Error('POS_TOTAL_INVALID');
+          subtotalMinor += lineTotalMinor;
+          lines.push({ sourceType: line.sourceType, itemId: line.itemId, ...(line.sourceType === 'menuItem' ? { menuId: line.menuId } : {}), ...(variantId ? { variantId } : {}), nameSnapshot: itemName, quantity: line.quantity, unitPrice: { amountMinor: unitPriceMinor, currency }, lineTotal: { amountMinor: lineTotalMinor, currency } });
+        }
+
+        const nextNumber = Number(counterSnapshot.data()?.value ?? 0) + 1;
+        if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) throw new Error('POS_ORDER_SEQUENCE_INVALID');
+        const number = `POS-${String(nextNumber).padStart(6, '0')}`;
+        const order = {
+          id: orderRef.id, organizationId, storeId, sessionId: parsed.data.sessionId,
+          number, status: 'confirmed', channel: parsed.data.channel, fulfillment: parsed.data.fulfillment,
+          ...(parsed.data.tableLabel ? { tableLabel: parsed.data.tableLabel } : {}),
+          ...(parsed.data.customerNote ? { customerNote: parsed.data.customerNote } : {}),
+          currency, subtotal: { amountMinor: subtotalMinor, currency }, taxTotal: { amountMinor: 0, currency },
+          discountTotal: { amountMinor: 0, currency }, grandTotal: { amountMinor: subtotalMinor, currency },
+          lines, createdBy: request.identity?.uid, createdAt: now, updatedAt: now
+        };
+        transaction.set(counterRef, { value: nextNumber, updatedAt: now }, { merge: true });
+        transaction.create(orderRef, order);
+        return order;
+      });
+      return reply.code(201).send({ data: finalOrder, requestId: request.id });
+    } catch (error) {
+      if (error instanceof Error) {
+        const known: Record<string, { status: number; message: string }> = {
+          STORE_NOT_FOUND: { status: 404, message: 'The store does not exist.' },
+          POS_SESSION_NOT_OPEN: { status: 409, message: 'Open a POS session before creating an order.' },
+          POS_ITEM_NOT_FOUND: { status: 404, message: 'One of the selected items no longer exists.' },
+          POS_ITEM_UNAVAILABLE: { status: 409, message: 'One of the selected items is not active in this store.' },
+          POS_VARIANT_UNAVAILABLE: { status: 409, message: 'The selected product variant is unavailable or uses a different currency.' },
+          POS_MENU_UNAVAILABLE: { status: 409, message: 'The selected menu is not active in this store.' },
+          POS_MENU_ITEM_UNAVAILABLE: { status: 409, message: 'The selected menu item is unavailable or uses a different currency.' },
+          POS_TOTAL_INVALID: { status: 400, message: 'The order total is too large.' },
+          POS_ORDER_SEQUENCE_INVALID: { status: 500, message: 'A valid order number could not be allocated.' }
+        };
+        const failure = known[error.message];
+        if (failure) return reply.code(failure.status).send({ error: { code: error.message, message: failure.message, requestId: request.id } });
+      }
       throw error;
-    });
-    if (!finalOrder) return reply.code(409).send({ error: { code: 'POS_SESSION_NOT_OPEN', message: 'The POS session was closed before the order could be saved.', requestId: request.id } });
-    return reply.code(201).send({ data: finalOrder, requestId: request.id });
+    }
   }
 );
 
