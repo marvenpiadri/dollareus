@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dollareus.com/schemas/menu-item.schema.json",
+  "title": "Dollareus Restaurant Menu Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "organizationId",
+    "storeId",
+    "menuId",
+    "slug",
+    "name",
+    "price",
+    "status",
+    "allergens",
+    "dietaryLabels",
+    "availability",
+    "position",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organizationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "storeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "menuId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 180
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amountMinor",
+        "currency"
+      ],
+      "properties": {
+        "amountMinor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ]
+    },
+    "categoryId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allergens": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      }
+    },
+    "dietaryLabels": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      }
+    },
+    "availability": {
+      "enum": [
+        "available",
+        "unavailable",
+        "limited"
+      ]
+    },
+    "position": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

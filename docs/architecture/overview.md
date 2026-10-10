@@ -1,29 +1,42 @@
 # Architecture overview
 
 ## Product boundary
-Dollareus is a standalone, API-first commerce platform. It serves its own merchant interface and authorized clients such as Mageus. Mageus owns publishing, communities, audience, and discovery; Dollareus owns commerce records and workflows.
+Dollareus is a standalone, API-first commerce platform and the source of truth for store/catalog data. It serves its own merchant interface and authorized clients such as Mageus and, potentially, future applications. Mageus owns publishing, communities, audience, and discovery; Dollareus owns commerce records and workflows.
 
 ## Planned monorepo
 - `apps/merchant`: Angular merchant workspace.
-- `apps/api`: planned versioned server API.
-- `packages/contracts`: transport-safe TypeScript contracts.
+- `apps/api`: versioned Fastify API.
+- `packages/contracts`: transport-safe TypeScript contracts shared by clients.
 - Future packages: domain logic, API client, UI primitives, QR adapter, X-Facture document adapter.
 
 Keep business rules testable without browser or cloud SDKs. Avoid importing Angular UI into domain packages.
 
 ## Core domains
 1. Identity and organizations: users, memberships, roles, permissions, invitations.
-2. Stores and channels: store configuration and connected storefronts.
-3. Catalog: products, variants, categories, collections, prices, media references.
+2. Stores and channels: store configuration, public experiences, stable entry points, and connected applications.
+3. Catalog: products/items, variants, categories, collections, prices, media references, availability, and publication state.
 4. Commerce: carts, checkout sessions, orders, line-item snapshots, refunds.
 5. Inventory: locations, stock levels, reservations, movements, adjustments.
-6. Business modules: POS, restaurant service, purchasing, CRM, appointments and digital goods.
-7. Integrations: Mageus, X-Facture, QR engine, payment providers, shipping and notifications.
+6. Optional business modules: restaurant service, POS, purchasing, CRM, appointments and digital goods.
+7. Integrations: Mageus, authorized external apps, X-Facture, QR/link generation, payment providers, shipping and notifications.
+
+## One source of truth; many presentations
+Do not model every presentation as a separate store type. Keep these dimensions separate:
+- Business type: restaurant, retail, services, freelancer, digital, general.
+- Catalog item kind: physical, digital, service, food/drink.
+- Experience: commerce, menu, catalog, services.
+- Channel: Dollareus, Mageus, authorized external application.
+- Entry point: direct URL, QR code, or embed.
+
+A restaurant's menu is a public presentation over its catalog. A QR code is a stable pointer to that presentation. A Mageus store is another channel rendering the same catalog. None of these should create a parallel store or duplicate products/prices. Domain-specific restaurant behavior can be added as a module when required, but common catalog identity and publication remain in the core.
+
+See [smart commerce architecture](smart-commerce.md) for the model and proposed integration contract.
 
 ## Invariants
 - Every private business resource is scoped to an organization and authorized server-side.
-- Storefronts are channels connected to a store, not duplicate catalogs.
+- Storefronts and channels are presentations/access paths, not duplicate catalogs.
 - A product's identity and stock ownership must not be duplicated across Mageus and Dollareus.
+- Public APIs expose only explicitly published records and a minimal public projection.
 - Money is integer minor units plus an explicit currency; never use floating-point money.
 - Order lines snapshot names, quantities, prices, discounts, and tax decisions at purchase time.
 - Stock changes are explicit movements, not arbitrary client writes to a stock count.
@@ -39,9 +52,9 @@ Keep business rules testable without browser or cloud SDKs. Avoid importing Angu
 - Version breaking contract changes deliberately.
 
 ## Persistence and security
-Firestore is a candidate for real-time data and Firebase Auth integration, but validate inventory transactions, reporting, queries, audit requirements, exportability, and cost before making it the source of truth for every domain. Keep contracts independent of storage SDKs.
+Firestore is the current foundation for the existing API routes. Keep contracts independent of storage SDKs and validate inventory transactions, reporting, audit requirements, exportability, and cost before deciding when to migrate any domain.
 
-Deny access by default. Enforce organization isolation and roles on the server. Keep secrets out of source control and browser bundles. Apply rate limits, request validation, audit logs, and observability to sensitive operations. Storage paths are identifiers, not authorization by themselves.
+Deny access by default. Enforce organization isolation and roles on the server. Keep secrets out of source control and browser bundles. Apply rate limits, request validation, audit logs, and observability to sensitive operations. Storage paths are identifiers, not authorization by themselves. Public routes must never return raw organization documents or drafts.
 
 ## Market readiness
 Morocco, France, and New York require explicit locale, timezone, currency, tax, address, payment, and privacy configuration. Do not hardcode tax rates or assume one legal invoice format. Country-specific tax and invoicing rules must be validated before production.

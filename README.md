@@ -7,6 +7,7 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 ## Product principles
 
 - **API-first:** Dollareus serves its own interfaces and authorized external clients such as Mageus through stable, versioned APIs.
+- **One source of truth, many experiences:** a store owns its catalog; menus, storefronts, Mageus pages, QR links, and external clients are presentations or channels over the same records.
 - **Modular by business need:** commerce fundamentals are shared; restaurant, retail, services, and digital-goods capabilities are optional modules.
 - **One source of truth:** catalogs, orders, inventory, and fulfillment have explicit ownership.
 - **Secure by default:** organizations are isolated; access is authenticated, authorized, audited, and validated on the server.
@@ -19,7 +20,7 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 - **Dollareus Commerce Core:** stores, catalogs, products, variants, carts, orders, checkout, and fulfillment.
 - **Business modules:** inventory, purchasing, POS, CRM, restaurant service, appointments, and digital products.
 - **Shared engines:** QR generation/management and integration with the X-Facture document engine.
-- **Mageus integration:** authorized storefront and commerce APIs; Mageus remains focused on publishing, communities, audience, and discovery.
+- **Mageus and external integrations:** authorized APIs render Dollareus-owned catalogs in Mageus and future apps without copying the source records; Mageus remains focused on publishing, communities, audience, and discovery.
 
 ## Repository structure
 
@@ -42,7 +43,7 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure Firebase Auth/emulators plus a development-only Neon `DATABASE_URL` when testing PostgreSQL migrations. Run `pnpm db:migrate` to apply versioned SQL migrations. Never commit real credentials. The initial commerce schema is in `apps/api/db/migrations`; the existing product routes still use Firestore until the API data-access migration is completed. The dashboard currently uses sample data and is not connected to the API yet. Protected API routes require a valid Firebase ID token and an active membership record.
+Copy `.env.example` to `.env` and configure Firebase Auth/emulators plus a development-only Neon `DATABASE_URL` when testing PostgreSQL migrations. Run `pnpm db:migrate` to apply versioned SQL migrations. Never commit real credentials. The initial commerce schema is in `apps/api/db/migrations`; the existing product routes still use Firestore until the API data-access migration is completed. The dashboard currently uses sample data and is not connected to the API yet. The API now has an initial store-creation/publishing and public-catalog foundation; the complete merchant workflow, public storefront renderer, stable QR-entry-point management, and Mageus channel authorization are still to be built. Protected API routes require a valid Firebase ID token and an active membership record.
 
 ## Product images
 
@@ -50,4 +51,4 @@ Image bytes belong in Firebase Cloud Storage (or a compatible object store), not
 
 ## Current status
 
-Early foundation, not production-ready. Authentication UI, organization onboarding, role management, production storage validation/image processing, payments, taxes, complete order processing, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md).
+Early foundation, not production-ready. Authentication UI, organization onboarding, role management, production storage validation/image processing, payments, taxes, complete order processing, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md) and the [smart-commerce architecture](docs/architecture/smart-commerce.md).
