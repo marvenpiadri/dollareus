@@ -317,6 +317,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', provider === 'google' ? 'openid email profile' : 'email,public_profile');
     url.searchParams.set('state', state);
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    reply.header('Set-Cookie', `dollareus_oauth_state=${encodeURIComponent(state)}; Path=/api/v1/auth/oauth; HttpOnly; SameSite=Lax; Max-Age=600${secure}`);
     if (provider === 'google') {
       url.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'));
       url.searchParams.set('code_challenge_method', 'S256');
@@ -333,6 +335,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const clientSecret = process.env[`${provider.toUpperCase()}_CLIENT_SECRET`];
     const callbackUrl = process.env[`${provider.toUpperCase()}_CALLBACK_URL`];
     if (!clientId || !clientSecret || !callbackUrl) return reply.code(503).send({ error: { code: 'OAUTH_NOT_CONFIGURED', message: 'This social sign-in provider has not been configured yet.', requestId: request.id } });
+    const stateCookie = cookieValue(request, 'dollareus_oauth_state');
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    reply.header('Set-Cookie', `dollareus_oauth_state=; Path=/api/v1/auth/oauth; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
+    if (!stateCookie || stateCookie !== request.query.state) {
+      return reply.code(400).send({ error: { code: 'OAUTH_STATE_INVALID', message: 'The sign-in request could not be verified. Please try again.', requestId: request.id } });
+    }
     const stateResult = await pool.query(
       'DELETE FROM auth_oauth_states WHERE provider=$1 AND state_hash=$2 AND expires_at>$3 RETURNING code_verifier',
       [provider, hash(request.query.state), new Date()]
@@ -349,7 +357,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!tokenResponse.ok) return reply.code(401).send({ error: { code: 'OAUTH_TOKEN_EXCHANGE_FAILED', message: 'The social provider could not complete sign-in.', requestId: request.id } });
     const tokenPayload = await tokenResponse.json() as { access_token?: string; id_token?: string };
-    if (!tokenPayload.access_token && !(provider === 'google' && tokenPayload.id_token)) return reply.code(401).send({ error: { code: 'OAUTH_TOKEN_MISSING', message: 'The social provider returned no access token.', requestId: request.id } });
+    if (!tokenPayload.access_token) return reply.code(401).send({ error: { code: 'OAUTH_TOKEN_MISSING', message: 'The social provider returned no access token.', requestId: request.id } });
     let subject = '';
     let email: string | null = null;
     let displayName: string | null = null;
