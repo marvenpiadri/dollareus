@@ -42,7 +42,9 @@ export interface CatalogCategory extends OrganizationRef {
 export interface Store extends OrganizationRef {
   id: string;
   name: string;
+  description?: string;
   slug: string;
+  hostedUrl?: string;
   businessType: BusinessType;
   defaultCurrency: CurrencyCode;
   locale: LocaleCode;
