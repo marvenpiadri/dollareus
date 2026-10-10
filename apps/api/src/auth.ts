@@ -1,0 +1,263 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual, randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
+import { pool } from './db/pool.js';
+
+const scrypt = promisify(scryptCallback);
+const SESSION_COOKIE = 'dollareus_session';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const OAUTH_STATE_TTL_MS = 1000 * 60 * 10;
+
+export interface AuthIdentity {
+  uid: string;
+  email: string | null;
+  emailVerified: boolean;
+  displayName: string | null;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest { identity: AuthIdentity | null; }
+}
+
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
+const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
+function cookieValue(request: FastifyRequest, name: string): string | null {
+  const header = request.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator < 0) continue;
+    if (part.slice(0, separator).trim() === name) {
+      try { return decodeURIComponent(part.slice(separator + 1).trim()); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function setSessionCookie(reply: FastifyReply, token: string, maxAgeSeconds: number): void {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  reply.header('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`);
+}
+
+async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+  const token = randomToken(32);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
+  await pool.query(
+    'INSERT INTO auth_sessions (id,user_id,token_hash,created_at,last_seen_at,expires_at) VALUES ($1,$2,$3,$4,$4,$5)',
+    [randomUUID(), userId, hash(token), now, expiresAt]
+  );
+  return { token, expiresAt };
+}
+
+export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const token = cookieValue(request, SESSION_COOKIE);
+  if (!token) {
+    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Sign in to continue.', requestId: request.id } });
+    return;
+  }
+  const result = await pool.query(
+    'SELECT u.id,u.email,u.email_verified_at,u.display_name,s.id AS session_id FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.status=$3 LIMIT 1',
+    [hash(token), new Date(), 'active']
+  );
+  const row = result.rows[0];
+  if (!row) {
+    setSessionCookie(reply, '', 0);
+    await reply.code(401).send({ error: { code: 'INVALID_SESSION', message: 'Your session is invalid or has expired.', requestId: request.id } });
+    return;
+  }
+  request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
+  await pool.query('UPDATE auth_sessions SET last_seen_at=$1 WHERE id=$2', [new Date(), row.session_id]);
+}
+
+export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
+  app.decorateRequest('identity', null);
+
+  app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown } }>('/api/v1/auth/register', async (request, reply) => {
+    const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
+    const password = typeof request.body?.password === 'string' ? request.body.password : '';
+    const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+      return reply.code(400).send({ error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.', requestId: request.id } });
+    }
+    if (password.length < 12 || password.length > 256) {
+      return reply.code(400).send({ error: { code: 'WEAK_PASSWORD', message: 'Password must contain between 12 and 256 characters.', requestId: request.id } });
+    }
+    if (displayName.length > 120) {
+      return reply.code(400).send({ error: { code: 'INVALID_DISPLAY_NAME', message: 'Display name must be 120 characters or fewer.', requestId: request.id } });
+    }
+    const salt = randomBytes(16);
+    const derived = await scrypt(password, salt, 64) as Buffer;
+    const passwordHash = `scrypt:${salt.toString('hex')}:${derived.toString('hex')}`;
+    const client = await pool.connect();
+    const userId = randomUUID();
+    const now = new Date();
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO users (id,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [userId, email, displayName || null, 'active', now]);
+      await client.query('INSERT INTO auth_passwords (user_id,password_hash,created_at,updated_at) VALUES ($1,$2,$3,$3)', [userId, passwordHash, now]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+        return reply.code(409).send({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'An account with this email already exists.', requestId: request.id } });
+      }
+      throw error;
+    } finally { client.release(); }
+    const session = await createSession(userId);
+    setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
+    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false }, requestId: request.id });
+  });
+
+  app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', async (request, reply) => {
+    const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
+    const password = typeof request.body?.password === 'string' ? request.body.password : '';
+    const result = await pool.query(
+      'SELECT u.id,u.email,u.display_name,u.status,p.password_hash FROM users u JOIN auth_passwords p ON p.user_id=u.id WHERE u.email=$1 LIMIT 1',
+      [email]
+    );
+    const row = result.rows[0];
+    let valid = false;
+    if (row && row.status === 'active' && typeof row.password_hash === 'string') {
+      const [algorithm, saltHex, expectedHex] = row.password_hash.split(':');
+      if (algorithm === 'scrypt' && saltHex && expectedHex) {
+        const expected = Buffer.from(expectedHex, 'hex');
+        const actual = await scrypt(password, Buffer.from(saltHex, 'hex'), expected.length) as Buffer;
+        valid = expected.length === actual.length && timingSafeEqual(expected, actual);
+      }
+    }
+    if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
+    const session = await createSession(row.id);
+    setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
+    return { data: { id: row.id, email: row.email, displayName: row.display_name }, requestId: request.id };
+  });
+
+  app.post('/api/v1/auth/logout', async (request, reply) => {
+    const token = cookieValue(request, SESSION_COOKIE);
+    if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1', [hash(token)]);
+    setSessionCookie(reply, '', 0);
+    return { data: { signedOut: true }, requestId: request.id };
+  });
+
+  app.get('/api/v1/auth/session', { preHandler: authenticate }, async (request) => ({
+    data: {
+      id: request.identity!.uid,
+      email: request.identity!.email,
+      displayName: request.identity!.displayName,
+      emailVerified: request.identity!.emailVerified
+    },
+    requestId: request.id
+  }));
+
+  app.get<{ Params: { provider: string } }>('/api/v1/auth/oauth/:provider/start', async (request, reply) => {
+    const provider = request.params.provider;
+    if (provider !== 'google' && provider !== 'facebook') {
+      return reply.code(404).send({ error: { code: 'OAUTH_PROVIDER_UNSUPPORTED', message: 'This social sign-in provider is not supported.', requestId: request.id } });
+    }
+    const clientId = process.env[`${provider.toUpperCase()}_CLIENT_ID`];
+    const callbackUrl = process.env[`${provider.toUpperCase()}_CALLBACK_URL`];
+    if (!clientId || !callbackUrl) {
+      return reply.code(503).send({ error: { code: 'OAUTH_NOT_CONFIGURED', message: 'This social sign-in provider has not been configured yet.', requestId: request.id } });
+    }
+    const state = randomToken(32);
+    const verifier = randomToken(48);
+    const now = new Date();
+    await pool.query(
+      'INSERT INTO auth_oauth_states (id,provider,state_hash,code_verifier,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)',
+      [randomUUID(), provider, hash(state), verifier, now, new Date(now.getTime() + OAUTH_STATE_TTL_MS)]
+    );
+    const url = new URL(provider === 'google' ? 'https://accounts.google.com/o/oauth2/v2/auth' : 'https://www.facebook.com/v23.0/dialog/oauth');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', callbackUrl);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', provider === 'google' ? 'openid email profile' : 'email,public_profile');
+    url.searchParams.set('state', state);
+    if (provider === 'google') {
+      url.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'));
+      url.searchParams.set('code_challenge_method', 'S256');
+      url.searchParams.set('access_type', 'online');
+    }
+    return reply.redirect(url.toString());
+  });
+
+  app.get<{ Params: { provider: string }; Querystring: { code?: string; state?: string; error?: string } }>('/api/v1/auth/oauth/:provider/callback', async (request, reply) => {
+    const provider = request.params.provider;
+    if (provider !== 'google' && provider !== 'facebook') return reply.code(404).send({ error: 'Unsupported provider.' });
+    if (request.query.error || !request.query.code || !request.query.state) return reply.code(400).send({ error: { code: 'OAUTH_CANCELLED', message: 'Social sign-in was cancelled or could not be completed.', requestId: request.id } });
+    const clientId = process.env[`${provider.toUpperCase()}_CLIENT_ID`];
+    const clientSecret = process.env[`${provider.toUpperCase()}_CLIENT_SECRET`];
+    const callbackUrl = process.env[`${provider.toUpperCase()}_CALLBACK_URL`];
+    if (!clientId || !clientSecret || !callbackUrl) return reply.code(503).send({ error: { code: 'OAUTH_NOT_CONFIGURED', message: 'This social sign-in provider has not been configured yet.', requestId: request.id } });
+    const stateResult = await pool.query(
+      'DELETE FROM auth_oauth_states WHERE provider=$1 AND state_hash=$2 AND expires_at>$3 RETURNING code_verifier',
+      [provider, hash(request.query.state), new Date()]
+    );
+    if (!stateResult.rowCount) return reply.code(400).send({ error: { code: 'OAUTH_STATE_INVALID', message: 'The sign-in request expired or could not be verified. Please try again.', requestId: request.id } });
+    const tokenResponse = await fetch(provider === 'google' ? 'https://oauth2.googleapis.com/token' : 'https://graph.facebook.com/v23.0/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId, client_secret: clientSecret, redirect_uri: callbackUrl,
+        code: request.query.code, grant_type: 'authorization_code',
+        ...(provider === 'google' ? { code_verifier: stateResult.rows[0].code_verifier } : {})
+      })
+    });
+    if (!tokenResponse.ok) return reply.code(401).send({ error: { code: 'OAUTH_TOKEN_EXCHANGE_FAILED', message: 'The social provider could not complete sign-in.', requestId: request.id } });
+    const tokenPayload = await tokenResponse.json() as { access_token?: string; id_token?: string };
+    if (!tokenPayload.access_token && !(provider === 'google' && tokenPayload.id_token)) return reply.code(401).send({ error: { code: 'OAUTH_TOKEN_MISSING', message: 'The social provider returned no access token.', requestId: request.id } });
+    let subject = '';
+    let email: string | null = null;
+    let displayName: string | null = null;
+    let avatarUrl: string | null = null;
+    let emailVerified = false;
+    if (provider === 'google') {
+      const userInfo = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${tokenPayload.access_token}` } });
+      if (!userInfo.ok) return reply.code(401).send({ error: { code: 'OAUTH_PROFILE_FAILED', message: 'Could not read the social account profile.', requestId: request.id } });
+      const profile = await userInfo.json() as { sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string };
+      subject = profile.sub ?? ''; email = profile.email ? normalizeEmail(profile.email) : null;
+      emailVerified = profile.email_verified === true; displayName = profile.name ?? null; avatarUrl = profile.picture ?? null;
+    } else {
+      const profileResponse = await fetch(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(tokenPayload.access_token!)}`);
+      if (!profileResponse.ok) return reply.code(401).send({ error: { code: 'OAUTH_PROFILE_FAILED', message: 'Could not read the social account profile.', requestId: request.id } });
+      const profile = await profileResponse.json() as { id?: string; email?: string; name?: string; picture?: { data?: { url?: string } } };
+      subject = profile.id ?? ''; email = profile.email ? normalizeEmail(profile.email) : null;
+      displayName = profile.name ?? null; avatarUrl = profile.picture?.data?.url ?? null;
+    }
+    if (!subject) return reply.code(401).send({ error: { code: 'OAUTH_SUBJECT_MISSING', message: 'The social provider returned an invalid profile.', requestId: request.id } });
+    const client = await pool.connect();
+    let userId = '';
+    const now = new Date();
+    try {
+      await client.query('BEGIN');
+      const linked = await client.query('SELECT user_id FROM auth_oauth_accounts WHERE provider=$1 AND provider_subject=$2 FOR UPDATE', [provider, subject]);
+      if (linked.rowCount) {
+        userId = linked.rows[0].user_id;
+        await client.query('UPDATE users SET email=COALESCE($1,email),email_verified_at=CASE WHEN $2 THEN COALESCE(email_verified_at,$3) ELSE email_verified_at END,display_name=COALESCE(display_name,$4),avatar_url=COALESCE(avatar_url,$5),updated_at=$3 WHERE id=$6', [email, emailVerified, now, displayName, avatarUrl, userId]);
+      } else {
+        let existing = null;
+        if (email && emailVerified) {
+          const found = await client.query('SELECT id FROM users WHERE email=$1 FOR UPDATE', [email]);
+          existing = found.rows[0] ?? null;
+        }
+        userId = existing?.id ?? randomUUID();
+        if (existing) {
+          await client.query('UPDATE users SET email_verified_at=COALESCE(email_verified_at,$1),display_name=COALESCE(display_name,$2),avatar_url=COALESCE(avatar_url,$3),updated_at=$1 WHERE id=$4', [now, displayName, avatarUrl, userId]);
+        } else {
+          await client.query('INSERT INTO users (id,email,email_verified_at,display_name,avatar_url,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)', [userId, email, emailVerified ? now : null, displayName, avatarUrl, 'active', now]);
+        }
+        await client.query('INSERT INTO auth_oauth_accounts (id,user_id,provider,provider_subject,provider_email,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [randomUUID(), userId, provider, subject, email, now]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally { client.release(); }
+    const session = await createSession(userId);
+    setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
+    const frontendUrl = process.env.AUTH_SUCCESS_REDIRECT_URL;
+    if (frontendUrl) return reply.redirect(frontendUrl);
+    return reply.send({ data: { signedIn: true }, requestId: request.id });
+  });
+}
