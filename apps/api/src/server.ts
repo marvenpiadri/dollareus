@@ -190,6 +190,58 @@ const UpdateProductSchema = z.object({
   message: 'Provide at least one product field to update.'
 });
 
+
+const CreateMenuSchema = z.object({
+  name: z.string().trim().min(1).max(180),
+  slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  description: z.string().max(5000).optional(),
+  servicePeriods: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
+  status: z.enum(['draft', 'active', 'archived']).default('draft')
+}).strict();
+
+const CreateMenuItemSchema = z.object({
+  slug: z.string().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  name: z.string().trim().min(1).max(180),
+  description: z.string().max(5000).optional(),
+  price: MoneySchema,
+  status: z.enum(['draft', 'active', 'archived']).default('draft'),
+  categoryId: z.string().min(1).max(100).optional(),
+  allergens: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  availability: z.enum(['available', 'unavailable', 'limited']).default('available'),
+  position: z.number().int().nonnegative().default(0)
+}).strict();
+
+const PosLineSchema = z.discriminatedUnion('sourceType', [
+  z.object({
+    sourceType: z.literal('product'),
+    itemId: z.string().min(1).max(100),
+    variantId: z.string().min(1).max(100),
+    quantity: z.number().int().min(1).max(1000)
+  }).strict(),
+  z.object({
+    sourceType: z.literal('menuItem'),
+    menuId: z.string().min(1).max(100),
+    itemId: z.string().min(1).max(100),
+    quantity: z.number().int().min(1).max(1000)
+  }).strict()
+]);
+
+const CreatePosSessionSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  terminalType: z.enum(['retail', 'restaurant', 'service', 'general']),
+  locationId: z.string().min(1).max(100).optional()
+}).strict();
+
+const CreatePosOrderSchema = z.object({
+  sessionId: z.string().min(1).max(100),
+  channel: z.enum(['pos', 'qr']).default('pos'),
+  fulfillment: z.enum(['counter', 'takeaway', 'dine_in', 'delivery', 'service']).default('counter'),
+  tableLabel: z.string().max(80).optional(),
+  customerNote: z.string().max(1000).optional(),
+  lines: z.array(PosLineSchema).min(1).max(100)
+}).strict();
+
 const UploadIntentSchema = z.object({
   contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
 }).strict();
@@ -872,6 +924,277 @@ app.get<{ Params: { storeSlug: string }; Querystring: { limit?: string; cursor?:
     };
   }
 );
+
+
+/**
+ * Restaurant domain: menus and menu items have their own schema and lifecycle.
+ * They are not stored as retail products.
+ */
+app.get<{ Params: { organizationId: string; storeId: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/menus',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    if (!(await storeRef.get()).exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const snapshot = await storeRef.collection('menus').orderBy('updatedAt', 'desc').limit(100).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data() })), requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/menus',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateMenuSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The menu payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    if (storeSnapshot.data()?.businessType !== 'restaurant' && !(storeSnapshot.data()?.enabledExperiences as string[] | undefined)?.includes('menu')) {
+      return reply.code(400).send({ error: { code: 'MENU_DOMAIN_NOT_ENABLED', message: 'Enable the menu experience for this store before creating menus.', requestId: request.id } });
+    }
+    const menuRef = storeRef.collection('menus').doc();
+    const slugRef = storeRef.collection('menuSlugs').doc(parsed.data.slug);
+    const now = new Date().toISOString();
+    const menu = { ...parsed.data, id: menuRef.id, storeId, organizationId, createdAt: now, updatedAt: now };
+    try {
+      await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(slugRef);
+        if (existing.exists) throw new Error('MENU_SLUG_TAKEN');
+        transaction.create(menuRef, menu);
+        transaction.create(slugRef, { menuId: menuRef.id, createdAt: now });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'MENU_SLUG_TAKEN') return reply.code(409).send({ error: { code: 'MENU_SLUG_TAKEN', message: 'A menu with this slug already exists in the store.', requestId: request.id } });
+      throw error;
+    }
+    return reply.code(201).send({ data: menu, requestId: request.id });
+  }
+);
+
+app.get<{ Params: { organizationId: string; storeId: string; menuId: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/menus/:menuId/items',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId, menuId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const menuRef = db.doc(`organizations/${organizationId}/stores/${storeId}/menus/${menuId}`);
+    if (!(await menuRef.get()).exists) return reply.code(404).send({ error: { code: 'MENU_NOT_FOUND', message: 'The menu does not exist.', requestId: request.id } });
+    const snapshot = await menuRef.collection('items').orderBy('position', 'asc').limit(200).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data() })), requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string; menuId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/menus/:menuId/items',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId, menuId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreateMenuItemSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The menu-item payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    const menuRef = db.doc(`organizations/${organizationId}/stores/${storeId}/menus/${menuId}`);
+    const menuSnapshot = await menuRef.get();
+    if (!menuSnapshot.exists) return reply.code(404).send({ error: { code: 'MENU_NOT_FOUND', message: 'The menu does not exist.', requestId: request.id } });
+    const itemRef = menuRef.collection('items').doc();
+    const slugRef = menuRef.collection('itemSlugs').doc(parsed.data.slug);
+    const now = new Date().toISOString();
+    const item = { ...parsed.data, id: itemRef.id, storeId, menuId, organizationId, createdAt: now, updatedAt: now };
+    try {
+      await db.runTransaction(async (transaction) => {
+        const existing = await transaction.get(slugRef);
+        if (existing.exists) throw new Error('MENU_ITEM_SLUG_TAKEN');
+        transaction.create(itemRef, item);
+        transaction.create(slugRef, { itemId: itemRef.id, createdAt: now });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'MENU_ITEM_SLUG_TAKEN') return reply.code(409).send({ error: { code: 'MENU_ITEM_SLUG_TAKEN', message: 'A menu item with this slug already exists in the menu.', requestId: request.id } });
+      throw error;
+    }
+    return reply.code(201).send({ data: item, requestId: request.id });
+  }
+);
+
+app.get<{ Params: { storeSlug: string } }>(
+  '/api/v1/public/stores/:storeSlug/menus',
+  async (request, reply) => {
+    const resolved = await resolvePublicStore(request.params.storeSlug);
+    if (!resolved) return reply.code(404).send({ error: { code: 'PUBLIC_STORE_NOT_FOUND', message: 'This public store is not available.', requestId: request.id } });
+    const menusSnapshot = await db.collection(`organizations/${resolved.organizationId}/stores/${resolved.storeId}/menus`)
+      .where('status', '==', 'active').orderBy('updatedAt', 'desc').limit(50).get();
+    const menus = await Promise.all(menusSnapshot.docs.map(async (document) => {
+      const menu = document.data();
+      const itemsSnapshot = await document.ref.collection('items').where('status', '==', 'active').orderBy('position', 'asc').limit(200).get();
+      return {
+        id: document.id, slug: menu.slug, name: menu.name, description: menu.description,
+        servicePeriods: menu.servicePeriods ?? [],
+        items: itemsSnapshot.docs.map((itemDocument) => {
+          const item = itemDocument.data();
+          return {
+            id: itemDocument.id, slug: item.slug, name: item.name, description: item.description,
+            price: item.price, categoryId: item.categoryId, allergens: item.allergens ?? [],
+            dietaryLabels: item.dietaryLabels ?? [], availability: item.availability ?? 'available',
+            position: item.position, updatedAt: item.updatedAt
+          };
+        }).filter((item) => item.availability !== 'unavailable')
+      };
+    }));
+    return { data: { store: { id: resolved.storeId, name: resolved.store.name, slug: resolved.store.slug, defaultCurrency: resolved.store.defaultCurrency, locale: resolved.store.locale }, menus }, requestId: request.id };
+  }
+);
+
+/**
+ * Smart POS foundation. Sessions identify a terminal/work shift; orders use
+ * price snapshots and keep the originating channel and fulfillment workflow.
+ * Payment capture and stock/kitchen integrations are intentionally separate.
+ */
+app.get<{ Params: { organizationId: string; storeId: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    if (!(await storeRef.get()).exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const snapshot = await storeRef.collection('posSessions').orderBy('createdAt', 'desc').limit(100).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data() })), requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreatePosSessionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The POS session payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const businessType = String(storeSnapshot.data()?.businessType ?? 'general');
+    if (parsed.data.terminalType === 'restaurant' && businessType !== 'restaurant') return reply.code(400).send({ error: { code: 'POS_DOMAIN_MISMATCH', message: 'Restaurant terminals require a restaurant store.', requestId: request.id } });
+    const sessionRef = storeRef.collection('posSessions').doc();
+    const now = new Date().toISOString();
+    const session = { id: sessionRef.id, organizationId, storeId, ...parsed.data, status: 'open', openedBy: request.identity?.uid, openedAt: now, createdAt: now, updatedAt: now };
+    await sessionRef.create(session);
+    return reply.code(201).send({ data: session, requestId: request.id });
+  }
+);
+
+app.patch<{ Params: { organizationId: string; storeId: string; sessionId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions/:sessionId/close',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId, sessionId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const sessionRef = db.doc(`organizations/${organizationId}/stores/${storeId}/posSessions/${sessionId}`);
+    const snapshot = await sessionRef.get();
+    if (!snapshot.exists) return reply.code(404).send({ error: { code: 'POS_SESSION_NOT_FOUND', message: 'The POS session does not exist.', requestId: request.id } });
+    if (snapshot.data()?.status !== 'open') return reply.code(409).send({ error: { code: 'POS_SESSION_NOT_OPEN', message: 'This POS session is already closed.', requestId: request.id } });
+    const now = new Date().toISOString();
+    await sessionRef.update({ status: 'closed', closedBy: request.identity?.uid, closedAt: now, updatedAt: now });
+    return { data: { ...snapshot.data(), status: 'closed', closedBy: request.identity?.uid, closedAt: now, updatedAt: now }, requestId: request.id };
+  }
+);
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/orders',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const parsed = CreatePosOrderSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: { code: 'VALIDATION_ERROR', message: 'The POS order payload is invalid.', details: parsed.error.flatten(), requestId: request.id } });
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    const storeSnapshot = await storeRef.get();
+    if (!storeSnapshot.exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const sessionRef = storeRef.collection('posSessions').doc(parsed.data.sessionId);
+    const sessionSnapshot = await sessionRef.get();
+    if (!sessionSnapshot.exists || sessionSnapshot.data()?.status !== 'open') return reply.code(409).send({ error: { code: 'POS_SESSION_NOT_OPEN', message: 'Open a POS session before creating an order.', requestId: request.id } });
+
+    const lineRefs = parsed.data.lines.map((line) => line.sourceType === 'product'
+      ? db.doc(`organizations/${organizationId}/products/${line.itemId}`)
+      : db.doc(`organizations/${organizationId}/stores/${storeId}/menus/${line.menuId}/items/${line.itemId}`));
+    const uniqueRefs = [...new Map(lineRefs.map((ref) => [ref.path, ref])).values()];
+    const snapshots = await Promise.all(uniqueRefs.map((ref) => ref.get()));
+    const snapshotByPath = new Map(uniqueRefs.map((ref, index) => [ref.path, snapshots[index]]));
+    const currency = String(storeSnapshot.data()?.defaultCurrency ?? 'MAD');
+    const lines: Array<Record<string, unknown>> = [];
+    let subtotalMinor = 0;
+    for (let index = 0; index < parsed.data.lines.length; index += 1) {
+      const line = parsed.data.lines[index];
+      const ref = lineRefs[index];
+      const itemSnapshot = snapshotByPath.get(ref.path);
+      if (!itemSnapshot?.exists) return reply.code(404).send({ error: { code: 'POS_ITEM_NOT_FOUND', message: 'One of the selected items no longer exists.', requestId: request.id } });
+      const item = itemSnapshot.data()!;
+      if (item.storeId !== storeId || item.status !== 'active') return reply.code(409).send({ error: { code: 'POS_ITEM_UNAVAILABLE', message: 'One of the selected items is not active in this store.', requestId: request.id } });
+      let unitPriceMinor: number;
+      let itemName = String(item.name ?? '');
+      let variantId: string | undefined;
+      if (line.sourceType === 'product') {
+        const variant = (item.variants ?? []).find((candidate: { id?: string; status?: string }) => candidate.id === line.variantId && candidate.status === 'active');
+        if (!variant || variant.price?.currency !== currency || !Number.isSafeInteger(variant.price?.amountMinor)) return reply.code(409).send({ error: { code: 'POS_VARIANT_UNAVAILABLE', message: 'The selected product variant is unavailable or uses a different currency.', requestId: request.id } });
+        unitPriceMinor = variant.price.amountMinor;
+        itemName = `${itemName} — ${variant.title}`;
+        variantId = line.variantId;
+      } else {
+        if (item.availability === 'unavailable' || item.price?.currency !== currency || !Number.isSafeInteger(item.price?.amountMinor)) return reply.code(409).send({ error: { code: 'POS_MENU_ITEM_UNAVAILABLE', message: 'The selected menu item is unavailable or uses a different currency.', requestId: request.id } });
+        unitPriceMinor = item.price.amountMinor;
+      }
+      const lineTotalMinor = unitPriceMinor * line.quantity;
+      if (!Number.isSafeInteger(lineTotalMinor) || !Number.isSafeInteger(subtotalMinor + lineTotalMinor)) return reply.code(400).send({ error: { code: 'POS_TOTAL_INVALID', message: 'The order total is too large.', requestId: request.id } });
+      subtotalMinor += lineTotalMinor;
+      lines.push({ sourceType: line.sourceType, itemId: line.itemId, ...(line.sourceType === 'menuItem' ? { menuId: line.menuId } : {}), ...(variantId ? { variantId } : {}), nameSnapshot: itemName, quantity: line.quantity, unitPrice: { amountMinor: unitPriceMinor, currency }, lineTotal: { amountMinor: lineTotalMinor, currency } });
+    }
+    const orderRef = storeRef.collection('orders').doc();
+    const counterRef = storeRef.collection('system').doc('orderCounter');
+    const now = new Date().toISOString();
+    const order = {
+      id: orderRef.id, organizationId, storeId, sessionId: parsed.data.sessionId,
+      number: '', status: 'confirmed', channel: parsed.data.channel, fulfillment: parsed.data.fulfillment,
+      ...(parsed.data.tableLabel ? { tableLabel: parsed.data.tableLabel } : {}),
+      ...(parsed.data.customerNote ? { customerNote: parsed.data.customerNote } : {}),
+      currency, subtotal: { amountMinor: subtotalMinor, currency }, taxTotal: { amountMinor: 0, currency },
+      discountTotal: { amountMinor: 0, currency }, grandTotal: { amountMinor: subtotalMinor, currency },
+      lines, createdBy: request.identity?.uid, createdAt: now, updatedAt: now
+    };
+    const finalOrder = await db.runTransaction(async (transaction) => {
+      const [currentSession, counterSnapshot] = await Promise.all([transaction.get(sessionRef), transaction.get(counterRef)]);
+      if (!currentSession.exists || currentSession.data()?.status !== 'open') throw new Error('POS_SESSION_NOT_OPEN');
+      const nextNumber = Number(counterSnapshot.data()?.value ?? 0) + 1;
+      const number = `POS-${String(nextNumber).padStart(6, '0')}`;
+      transaction.set(counterRef, { value: nextNumber, updatedAt: now }, { merge: true });
+      transaction.create(orderRef, { ...order, number });
+      return { ...order, number };
+    }).catch((error) => {
+      if (error instanceof Error && error.message === 'POS_SESSION_NOT_OPEN') return null;
+      throw error;
+    });
+    if (!finalOrder) return reply.code(409).send({ error: { code: 'POS_SESSION_NOT_OPEN', message: 'The POS session was closed before the order could be saved.', requestId: request.id } });
+    return reply.code(201).send({ data: finalOrder, requestId: request.id });
+  }
+);
+
+app.get<{ Params: { organizationId: string; storeId: string }; Querystring: { limit?: string } }>(
+  '/api/v1/organizations/:organizationId/stores/:storeId/pos/orders',
+  { preHandler: authenticate },
+  async (request, reply) => {
+    const { organizationId, storeId } = request.params;
+    if (!await requireOrganizationMembership(request, reply, organizationId)) return;
+    const storeRef = db.doc(`organizations/${organizationId}/stores/${storeId}`);
+    if (!(await storeRef.get()).exists) return reply.code(404).send({ error: { code: 'STORE_NOT_FOUND', message: 'The store does not exist.', requestId: request.id } });
+    const requestedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 100)) : 50;
+    const snapshot = await storeRef.collection('orders').orderBy('createdAt', 'desc').limit(limit).get();
+    return { data: snapshot.docs.map((document) => ({ id: document.id, ...document.data() })), requestId: request.id };
+  }
+);
+
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
