@@ -33,16 +33,20 @@ A retail store uses the commerce experience to render products and variants. Mag
 
 ## API shape
 
-The public read API should expose a deliberately published projection, not raw merchant documents. Proposed endpoints:
+The public read API exposes a deliberately published projection, not raw merchant documents. The current feature branch implements the initial store/catalog/entry-point API foundation:
 
-- 'GET /api/v1/public/stores/:storeSlug' — public store identity and active storefront configuration.
-- 'GET /api/v1/public/stores/:storeSlug/catalog' — published categories and items with cursor pagination.
-- 'GET /api/v1/public/stores/:storeSlug/experiences/:experience' — the public projection for menu/catalog/services/commerce presentation.
-- 'GET /api/v1/organizations/:organizationId/stores/:storeId/entry-points' — authenticated entry-point management.
-- 'POST /api/v1/organizations/:organizationId/stores/:storeId/entry-points' — create a stable QR/link target.
-- 'GET /api/v1/organizations/:organizationId/stores/:storeId/channels' and corresponding connect/revoke operations — manage authorized channels.
+- POST /api/v1/organizations/:organizationId/stores and GET /api/v1/organizations/:organizationId/stores — create and list stores.
+- PATCH /api/v1/organizations/:organizationId/stores/:storeId/storefront — configure experiences and publish/unpublish the public storefront.
+- POST /api/v1/organizations/:organizationId/stores/:storeId/categories — create store-scoped catalog categories.
+- GET /api/v1/public/stores/:storeSlug — public store identity and active storefront configuration.
+- GET /api/v1/public/stores/:storeSlug/catalog — published categories and items.
+- GET and POST /api/v1/organizations/:organizationId/stores/:storeId/entry-points — manage stable QR/link targets.
+- PATCH /api/v1/organizations/:organizationId/stores/:storeId/entry-points/:entryPointId — enable or disable an entry point.
+- GET /api/v1/public/entry-points/:entryPointId — resolve a stable entry-point ID to its canonical public path.
 
-These endpoints are an implementation target, not a claim that they are already live. Validate every path and query, enforce organization membership on private routes, and expose only published content on public routes.
+The QR code should encode the public app URL plus the returned /q/{entryPointId} path. The frontend /q/:entryPointId route and public HTML storefront renderer are not implemented yet; the API resolver returns the canonical path for that frontend route to follow. Mageus channel connection/token management and a dedicated experience-specific response endpoint are also future work.
+
+Validate every path and query, enforce organization membership on private routes, and expose only published content on public routes. Public catalog image delivery URLs are not yet part of this implementation; public responses deliberately omit private object-storage keys.
 
 ## Mageus and external app authorization
 
