@@ -14,6 +14,7 @@ export class AuthPanelComponent {
   protected readonly busy = signal(false);
   protected readonly message = signal('');
   protected readonly error = signal('');
+  protected readonly lastEmail = signal('');
   protected readonly apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
 
   constructor() {
@@ -36,6 +37,7 @@ export class AuthPanelComponent {
     const mode = this.mode();
     const endpoint = mode === 'register' ? '/api/v1/auth/register' : mode === 'forgot' ? '/api/v1/auth/password/forgot' : '/api/v1/auth/login';
     const body: Record<string, string> = { email: String(values.get('email') ?? '') };
+    this.lastEmail.set(body.email);
     if (mode === 'register') body.displayName = String(values.get('displayName') ?? '');
     if (mode !== 'forgot') body.password = String(values.get('password') ?? '');
     this.busy.set(true); this.error.set(''); this.message.set('');
@@ -56,6 +58,21 @@ export class AuthPanelComponent {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  protected async resendVerification(): Promise<void> {
+    this.busy.set(true); this.error.set(''); this.message.set('');
+    try {
+      const response = await fetch(this.apiBase + '/api/v1/auth/email/verification/request', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: this.lastEmail() })
+      });
+      const payload = await response.json().catch(() => ({})) as { data?: { message?: string }; error?: { message?: string } };
+      if (!response.ok) throw new Error(payload.error?.message ?? 'Could not request a verification email.');
+      this.message.set(payload.data?.message ?? 'If the account needs verification, an email will be sent.');
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Could not request a verification email.');
+    } finally { this.busy.set(false); }
   }
 
   protected async confirmEmail(): Promise<void> {
