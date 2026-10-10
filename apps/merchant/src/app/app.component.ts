@@ -66,6 +66,12 @@ export class AppComponent {
   }
 
   private async checkSession(): Promise<void> {
+    const action = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null;
+    if (action === 'verify-email' || action === 'reset-password') {
+      this.authenticated.set(false);
+      this.authReady.set(true);
+      return;
+    }
     const apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
     try {
       const response = await fetch(apiBase + '/api/v1/auth/session', { credentials: 'include' });
