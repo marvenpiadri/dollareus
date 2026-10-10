@@ -30,7 +30,7 @@ Last reviewed: 2026-10-11
 ### Connect the merchant UI to real data
 - [x] Replace hard-coded sample products and demo store identity with API-backed workspace/catalog state; show unavailable indicators instead of fabricated sales and inventory metrics.
 - [x] Implement first-run organization/store creation and draft product creation through the API, with loading/error states.
-- [ ] Finish onboarding and storefront configuration; implement product edit/publish/archive flows, categories, variant editing, images, and inventory changes.
+- [ ] Finish onboarding and storefront configuration; implement product publishing, category management, variant/price editing, images, and inventory changes. Basic product detail editing and archiving are now available.
 - [ ] Implement customer records, carts, orders, order items, payment states, fulfillment, cancellations/refunds, and transactional emails.
 - [ ] Implement and test restaurant menus/menu items, POS sessions/orders, QR/entry points, custom domains, and inventory endpoints if those modules are included in the first launch.
 - [ ] Implement object-storage uploads with server-side authorization, file type/size limits, and safe public/private access rules.
