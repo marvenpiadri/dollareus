@@ -22,6 +22,7 @@
       <p class="auth-copy">{{ mode() === 'register' ? 'One account for your store, catalog, orders and commerce tools.' : mode() === 'forgot' ? 'We’ll email you a secure password reset link if an account exists.' : 'Your business workspace, all in one place.' }}</p>
       @if (message()) { <p class="auth-message">{{ message() }}</p> }
       @if (error()) { <p class="auth-error">{{ error() }}</p> }
+      @if (mode() === 'login' && error().includes('Verify your email address')) { <button class="auth-link" type="button" [disabled]="busy()" (click)="resendVerification()">Resend verification email</button> }
       @if (mode() !== 'forgot') {
         <div class="social-buttons">
           <a [href]="apiBase + '/api/v1/auth/oauth/google/start'"><span class="google-mark">G</span> Continue with Google</a>
