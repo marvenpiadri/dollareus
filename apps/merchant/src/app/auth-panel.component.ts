@@ -38,8 +38,8 @@ export class AuthPanelComponent {
     const endpoint = mode === 'register' ? '/api/v1/auth/register' : mode === 'forgot' ? '/api/v1/auth/password/forgot' : '/api/v1/auth/login';
     const body: Record<string, string> = { email: String(values.get('email') ?? '') };
     this.lastEmail.set(body.email);
-    if (mode === 'register') body.displayName = String(values.get('displayName') ?? '');
-    if (mode !== 'forgot') body.password = String(values.get('password') ?? '');
+    if (mode === 'register') body['displayName'] = String(values.get('displayName') ?? '');
+    if (mode !== 'forgot') body['password'] = String(values.get('password') ?? '');
     this.busy.set(true); this.error.set(''); this.message.set('');
     try {
       const response = await fetch(this.apiBase + endpoint, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
