@@ -3,7 +3,7 @@ import { AuthPanelComponent } from './auth-panel.component';
 
 type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'Online store' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
-interface ProductRow { id: string; name: string; category: string; sku: string; priceMinor: number; currency: 'MAD' | 'EUR' | 'USD'; stock: number; status: ProductStatus; initials: string; tone: string; }
+interface ProductRow { id: string; name: string; category: string; sku: string; priceMinor: number; currency: 'MAD' | 'EUR' | 'USD'; stock: number | null; status: ProductStatus; initials: string; tone: string; }
 interface OrderRow { id: string; customer: string; channel: string; totalMinor: number; currency: 'MAD' | 'EUR' | 'USD'; status: 'Paid' | 'Processing' | 'Pending'; }
 
 @Component({
@@ -56,7 +56,7 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
             <article class="metric"><div class="metric-top"><span>Total sales</span><span class="metric-icon green">↗</span></div><strong>—</strong><footer>Sales analytics not connected</footer></article>
             <article class="metric"><div class="metric-top"><span>Orders</span><span class="metric-icon purple">▤</span></div><strong>{{ orders.length }}</strong><footer>Order API not implemented</footer></article>
             <article class="metric"><div class="metric-top"><span>Products</span><span class="metric-icon peach">◇</span></div><strong>{{ products().length }} <small>in your catalog</small></strong><footer>{{ activeCount() }} active products <button type="button" (click)="selectNav('Products')">View catalog →</button></footer></article>
-            <article class="metric"><div class="metric-top"><span>Low stock alerts</span><span class="metric-icon amber">△</span></div><strong>{{ lowStockCount() }} <small>need attention</small></strong><footer>Across tracked products <button type="button" (click)="selectNav('Inventory')">Review stock →</button></footer></article>
+            <article class="metric"><div class="metric-top"><span>Low stock alerts</span><span class="metric-icon amber">△</span></div><strong>—</strong><footer>Inventory tracking API not connected</footer></article>
           </section>
           <section class="two-column">
             <article class="panel"><div class="panel-heading"><div><h2>Recent orders</h2><p>A quick look at your latest sales.</p></div><button type="button" (click)="selectNav('Orders')">View all orders →</button></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>CHANNEL</th><th>TOTAL</th><th>STATUS</th></tr></thead><tbody>@for(order of orders;track order.id){<tr><td class="order-id">{{ order.id }}</td><td>{{ order.customer }}</td><td><span class="channel-dot" [class.mageus]="order.channel === 'Mageus'" [class.pos]="order.channel === 'POS'"></span>{{ order.channel }}</td><td class="total">{{ money(order.totalMinor,order.currency) }}</td><td><span class="status" [class]="statusClass(order.status)">{{ order.status }}</span></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ orders.length }} recent orders <button type="button" (click)="selectNav('Orders')">Open order manager →</button></div></article>
