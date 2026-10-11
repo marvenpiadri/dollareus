@@ -741,9 +741,28 @@ export class AppComponent {
       const context = canvas.getContext('2d', { alpha: false }); if (!context) { bitmap.close(); throw new Error('Your browser could not prepare the image.'); }
       context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
       let optimized: Blob | null = null;
-      for (const quality of [0.82, 0.75, 0.68, 0.61, 0.55]) { optimized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality)); if (optimized && optimized.size <= 5 * 1024 * 1024) break; }
+      for (const quality of [0.82, 0.76, 0.70, 0.64, 0.58, 0.52, 0.46, 0.40]) { optimized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality)); if (optimized && optimized.size <= 1024 * 1024) break; }
       if (!optimized) throw new Error('Your browser could not encode this image as WebP.');
-      if (optimized.size > 5 * 1024 * 1024) throw new Error('This image is still larger than 5 MB after compression. Reduce the maximum dimensions and try again.');
+      if (optimized.size > 1024 * 1024) {
+        const scaledCanvas = document.createElement('canvas');
+        let scaleDown = 0.85;
+        while (optimized.size > 1024 * 1024 && scaleDown >= 0.35) {
+          scaledCanvas.width = Math.max(1, Math.floor(canvas.width * scaleDown));
+          scaledCanvas.height = Math.max(1, Math.floor(canvas.height * scaleDown));
+          const scaledContext = scaledCanvas.getContext('2d', { alpha: false });
+          if (!scaledContext) break;
+          scaledContext.fillStyle = '#ffffff'; scaledContext.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
+          scaledContext.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+          for (const quality of [0.72, 0.62, 0.52, 0.42]) {
+            optimized = await new Promise<Blob | null>((resolve) => scaledCanvas.toBlob(resolve, 'image/webp', quality));
+            if (optimized && optimized.size <= 1024 * 1024) break;
+          }
+          if (optimized && optimized.size <= 1024 * 1024) break;
+          scaleDown *= 0.85;
+        }
+        if (optimized && optimized.size <= 1024 * 1024) { canvas.width = scaledCanvas.width; canvas.height = scaledCanvas.height; }
+      }
+      if (optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
       const response = await fetch(this.apiBase() + '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
       const payload = await response.json().catch(() => ({})) as { data?: { contentUrl?: string }; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message ?? 'The image could not be uploaded.');
