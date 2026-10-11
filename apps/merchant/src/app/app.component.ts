@@ -181,6 +181,8 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
                   <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required placeholder="45.00"></label>
                   <label>Description<input name="description" maxlength="5000" placeholder="Optional description"></label>
+                  <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" placeholder="e.g. milk, sesame, nuts"></label>
+                  <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" placeholder="e.g. vegetarian, vegan, gluten-free"></label>
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
                 </form>
                 <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
@@ -1032,6 +1034,8 @@ export class AppComponent {
     const slug = String(values.get('slug') ?? '').trim();
     const price = Number(values.get('price'));
     const description = String(values.get('description') ?? '').trim();
+    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const menuId = this.selectedMenuId();
     if (!menuId || !name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
       this.menuError.set('Choose a menu and enter a valid item name, slug, and non-negative price.'); return;
@@ -1039,7 +1043,7 @@ export class AppComponent {
     this.menuBusy.set(true); this.menuError.set('');
     try {
       await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
-        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', allergens: [], dietaryLabels: [], availability: 'available', metadata: {} })
+        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', allergens, dietaryLabels, availability: 'available', metadata: {} })
       });
       await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
