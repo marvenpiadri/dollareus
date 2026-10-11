@@ -1591,6 +1591,16 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
     const next = parsed.data.status;
     const allowed: Record<string, string[]> = { confirmed: ['preparing', 'cancelled'], preparing: ['ready', 'cancelled'], ready: ['completed', 'cancelled'], completed: [], cancelled: [] };
     if (!allowed[current]?.includes(next)) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'INVALID_POS_STATUS_TRANSITION', 'The requested POS order status transition is not allowed.'); }
+    if (next === 'cancelled') {
+      const paymentTotals = await client.query(
+        "SELECT COALESCE((SELECT SUM(amount_minor) FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'),0)::text AS captured,COALESCE((SELECT SUM(amount_minor) FROM refunds WHERE order_id=$1 AND organization_id=$2 AND status='recorded'),0)::text AS refunded",
+        [orderId, organizationId]
+      );
+      if (Number(paymentTotals.rows[0]?.captured ?? 0) > Number(paymentTotals.rows[0]?.refunded ?? 0)) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'POS_REFUND_REQUIRED', 'Record a full refund for collected payments before cancelling this POS order.');
+      }
+    }
     const inventoryDeductions: Array<{ variantId: string; locationId: string; quantity: number }> = [];
     if (next === 'completed') {
       const lines = await client.query(
