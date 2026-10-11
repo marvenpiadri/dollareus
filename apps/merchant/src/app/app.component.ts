@@ -49,6 +49,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 @for(item of menu.items || [];track item.id){
                   <article style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:17px 0;border-top:1px solid #e5e9e1">
                     <div style="min-width:0;flex:1">
+                      @if(item.categoryName){<p style="margin:0 0 5px;color:#63705b;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">{{item.categoryName}}</p>}
                       <h3 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h3>
                       @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
                       @if(item.dietaryLabels?.length){<p style="margin:8px 0 0;color:#456a3e;font-size:12px;font-weight:700">{{item.dietaryLabels.join(' · ')}}</p>}
