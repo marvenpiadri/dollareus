@@ -10,6 +10,7 @@ type ProductFilter = 'All' | ProductStatus;
   styleUrl: './product-catalog.component.css'
 })
 export class ProductCatalogComponent {
+  protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
   readonly products = input.required<ProductRow[]>();
   readonly filteredProducts = input.required<ProductRow[]>();
   readonly categories = input.required<CategoryRow[]>();
