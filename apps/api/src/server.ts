@@ -461,6 +461,132 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   } finally { client.release(); }
 });
 
+
+const MenuInput = z.object({
+  storeId: z.string().min(1).max(100), slug: Slug, name: z.string().trim().min(1).max(180),
+  description: z.string().max(5000).nullable().optional(), servicePeriods: z.array(z.string().trim().min(1).max(40)).max(20),
+  status: z.enum(['draft', 'active', 'archived']), position: z.number().int().nonnegative().optional()
+}).strict();
+const MenuItemInput = z.object({
+  slug: Slug, name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable().optional(),
+  priceAmountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), currency: z.string().regex(/^[A-Z]{3}$/),
+  status: z.enum(['draft', 'active', 'archived']), categoryId: z.string().min(1).max(100).nullable().optional(),
+  allergens: z.array(z.string().trim().min(1).max(80)).max(50), dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50),
+  availability: z.enum(['available', 'unavailable', 'limited']), position: z.number().int().nonnegative().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+}).strict();
+const EntryPointInput = z.object({
+  storeId: z.string().min(1).max(100), type: z.enum(['direct-link', 'qr', 'embed']),
+  targetPath: z.enum(['/', '/menu', '/catalog', '/services'])
+}).strict();
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/menus', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const result = await pool.query('SELECT m.*, (SELECT count(*)::int FROM restaurant_menu_items i WHERE i.menu_id=m.id) AS item_count FROM restaurant_menus m WHERE m.organization_id=$1 AND m.store_id=$2 ORDER BY m.position,m.created_at DESC LIMIT 200', [organizationId, storeId]);
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = MenuInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The restaurant menu payload is invalid.');
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const now = new Date();
+  try {
+    const result = await pool.query(
+      'INSERT INTO restaurant_menus (id,organization_id,store_id,slug,name,description,service_periods,status,position,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10) RETURNING *',
+      [randomUUID(), organizationId, parsed.data.storeId, parsed.data.slug, parsed.data.name, parsed.data.description ?? null, parsed.data.servicePeriods, parsed.data.status, parsed.data.position ?? 0, now]
+    );
+    return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'MENU_SLUG_TAKEN', 'A menu with this slug already exists in the selected store.');
+    throw error;
+  }
+});
+
+app.get<{ Params: { organizationId: string; menuId: string } }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const menu = await pool.query('SELECT id FROM restaurant_menus WHERE id=$1 AND organization_id=$2', [menuId, organizationId]);
+  if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+  const result = await pool.query('SELECT * FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,name LIMIT 500', [menuId, organizationId]);
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = MenuItemInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu item payload is invalid.');
+  const menu = await pool.query('SELECT m.id,m.store_id,s.default_currency FROM restaurant_menus m JOIN stores s ON s.id=m.store_id WHERE m.id=$1 AND m.organization_id=$2 AND s.organization_id=$2', [menuId, organizationId]);
+  if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+  if (parsed.data.currency !== String(menu.rows[0].default_currency).trim()) return fail(reply, request, 400, 'MENU_CURRENCY_MISMATCH', 'Menu items must use the selected store currency.');
+  const now = new Date();
+  try {
+    const result = await pool.query(
+      'INSERT INTO restaurant_menu_items (id,organization_id,store_id,menu_id,slug,name,description,price_amount_minor,currency,status,category_id,allergens,dietary_labels,availability,position,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$17) RETURNING *',
+      [randomUUID(), organizationId, menu.rows[0].store_id, menuId, parsed.data.slug, parsed.data.name, parsed.data.description ?? null, parsed.data.priceAmountMinor, parsed.data.currency, parsed.data.status, parsed.data.categoryId ?? null, parsed.data.allergens, parsed.data.dietaryLabels, parsed.data.availability, parsed.data.position ?? 0, JSON.stringify(parsed.data.metadata ?? {}), now]
+    );
+    return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'MENU_ITEM_SLUG_TAKEN', 'A menu item with this slug already exists in the selected menu.');
+    throw error;
+  }
+});
+
+app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/menus', async (request, reply) => {
+  const store = await pool.query('SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
+  const result = await pool.query(
+    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'availability',i.availability,'position',i.position,'metadata',i.metadata) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
+    [store.rows[0].id, store.rows[0].organization_id]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/entry-points', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const result = await pool.query('SELECT id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at FROM entry_points WHERE organization_id=$1 AND store_id=$2 ORDER BY created_at DESC LIMIT 200', [organizationId, storeId]);
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/entry-points', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = EntryPointInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The entry-point payload is invalid.');
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const now = new Date();
+  const result = await pool.query('INSERT INTO entry_points (id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at', [randomUUID(), organizationId, parsed.data.storeId, parsed.data.type, parsed.data.targetPath, 'active', request.identity!.uid, now]);
+  return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+});
+
+app.patch<{ Params: { organizationId: string; entryPointId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/entry-points/:entryPointId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, entryPointId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = z.object({ status: z.enum(['active', 'disabled']) }).strict().safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The entry-point status is invalid.');
+  const result = await pool.query('UPDATE entry_points SET status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4 RETURNING id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at', [parsed.data.status, new Date(), entryPointId, organizationId]);
+  if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The entry point does not exist in this organization.');
+  return { data: camelize(result.rows[0]), requestId: request.id };
+});
+
+app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entryPointId', async (request, reply) => {
+  const result = await pool.query(
+    "SELECT e.id,e.type,e.target_path,s.slug AS store_slug,s.name AS store_name FROM entry_points e JOIN stores s ON s.id=e.store_id AND s.organization_id=e.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE e.id=$1 AND e.status='active' AND s.status='active' AND f.published=true LIMIT 1",
+    [request.params.entryPointId]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
+  return { data: { ...camelize(result.rows[0]!), targetUrlPath: result.rows[0].target_path === '/' ? '/' + result.rows[0].store_slug : '/' + result.rows[0].store_slug + result.rows[0].target_path }, requestId: request.id };
+});
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
