@@ -306,7 +306,44 @@ app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
 app.get('/api/v1/health', async (request, reply) => {
   try {
     await pool.query('SELECT 1');
-    return { data: { status: 'ok', service: 'dollareus-api', version: '0.2.0', checks: { database: 'ok' } }, requestId: request.id };
+    const ledger = await pool.query<{ exists: boolean }>(
+      "SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists"
+    );
+    if (!ledger.rows[0]?.exists) {
+      return reply.code(503).send({
+        error: {
+          code: 'DATABASE_SCHEMA_NOT_INITIALIZED',
+          message: 'The database is reachable but Dollareus migrations have not been initialized. Run pnpm db:migrate.',
+          requestId: request.id
+        },
+        requestId: request.id
+      });
+    }
+
+    const initialMigration = await pool.query<{ applied: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM public.schema_migrations WHERE name = $1) AS applied",
+      ['0001_initial_schema.sql']
+    );
+    if (!initialMigration.rows[0]?.applied) {
+      return reply.code(503).send({
+        error: {
+          code: 'DATABASE_SCHEMA_INCOMPLETE',
+          message: 'The database migration ledger exists but the initial Dollareus schema migration is missing.',
+          requestId: request.id
+        },
+        requestId: request.id
+      });
+    }
+
+    return {
+      data: {
+        status: 'ok',
+        service: 'dollareus-api',
+        version: '0.2.0',
+        checks: { database: 'ok', schema: 'ok', migrations: 'initialized' }
+      },
+      requestId: request.id
+    };
   } catch {
     return fail(reply, request, 503, 'DATABASE_UNAVAILABLE', 'The API database readiness check failed.');
   }
