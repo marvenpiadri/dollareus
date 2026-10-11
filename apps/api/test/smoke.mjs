@@ -271,10 +271,10 @@ try {
   checks.push('category create and listing');
   const updatedMenuItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders,
-    body: JSON.stringify({ categoryId: category.payload?.data?.id, allergens: ['milk'], dietaryLabels: ['vegetarian'] })
+    body: JSON.stringify({ categoryId: category.payload?.data?.id, slug: `smoke-dish-edited-${suffix}`, description: 'Updated smoke dish', allergens: ['milk'], dietaryLabels: ['vegetarian'] })
   });
-  if (updatedMenuItem.payload?.data?.categoryId !== category.payload?.data?.id || !updatedMenuItem.payload?.data?.allergens?.includes('milk') || !updatedMenuItem.payload?.data?.dietaryLabels?.includes('vegetarian')) throw new Error('Menu item category, allergens, or dietary labels did not persist.');
-  checks.push('menu item category assignment and editable allergen/dietary metadata');
+  if (updatedMenuItem.payload?.data?.categoryId !== category.payload?.data?.id || updatedMenuItem.payload?.data?.slug !== `smoke-dish-edited-${suffix}` || updatedMenuItem.payload?.data?.description !== 'Updated smoke dish' || !updatedMenuItem.payload?.data?.allergens?.includes('milk') || !updatedMenuItem.payload?.data?.dietaryLabels?.includes('vegetarian')) throw new Error('Menu item editable fields, category, allergens, or dietary labels did not persist.');
+  checks.push('menu item slug/description/category/allergen/dietary edits');
 
   const customer = await request(`/api/v1/organizations/${organizationId}/customers`, 201, {
     method: 'POST', headers: authHeaders,
