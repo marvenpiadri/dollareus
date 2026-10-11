@@ -423,7 +423,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
       [variantIds, organizationId, parsed.data.storeId]
     );
     if (variants.rowCount !== variantIds.length) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_ORDER_ITEMS', 'Every order item must be an active product variant in the selected store.'); }
-    const byId = new Map(variants.rows.map((variant: any) => [variant.variant_id, variant]));
+    const byId = new Map<string, any>(variants.rows.map((variant: any) => [String(variant.variant_id), variant] as const));
     let subtotal = 0;
     const lineItems = parsed.data.items.map((item) => {
       const variant = byId.get(item.variantId)!;
