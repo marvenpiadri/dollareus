@@ -11,6 +11,20 @@ import {
   ProductStatus
 } from '../shared/models/commerce.models';
 
+interface OrganizationRecord { id: string; }
+interface StoreRecord { id: string; name?: string | null; slug?: string | null; defaultCurrency?: string | null; }
+interface ProductVariantRecord { id?: string; sku?: string | null; amountMinor?: number | string | null; currency?: string | null; }
+interface ProductRecord {
+ id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null;
+ categoryIds?: string[]; variants?: ProductVariantRecord[]; media?: Array<{ contentUrl?: string | null }>;
+}
+interface OrderRecord { id: string; orderNumber?: string | number; customerEmail?: string | null; channel?: string | null; totalMinor?: number | string | null; currency?: string | null; status?: string | null; effectivePaymentStatus?: string | null; paymentStatus?: string | null; }
+interface MenuItemRecord {
+ id: string; menuId?: string | null; slug?: string | null; name?: string | null; description?: string | null;
+ priceAmountMinor?: number | string | null; currency?: string | null; status?: string | null; availability?: string | null;
+ position?: number | string | null; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; metadata?: Record<string, unknown> | null;
+}
+
 export interface WorkspaceSnapshot {
   stage: 'organization' | 'store' | 'ready';
   organizationId: string;
@@ -31,12 +45,12 @@ export class WorkspaceDataService {
   constructor(private readonly apiClient: ApiClientService) {}
 
   async load(): Promise<WorkspaceSnapshot> {
-    const organizations = await this.apiClient.request<any[]>('/api/v1/organizations');
+    const organizations = await this.apiClient.request<OrganizationRecord[]>('/api/v1/organizations');
     const organization = Array.isArray(organizations) ? organizations[0] : null;
     if (!organization) return this.emptySnapshot('organization');
 
     const organizationId = String(organization.id);
-    const stores = await this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores`);
+    const stores = await this.apiClient.request<StoreRecord[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores`);
     const store = Array.isArray(stores) ? stores[0] : null;
     if (!store) {
       return { ...this.emptySnapshot('store'), organizationId };
@@ -45,16 +59,16 @@ export class WorkspaceDataService {
     const storeId = String(store.id);
     const storeCurrency = String(store.defaultCurrency ?? 'MAD');
     const [productRows, orderRows, inventoryRows, menuRows, categoryRows] = await Promise.all([
-      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/products`),
-      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/orders?storeId=${encodeURIComponent(storeId)}`),
-      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/inventory`),
+      this.apiClient.request<ProductRecord[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/products`),
+      this.apiClient.request<OrderRecord[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/orders?storeId=${encodeURIComponent(storeId)}`),
+      this.apiClient.request<InventoryRow[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/inventory`),
       this.apiClient.request<MenuRow[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores/${encodeURIComponent(storeId)}/menus`),
       this.apiClient.request<CategoryRow[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores/${encodeURIComponent(storeId)}/categories`)
     ]);
 
     const products = (Array.isArray(productRows) ? productRows : [])
-      .filter((product: any) => product.storeId === storeId)
-      .map((product: any): ProductRow => {
+      .filter((product: ProductRecord) => product.storeId === storeId)
+      .map((product: ProductRecord): ProductRow => {
         const variant = Array.isArray(product.variants) ? product.variants[0] : null;
         const status: ProductStatus = product.status === 'active' ? 'Active' : product.status === 'archived' ? 'Archived' : 'Draft';
         const name = String(product.name ?? 'Untitled product');
@@ -79,7 +93,7 @@ export class WorkspaceDataService {
         };
       });
 
-    const orders = (Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
+    const orders = (Array.isArray(orderRows) ? orderRows : []).map((order: OrderRecord): OrderRow => ({
       id: '#' + String(order.orderNumber),
       resourceId: String(order.id),
       customer: String(order.customerEmail ?? 'Guest checkout'),
@@ -93,10 +107,10 @@ export class WorkspaceDataService {
     const categories = Array.isArray(categoryRows) ? categoryRows as CategoryRow[] : [];
     const menus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
     const itemGroups = await Promise.all(menus.map(menu =>
-      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/menus/${encodeURIComponent(menu.id)}/items`)
+      this.apiClient.request<MenuItemRecord[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/menus/${encodeURIComponent(menu.id)}/items`)
     ));
     const menuItems = itemGroups.flatMap((group, index) =>
-      (Array.isArray(group) ? group : []).map((item: any): MenuItemRow => ({
+      (Array.isArray(group) ? group : []).map((item: MenuItemRecord): MenuItemRow => ({
         id: String(item.id),
         menuId: String(item.menuId ?? menus[index].id),
         slug: String(item.slug ?? ''),
