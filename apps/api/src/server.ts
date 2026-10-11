@@ -977,10 +977,18 @@ app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; 
     const category = await pool.query('SELECT id FROM categories WHERE id=$1 AND organization_id=$2 AND store_id=$3', [parsed.data.categoryId, organizationId, menu.rows[0].store_id]);
     if (!category.rowCount) return fail(reply, request, 404, 'CATEGORY_NOT_FOUND', 'The selected category does not exist in this menu’s store.');
   }
-  const result = await pool.query(
-    `UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),category_id=CASE WHEN $8 THEN $9 ELSE category_id END,allergens=COALESCE($10,allergens),dietary_labels=COALESCE($11,dietary_labels),metadata=CASE WHEN $12::jsonb IS NOT NULL AND $13::jsonb IS NOT NULL THEN jsonb_set($12::jsonb,'{modifierGroups}',$13::jsonb,true) WHEN $12::jsonb IS NOT NULL THEN CASE WHEN $12::jsonb ? 'modifierGroups' THEN $12::jsonb ELSE jsonb_set($12::jsonb,'{modifierGroups}',COALESCE(metadata->'modifierGroups','[]'::jsonb),true) END WHEN $13::jsonb IS NOT NULL THEN jsonb_set(COALESCE(metadata,'{}'::jsonb),'{modifierGroups}',$13::jsonb,true) ELSE metadata END,slug=COALESCE($14,slug),name=COALESCE($15,name),description=CASE WHEN $16 THEN $17 ELSE description END,price_amount_minor=COALESCE($18,price_amount_minor),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING *`,
-    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date(), parsed.data.categoryId !== undefined, parsed.data.categoryId ?? null, parsed.data.allergens ?? null, parsed.data.dietaryLabels ?? null, parsed.data.metadata === undefined ? null : JSON.stringify(parsed.data.metadata), parsed.data.modifierGroups === undefined ? null : JSON.stringify(parsed.data.modifierGroups), parsed.data.slug ?? null, parsed.data.name ?? null, parsed.data.description !== undefined, parsed.data.description ?? null, parsed.data.priceAmountMinor ?? null]
-  );
+  let result;
+  try {
+    result = await pool.query(
+      `UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),category_id=CASE WHEN $8 THEN $9 ELSE category_id END,allergens=COALESCE($10,allergens),dietary_labels=COALESCE($11,dietary_labels),metadata=CASE WHEN $12::jsonb IS NOT NULL AND $13::jsonb IS NOT NULL THEN jsonb_set($12::jsonb,'{modifierGroups}',$13::jsonb,true) WHEN $12::jsonb IS NOT NULL THEN CASE WHEN $12::jsonb ? 'modifierGroups' THEN $12::jsonb ELSE jsonb_set($12::jsonb,'{modifierGroups}',COALESCE(metadata->'modifierGroups','[]'::jsonb),true) END WHEN $13::jsonb IS NOT NULL THEN jsonb_set(COALESCE(metadata,'{}'::jsonb),'{modifierGroups}',$13::jsonb,true) ELSE metadata END,slug=COALESCE($14,slug),name=COALESCE($15,name),description=CASE WHEN $16 THEN $17 ELSE description END,price_amount_minor=COALESCE($18,price_amount_minor),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING *`,
+      [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date(), parsed.data.categoryId !== undefined, parsed.data.categoryId ?? null, parsed.data.allergens ?? null, parsed.data.dietaryLabels ?? null, parsed.data.metadata === undefined ? null : JSON.stringify(parsed.data.metadata), parsed.data.modifierGroups === undefined ? null : JSON.stringify(parsed.data.modifierGroups), parsed.data.slug ?? null, parsed.data.name ?? null, parsed.data.description !== undefined, parsed.data.description ?? null, parsed.data.priceAmountMinor ?? null]
+    );
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+      return fail(reply, request, 409, 'MENU_ITEM_SLUG_TAKEN', 'A menu item with this slug already exists in the selected menu.');
+    }
+    throw error;
+  }
   if (!result.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The selected menu item does not exist in this menu and organization.');
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
