@@ -225,7 +225,11 @@ export class PosWorkspaceComponent {
       this.dataChanged.emit();
       this.notifyRequested.emit('Offline payment recorded. No external payment was processed.');
     } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not record POS payment.');
+      const message = error instanceof Error ? error.message : 'Could not confirm the POS payment result.';
+      const reconciled = await this.refreshPosOrders();
+      this.posError.set(reconciled
+        ? message + ' The latest order/payment state was reloaded from the server; verify it before trying again.'
+        : message + ' The latest order/payment state could not be reloaded. Use Refresh POS data before retrying.');
     } finally { this.posSaveBusy.set(false); }
   }
 
