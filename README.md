@@ -2,14 +2,17 @@
 
 **An API-first commerce platform for independent businesses.**
 
-Dollareus is being built as a standalone commerce engine that powers its own merchant workspace and integrates deeply with Mageus. It aims to serve retailers, restaurants, freelancers, creators, and service businesses without forcing them into one rigid workflow.
+Dollareus is an API-first business operating system for retailers, restaurants, freelancers, creators, and service businesses. It owns operational data and workflows—catalogs, inventory, POS, customers, orders, payments, reservations, and fulfillment—and exposes those capabilities through a stable API. Mageus is the default customer-facing storefront, publishing, and discovery layer; Dollareus is not being developed as a competing public storefront.
 
 ## Product principles
 
 - **API-first:** Dollareus serves its own interfaces and authorized external clients such as Mageus through stable, versioned APIs.
 - **One source of truth, many experiences:** a store owns its catalog; menus, storefronts, Mageus pages, QR links, and external clients are presentations or channels over the same records.
 - **Modular by business need:** commerce fundamentals are shared; restaurant, retail, services, and digital-goods capabilities are optional modules.
-- **One source of truth:** catalogs, orders, inventory, and fulfillment have explicit ownership.
+- **One source of truth:** Dollareus owns commerce records; Mageus and external applications consume authorized API projections rather than duplicating business data.
+- **API as a product:** external developers and client businesses can pay to use scoped Dollareus APIs to power their own branded websites and apps.
+- **Shared identity:** a person can use the same Dollareus identity across Dollareus and Mageus. Cross-domain sign-in will use a proper shared identity/OIDC flow, not shared passwords or an insecure cross-domain cookie.
+- **Guest-friendly customer experience:** customers can buy or book through Mageus without being forced to create an account; an optional customer profile can unify their eligible activity across the ecosystem.
 - **Secure by default:** organizations are isolated; access is authenticated, authorized, audited, and validated on the server.
 - **Media is not JSON:** product images live in object storage. JSON records store storage keys and image metadata, not base64 files.
 - **International by design:** model currency, locale, timezone, tax treatment, addresses, and payment methods explicitly for Morocco, France, and the United States.
@@ -17,10 +20,11 @@ Dollareus is being built as a standalone commerce engine that powers its own mer
 
 ## Product boundaries
 
-- **Dollareus Commerce Core:** stores, catalogs, products, variants, carts, orders, checkout, and fulfillment.
-- **Business modules:** inventory, purchasing, POS, CRM, restaurant service, appointments, and digital products.
+- **Dollareus business engine:** organizations, products, variants, menus, inventory, POS, customers/CRM, orders, offline payment records, reservations, fulfillment, and audit history.
+- **Dollareus developer platform:** versioned APIs, scoped app credentials, webhooks, usage metering, documentation, and paid API plans. These capabilities are a product, not an internal implementation detail.
+- **Mageus storefront and discovery:** Mageus owns public storefronts, publishing, magazines, communities, audience-building, product/service discovery, and customer-facing buying and booking experiences.
+- **External applications:** a coffee app, restaurant website, booking app, or custom client site can use Dollareus APIs while keeping its own brand and frontend.
 - **Shared engines:** QR generation/management and integration with the X-Facture document engine.
-- **Mageus and external integrations:** authorized APIs render Dollareus-owned catalogs in Mageus and future apps without copying the source records; Mageus remains focused on publishing, communities, audience, and discovery.
 
 ## Repository structure
 
@@ -43,7 +47,7 @@ pnpm api:typecheck
 pnpm ci
 ```
 
-Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firebase dependency, Firestore data migration, or versioned migration runner. Dollareus owns password credentials, OAuth account links, email verification, password recovery, and sessions in PostgreSQL. Email flows use a Resend-compatible API and require `AUTH_EMAIL_API_KEY`, `AUTH_EMAIL_FROM`, and `AUTH_PUBLIC_URL`. Object-storage upload routes are not yet reimplemented. Never commit credentials. The merchant sign-in/register UI is connected to first-party auth endpoints. The dashboard now loads organizations, stores, and products from the API, supports first-run organization/store creation, and can create draft products. Order listing and creation, inventory tracking, customer records, restaurant menus, QR entry points, order-status auditing, and manual/offline payment tracking are implemented at the API level. The merchant UI exposes order status and offline payment tracking; full fulfillment/shipping, refunds, POS checkout, sales analytics, media uploads, and product publishing remain incomplete. The PostgreSQL reset is underway. API coverage includes organization/store/product workflows, category/customer/inventory APIs, orders, restaurant menus, QR/direct-link entry points, and manual/offline payment tracking. POS, domain, media, fulfillment/shipping, refunds, and some storefront workflows remain to be implemented against PostgreSQL. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md) and review the [pre-launch readiness checklist](docs/launch-readiness.md). Protected API routes require a valid Dollareus session and an active organization membership stored in PostgreSQL.
+Copy `.env.example` to `.env` and configure `DATABASE_URL` for Neon PostgreSQL. Run `pnpm db:setup` once against an empty database to create the fresh schema in `apps/api/db/schema.sql`. The setup script refuses to run if the public schema already contains tables. There is no Firebase dependency, Firestore data migration, or versioned migration runner. Dollareus owns password credentials, OAuth account links, email verification, password recovery, and sessions in PostgreSQL. Email flows use a Resend-compatible API and require `AUTH_EMAIL_API_KEY`, `AUTH_EMAIL_FROM`, and `AUTH_PUBLIC_URL`. Object-storage upload routes are not yet reimplemented. Never commit credentials. The merchant sign-in/register UI is connected to first-party auth endpoints. The dashboard loads organizations, stores, products, orders, customers, and inventory from the API. The merchant UI supports order status updates and manual/offline payment tracking. Audited manual shipment tracking is now implemented in the API and merchant workspace, including carrier, tracking number/link, expected delivery, notes, delivery stages, and separation of delivery status from COD collection. Build and live Neon integration verification are still pending. POS checkout, refunds, media uploads, advanced product publishing, developer API credentials/usage plans/webhooks, and shared Mageus identity integration remain unfinished. Dollareus will not become the default public storefront; Mageus will provide the default storefront and customer-facing commerce experience. Track progress in [the PostgreSQL reset status](docs/architecture/postgresql-reset-status.md) and review the [pre-launch readiness checklist](docs/launch-readiness.md). Protected API routes require a valid Dollareus session and an active organization membership stored in PostgreSQL.
 
 ## Product images
 
@@ -51,4 +55,4 @@ Image bytes belong in object storage, not PostgreSQL rows or JSON. Product JSON 
 
 ## Current status
 
-Early foundation, not production-ready. Authentication endpoints and merchant auth screens are implemented but have not been build-verified or exercised against a live database and real OAuth/email provider configuration. The PostgreSQL API cutover and endpoint parity, role management, media upload verification, online payment processing (intentionally deferred), refunds, fulfillment/shipping, taxes, observability, and full test coverage remain to be implemented. Review [the first milestones](docs/product/first-milestones.md) and the [smart-commerce architecture](docs/architecture/smart-commerce.md).
+Early foundation, not production-ready. Authentication endpoints and merchant auth screens are implemented but have not been build-verified or exercised against a live database and real OAuth/email provider configuration. The PostgreSQL API and operational workflows still need CI/build verification, live database testing, role management, POS checkout, media uploads, refunds, taxes, observability, developer API access controls, and full test coverage. Online payment processing is intentionally deferred. Review [the first milestones](docs/product/first-milestones.md) and the [smart-commerce architecture](docs/architecture/smart-commerce.md).
