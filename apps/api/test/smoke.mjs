@@ -8,7 +8,10 @@ const token = randomUUID() + randomUUID();
 const userId = randomUUID();
 const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
 let organizationId = null;
+let viewerOrganizationId = null;
 let signupUserId = null;
+let viewerUserId = null;
+let viewerToken = null;
 
 async function request(path, expectedStatus, init = {}) {
   const response = await fetch(new URL(path, baseUrl), init);
@@ -84,6 +87,33 @@ try {
   if (!organizationId) throw new Error('Organization creation did not return an id.');
   checks.push('organization creation');
 
+  viewerUserId = randomUUID();
+  viewerToken = randomUUID() + randomUUID();
+  const viewerNow = new Date();
+  await pool.query(
+    'INSERT INTO users (id,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)',
+    [viewerUserId, `viewer-${suffix}@example.test`, 'CI Viewer', 'active', viewerNow]
+  );
+  await pool.query(
+    'INSERT INTO auth_sessions (id,user_id,token_hash,created_at,last_seen_at,expires_at) VALUES ($1,$2,$3,$4,$4,$5)',
+    [randomUUID(), viewerUserId, createHash('sha256').update(viewerToken).digest('hex'), viewerNow, new Date(viewerNow.getTime() + 60_000)]
+  );
+  await pool.query(
+    'INSERT INTO organization_memberships (organization_id,user_id,role,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)',
+    [organizationId, viewerUserId, 'viewer', 'active', viewerNow]
+  );
+  const viewerHeaders = { cookie: `dollareus_session=${viewerToken}`, 'content-type': 'application/json' };
+  const viewerSession = await request('/api/v1/auth/session', 200, { headers: viewerHeaders });
+  if (viewerSession.payload?.data?.id !== viewerUserId) throw new Error('Viewer test account session was not valid.');
+  const viewerOrganization = await request('/api/v1/organizations', 201, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ name: 'CI Viewer Workspace', slug: `viewer-${suffix}` })
+  });
+  viewerOrganizationId = viewerOrganization.payload?.data?.id;
+  if (!viewerOrganizationId) throw new Error('Viewer-owned organization was not created.');
+  await request(`/api/v1/organizations/${viewerOrganizationId}/stores`, 403, { headers: authHeaders });
+  checks.push('tenant isolation and authenticated viewer fixture');
+
   const store = await request(`/api/v1/organizations/${organizationId}/stores`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({
@@ -95,6 +125,11 @@ try {
   });
   const storeId = store.payload?.data?.id;
   if (!storeId) throw new Error('Store creation did not return an id.');
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/pos/sessions`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ label: 'Unauthorized register', terminalType: 'retail' })
+  });
+  checks.push('viewer role cannot open POS registers');
   checks.push('store creation');
 
   const menu = await request(`/api/v1/organizations/${organizationId}/menus`, 201, {
@@ -247,6 +282,10 @@ try {
     body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `CASH-${suffix}`, idempotencyKey: `smoke-payment-${suffix}` })
   });
   const refundPath = `/api/v1/organizations/${organizationId}/orders/${orderIdForRefund}/refunds`;
+  await request(refundPath, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 100, reason: 'Viewer must not record refunds' })
+  });
   const firstRefund = await request(refundPath, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1000, reason: 'Smoke test partial refund', idempotencyKey: `smoke-refund-1-${suffix}` })
@@ -354,7 +393,9 @@ try {
     await pool.query('DELETE FROM customers WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM organizations WHERE id=$1', [organizationId]).catch(() => undefined);
   }
+  if (viewerOrganizationId) await pool.query('DELETE FROM organizations WHERE id=$1', [viewerOrganizationId]).catch(() => undefined);
   if (signupUserId) await pool.query('DELETE FROM users WHERE id=$1', [signupUserId]).catch(() => undefined);
+  if (viewerUserId) await pool.query('DELETE FROM users WHERE id=$1', [viewerUserId]).catch(() => undefined);
   await pool.query('DELETE FROM users WHERE id=$1', [userId]).catch(() => undefined);
   await pool.end();
 }
