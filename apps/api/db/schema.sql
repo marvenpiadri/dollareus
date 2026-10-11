@@ -531,12 +531,14 @@ CREATE TABLE entry_points (
   type text NOT NULL CHECK (type IN ('direct-link', 'qr', 'embed')),
   target_path text NOT NULL CHECK (target_path IN ('/', '/menu', '/catalog', '/services')),
   status text NOT NULL CHECK (status IN ('active', 'disabled')),
+  branding jsonb NOT NULL CHECK (jsonb_typeof(branding) = 'object'),
   created_by text NOT NULL,
   created_at timestamptz NOT NULL,
   updated_at timestamptz NOT NULL,
   FOREIGN KEY (store_id, organization_id) REFERENCES stores(id, organization_id) ON DELETE CASCADE,
   UNIQUE (id, organization_id, store_id)
 );
+ALTER TABLE entry_points ADD COLUMN IF NOT EXISTS branding jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX entry_points_store_idx ON entry_points(store_id, status, created_at DESC);
 
 CREATE TABLE store_domain_events (
