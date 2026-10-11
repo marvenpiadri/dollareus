@@ -843,6 +843,13 @@ app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>(
   }
 });
 
+const MenuPatchInput = z.object({
+  slug: Slug.optional(),
+  name: z.string().trim().min(1).max(180).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  servicePeriods: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  position: z.number().int().nonnegative().optional()
+}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be supplied.' });
 const MenuStatusInput = z.object({ status: z.enum(['draft', 'active', 'archived']) }).strict();
 const MenuItemAvailabilityInput = z.object({
   status: z.enum(['draft', 'active', 'archived']).optional(),
@@ -854,6 +861,25 @@ const MenuItemAvailabilityInput = z.object({
   modifierGroups: z.array(MenuModifierGroupInput).max(20).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be provided.' });
+
+app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = MenuPatchInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The restaurant menu update payload is invalid.');
+  try {
+    const result = await pool.query(
+      'UPDATE restaurant_menus SET slug=COALESCE($3,slug),name=COALESCE($4,name),description=CASE WHEN $5 THEN $6 ELSE description END,service_periods=COALESCE($7,service_periods),position=COALESCE($8,position),updated_at=$9 WHERE id=$1 AND organization_id=$2 RETURNING *',
+      [menuId, organizationId, parsed.data.slug ?? null, parsed.data.name ?? null, parsed.data.description !== undefined, parsed.data.description ?? null, parsed.data.servicePeriods ?? null, parsed.data.position ?? null, new Date()]
+    );
+    if (!result.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+    return { data: camelize(result.rows[0]), requestId: request.id };
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'MENU_SLUG_TAKEN', 'A menu with this slug already exists in the selected store.');
+    throw error;
+  }
+});
 
 app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/status', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId } = request.params;
