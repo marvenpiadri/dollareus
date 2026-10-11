@@ -2,9 +2,9 @@
 
 :root {
   color-scheme: light;
-  --color-midnight-950: #05080f;
-  --color-midnight-900: #090d16;
-  --color-midnight-800: #0f172a;
+  --color-midnight-950: #07111f;
+  --color-midnight-900: #0b1626;
+  --color-midnight-800: #122033;
   --color-midnight-700: #1e293b;
   --color-midnight-600: #334155;
   --color-money-green: #238636;
@@ -16,10 +16,10 @@
   --color-surface: #ffffff;
   --color-border: #e2e8f0;
   --color-text-main: #0f172a;
-  --color-text-secondary: #475569;
+  --color-text-secondary: #40516a;
   --color-text-muted: #64748b;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 16px;
+  font-size: 17px;
   color: var(--color-text-main);
   background: var(--color-canvas);
   font-synthesis: none;
@@ -30,10 +30,15 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { min-height: 100%; margin: 0; }
-body { min-width: 320px; font-size: 16px; line-height: 1.5; }
+body { min-width: 320px; font-size: 17px; line-height: 1.6; }
 button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 h1, h2, h3, .brand { font-family: 'Manrope', 'DM Sans', sans-serif; }
-:focus-visible { outline: 3px solid #238636; outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--color-money-green); outline-offset: 3px; }
+
+/* Readability baseline: generous controls, legible helper text, and consistent focus. */
+input, select, textarea { min-height: 44px; }
+button { min-height: 40px; }
+@media (max-width: 700px) { body { font-size: 16px; } button { min-height: 44px; } }
 ::selection { background: #dcfce7; color: #0f172a; }
