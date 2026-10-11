@@ -55,6 +55,15 @@ function camelize(value: unknown): unknown {
   return value;
 }
 
+function readWebpDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP') return null;
+  const chunk = buffer.toString('ascii', 12, 16);
+  if (chunk === 'VP8X' && buffer.length >= 30) return { width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3) };
+  if (chunk === 'VP8 ' && buffer.length >= 30) return { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
+  if (chunk === 'VP8L' && buffer.length >= 25 && buffer[21] === 0x2f) { const b0=buffer[22]!, b1=buffer[23]!, b2=buffer[24]!, b3=buffer[25]!; return { width: 1 + (((b1 & 0x3f) << 8) | b0), height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6)) }; }
+  return null;
+}
+
 function sha256(value: string | Buffer): string { return createHash('sha256').update(value).digest('hex'); }
 function hmac(key: Buffer | string, value: string, encoding?: 'hex'): Buffer | string { return createHmac('sha256', key).update(value).digest(encoding); }
 function awsObjectUrl(storageKey: string): URL {
@@ -65,7 +74,7 @@ function awsObjectUrl(storageKey: string): URL {
   endpoint.pathname = endpoint.pathname.replace(/\/+$/, '') + '/' + encodeURIComponent(bucket) + '/' + encodedKey;
   endpoint.search = ''; endpoint.hash = ''; return endpoint;
 }
-async function s3Request(method: 'GET' | 'PUT', storageKey: string, body?: Buffer): Promise<Response> {
+async function s3Request(method: 'GET' | 'PUT' | 'DELETE', storageKey: string, body?: Buffer): Promise<Response> {
   const endpoint = awsObjectUrl(storageKey); const accessKey = process.env.AWS_ACCESS_KEY_ID; const secretKey = process.env.AWS_SECRET_ACCESS_KEY; const region = process.env.AWS_REGION ?? 'us-east-2';
   if (!accessKey || !secretKey) throw new Error('S3-compatible media credentials are not configured.');
   const now = new Date(); const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); const dateStamp = amzDate.slice(0, 8);
@@ -129,6 +138,8 @@ app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }
   if (!Buffer.isBuffer(request.body) || request.body.length < 16 || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 5 MB.');
   const body = request.body;
   if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MEDIA_TYPE_INVALID', 'Only WebP image uploads are accepted.');
+  const dimensions = readWebpDimensions(body);
+  if (!dimensions || dimensions.width > 2400 || dimensions.height > 2400) return fail(reply, request, 400, 'MEDIA_DIMENSIONS_INVALID', 'Images must be valid WebP files no larger than 2400 by 2400 pixels.');
   const altText = String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500);
   const rawPosition = Number.parseInt(String(request.headers['x-image-position'] ?? '0'), 10); const position = Number.isFinite(rawPosition) ? Math.max(0, Math.min(1000, rawPosition)) : 0;
   const product = await pool.query('SELECT id FROM products WHERE id=$1 AND organization_id=$2', [productId, organizationId]);
@@ -138,9 +149,9 @@ app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }
   const stored = await s3Request('PUT', storageKey, body);
   if (!stored.ok) { const detail = await stored.text().catch(() => ''); request.log.error({ status: stored.status, detail: detail.slice(0, 300) }, 'Neon object storage upload failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The image could not be saved to object storage.'); }
   try {
-    const metadata = await pool.query('INSERT INTO product_media (id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_by,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_at', [mediaId, organizationId, productId, 'neon_s3', storageKey, 'image/webp', body.length, altText, null, null, position, request.identity!.uid, new Date()]);
+    const metadata = await pool.query('INSERT INTO product_media (id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_by,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_at', [mediaId, organizationId, productId, 'neon_s3', storageKey, 'image/webp', body.length, altText, dimensions.width, dimensions.height, position, request.identity!.uid, new Date()]);
     return reply.code(201).send({ data: { ...camelize(metadata.rows[0]) as Record<string, unknown>, contentUrl: '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/products/' + encodeURIComponent(productId) + '/media/' + encodeURIComponent(mediaId) + '/content' }, requestId: request.id });
-  } catch (error) { await s3Request('PUT', storageKey, Buffer.alloc(0)).catch(() => undefined); throw error; }
+  } catch (error) { await s3Request('DELETE', storageKey).catch(() => undefined); throw error; }
 });
 
 app.get<{ Params: { organizationId: string; productId: string; mediaId: string } }>('/api/v1/organizations/:organizationId/products/:productId/media/:mediaId/content', { preHandler: authenticate }, async (request, reply) => {
