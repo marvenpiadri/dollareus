@@ -204,11 +204,28 @@ try {
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
   const posCompleted = await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
   if (posCompleted.payload?.data?.status !== 'completed' || posCompleted.payload?.data?.items?.length !== 1) throw new Error('POS status transition or order history projection failed.');
+  const canonicalOrders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
+  const canonicalPosOrder = canonicalOrders.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
+  if (!canonicalPosOrder || canonicalPosOrder.channel !== 'POS' || Number(canonicalPosOrder.totalMinor) !== 2598 || canonicalPosOrder.items?.length !== 1) {
+    throw new Error('POS order was not mirrored to the canonical order/payment workflow.');
+  }
+  const posPayment = await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` })
+  });
+  if (posPayment.payload?.data?.paymentStatus !== 'paid') throw new Error('POS order did not use the canonical manual payment workflow.');
+  const posRefund = await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 500, reason: 'POS smoke test partial refund', idempotencyKey: `smoke-pos-refund-${suffix}` })
+  });
+  if (posRefund.payload?.data?.paymentStatus !== 'partially_refunded') throw new Error('POS order did not use the canonical refund workflow.');
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
   const posClosed = await request(`${posBase}/sessions/${posSession.payload?.data?.id}/close`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({}) });
   if (posClosed.payload?.data?.status !== 'closed') throw new Error('POS session did not close.');
+  const closedSessionReplay = await request(`${posBase}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
+  if (closedSessionReplay.payload?.data?.id !== posOrder.payload?.data?.id) throw new Error('POS idempotency replay failed after the register was closed.');
   await request(`${posBase}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...posPayload, idempotencyKey: `smoke-pos-closed-${suffix}` }) });
-  checks.push('POS sessions, server-priced product orders, idempotency, audited status transitions and close guards');
+  checks.push('POS sessions, canonical order/payment/refund integration, idempotency, audited status transitions and close guards');
 
   const orderPayload = { storeId, customerId: customer.payload?.data?.id, notes: 'Smoke test order', idempotencyKey: `smoke-order-${suffix}`, items: [{ variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 2 }] };
   const order = await request(`/api/v1/organizations/${organizationId}/orders`, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
