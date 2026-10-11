@@ -265,6 +265,10 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 @if(editingMenuItem()){
                   <div class="panel-heading"><div><h2>Edit menu item details</h2><p>{{editingMenuItem()?.name}} · allergens and dietary labels should reflect the recipe and preparation process.</p></div><button type="button" (click)="editingMenuItem.set(null)">Cancel</button></div>
                   <form class="customer-form" (submit)="saveMenuItemDetails($event)">
+                    <label>Item name<input name="name" required maxlength="180" [value]="editingMenuItem()?.name || ''"></label>
+                    <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="editingMenuItem()?.slug || ''"></label>
+                    <label>Description<input name="description" maxlength="5000" [value]="editingMenuItem()?.description || ''"></label>
+                    <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required [value]="(editingMenuItem()?.priceAmountMinor || 0) / 100"></label>
                     <label>Category<select name="categoryId" [value]="editingMenuItem()?.categoryId || ''"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
                     <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" [value]="(editingMenuItem()?.allergens || []).join(', ')" placeholder="milk, sesame, nuts"></label>
                     <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" [value]="(editingMenuItem()?.dietaryLabels || []).join(', ')" placeholder="vegetarian, vegan, gluten-free"></label>
@@ -1335,6 +1339,11 @@ export class AppComponent {
     if (!item) return;
     const values = new FormData(event.currentTarget as HTMLFormElement);
     const categoryId = String(values.get('categoryId') ?? '').trim() || null;
+    const name = String(values.get('name') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim();
+    const description = String(values.get('description') ?? '').trim();
+    const price = Number(values.get('price'));
+    if (!name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) { this.menuError.set('Enter a valid item name, slug, and non-negative price.'); return; }
     const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     let modifierGroups: MenuModifierGroup[];
@@ -1348,7 +1357,7 @@ export class AppComponent {
     this.menuBusy.set(true); this.menuError.set('');
     try {
       await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
-        method: 'PATCH', body: JSON.stringify({ categoryId, allergens, dietaryLabels, modifierGroups })
+        method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, priceAmountMinor: Math.round(price * 100), categoryId, allergens, dietaryLabels, modifierGroups })
       });
       this.editingMenuItem.set(null);
       await this.loadWorkspace();
