@@ -510,7 +510,7 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', a
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/catalog', async (request, reply) => {
-  const store = await pool.query('SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
+  const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true AND 'menu'=ANY(f.enabled_experiences) LIMIT 1", [request.params.storeSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   const products = await pool.query('SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), \'[]\'::jsonb) AS variants FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC', [store.rows[0].organization_id, store.rows[0].id, 'active']);
   return { data: camelize(products.rows), requestId: request.id };
