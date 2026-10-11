@@ -3,13 +3,16 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { pool } from './db/pool.js';
 import { authenticate, registerAuthRoutes } from './auth.js';
 
 const app = Fastify({ logger: true, trustProxy: process.env.NODE_ENV === 'production', bodyLimit: 1_048_576, genReqId: () => randomUUID() });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').split(',').map((origin) => origin.trim()).filter(Boolean);
-const IMAGE_UPLOAD_LIMIT = 5 * 1024 * 1024;
+const IMAGE_UPLOAD_LIMIT = 4096 * 1024;
+const PRODUCT_IMAGE_TARGET = 1024 * 1024;
+const RESPONSIVE_IMAGE_WIDTHS = new Set([64, 96, 128, 160, 200, 240, 300, 320, 400, 480, 600, 800, 1000, 1200, 1600, 2000, 2400]);
 app.addContentTypeParser('image/webp', { parseAs: 'buffer', bodyLimit: IMAGE_UPLOAD_LIMIT }, (_request, payload, done) => done(null, payload));
 
 
@@ -135,7 +138,7 @@ app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }
   if (!await requireMembership(request, reply, organizationId)) return;
   const membership = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity!.uid, 'active']);
   if (!['owner', 'admin', 'manager', 'staff'].includes(String(membership.rows[0]?.role ?? ''))) return fail(reply, request, 403, 'MEDIA_WRITE_FORBIDDEN', 'Your organization role cannot upload product media.');
-  if (!Buffer.isBuffer(request.body) || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 5 MB.');
+  if (!Buffer.isBuffer(request.body) || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 4096 KB.');
   const body = request.body;
   if (body.length < 16 || body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MEDIA_TYPE_INVALID', 'Only WebP image uploads are accepted.');
   const dimensions = readWebpDimensions(body);
@@ -154,16 +157,47 @@ app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }
   } catch (error) { await s3Request('DELETE', storageKey).catch(() => undefined); throw error; }
 });
 
-app.get<{ Params: { organizationId: string; productId: string; mediaId: string } }>('/api/v1/organizations/:organizationId/products/:productId/media/:mediaId/content', { preHandler: authenticate }, async (request, reply) => {
+app.get<{ Params: { organizationId: string; productId: string; mediaId: string }; Querystring: { width?: string } }>('/api/v1/organizations/:organizationId/products/:productId/media/:mediaId/content', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, productId, mediaId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
   const result = await pool.query('SELECT storage_key,content_type FROM product_media WHERE id=$1 AND organization_id=$2 AND product_id=$3', [mediaId, organizationId, productId]);
   if (!result.rowCount) return fail(reply, request, 404, 'MEDIA_NOT_FOUND', 'The image does not exist.');
-  const stored = await s3Request('GET', String(result.rows[0].storage_key));
-  if (!stored.ok) { request.log.error({ status: stored.status }, 'Neon object storage download failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The image could not be loaded from object storage.'); }
-  const bytes = Buffer.from(await stored.arrayBuffer());
-  reply.header('Content-Type', String(result.rows[0].content_type)); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'private, max-age=300'); reply.header('X-Content-Type-Options', 'nosniff');
-  return reply.send(bytes);
+  const requestedWidth = request.query.width === undefined ? null : Number(request.query.width);
+  if (requestedWidth !== null && (!Number.isInteger(requestedWidth) || !RESPONSIVE_IMAGE_WIDTHS.has(requestedWidth))) {
+    return fail(reply, request, 400, 'MEDIA_WIDTH_INVALID', 'Choose a supported image width (64, 96, 128, 160, 200, 240, 300, 320, 400, 480, 600, 800, 1000, 1200, 1600, 2000 or 2400).');
+  }
+  const originalKey = String(result.rows[0].storage_key);
+  if (requestedWidth === null) {
+    const stored = await s3Request('GET', originalKey);
+    if (!stored.ok) { request.log.error({ status: stored.status }, 'Neon object storage download failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The image could not be loaded from object storage.'); }
+    const bytes = Buffer.from(await stored.arrayBuffer());
+    reply.header('Content-Type', String(result.rows[0].content_type)); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'private, max-age=300'); reply.header('X-Content-Type-Options', 'nosniff');
+    return reply.send(bytes);
+  }
+  const variantKey = originalKey.replace(/\\.webp$/i, '-w' + requestedWidth + '.webp');
+  let variant = await s3Request('GET', variantKey);
+  let variantBytes: Buffer;
+  if (variant.ok) {
+    variantBytes = Buffer.from(await variant.arrayBuffer());
+  } else {
+    const original = await s3Request('GET', originalKey);
+    if (!original.ok) { request.log.error({ status: original.status }, 'Neon object storage download failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The source image could not be loaded for resizing.'); }
+    const sourceBytes = Buffer.from(await original.arrayBuffer());
+    try {
+      variantBytes = await sharp(sourceBytes, { limitInputPixels: 40_000_000 }).rotate().resize({ width: requestedWidth, withoutEnlargement: true, fit: 'inside' }).webp({ quality: 76, effort: 4 }).toBuffer();
+    } catch (error) {
+      request.log.warn({ err: error }, 'Image resize failed');
+      return fail(reply, request, 415, 'MEDIA_PROCESSING_FAILED', 'The stored image could not be resized.');
+    }
+    if (variantBytes.length > IMAGE_UPLOAD_LIMIT) {
+      variantBytes = await sharp(variantBytes).webp({ quality: 60, effort: 5 }).toBuffer();
+    }
+    if (variantBytes.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 500, 'MEDIA_VARIANT_TOO_LARGE', 'The generated image variant exceeds the size limit.');
+    const saved = await s3Request('PUT', variantKey, variantBytes);
+    if (!saved.ok) request.log.warn({ status: saved.status, width: requestedWidth }, 'Could not cache resized image in object storage');
+  }
+  reply.header('Content-Type', 'image/webp'); reply.header('Content-Length', String(variantBytes.length)); reply.header('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800'); reply.header('Vary', 'Accept'); reply.header('X-Content-Type-Options', 'nosniff');
+  return reply.send(variantBytes);
 });
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
