@@ -11,6 +11,7 @@ interface OrderRow { id: string; resourceId: string; customer: string; channel: 
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
 interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
+type PosCartLine = { key: string; sourceType: 'product' | 'menu_item'; sourceItemId: string; sourceVariantId?: string; quantity: number; name: string; priceAmountMinor: number; currency: string; metadata?: Record<string, unknown> };
 type MenuModifierOption = { id: string; name: string; priceDeltaMinor: number };
 type MenuModifierGroup = { id: string; name: string; required: boolean; minSelections: number; maxSelections: number; options: MenuModifierOption[] };
 interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; modifierGroups?: MenuModifierGroup[]; metadata?: Record<string, unknown>; }
@@ -155,7 +156,16 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               @if(posError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{posError()}}</p>}
               <form class="customer-form" (submit)="createPosSession($event)"><label>Register name<input name="label" required maxlength="120" [value]="posSessionLabel()" (input)="posSessionLabel.set($any($event.target).value)"></label><label>Terminal type<select [value]="posTerminalType()" (change)="posTerminalType.set($any($event.target).value)"><option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="service">Services</option><option value="general">General</option></select></label><button class="button primary small" type="submit" [disabled]="posBusy()">{{posBusy()?'Opening…':'Open register'}}</button></form>
               <div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;padding:14px 17px;border-bottom:1px solid #eef0eb"><label style="display:grid;gap:6px;flex:1;min-width:220px;color:#6f786a;font-size:13px;font-weight:700">Active register<select [value]="selectedPosSessionId()" (change)="selectedPosSessionId.set($any($event.target).value)" style="height:42px;padding:0 10px;border:1px solid #cbd5e1;border-radius:7px;background:white"><option value="">Choose an open register</option>@for(session of posSessions();track session.id){@if(session.status==='open'){<option [value]="session.id">{{session.label}} · {{orderStatusLabel(session.terminalType)}}</option>}}</select></label><button class="button secondary small" type="button" [disabled]="posBusy() || !selectedPosSessionId()" (click)="closePosSession()">Close register</button></div>
-              <form class="customer-form" (submit)="createPosOrder($event)"><label>Sale type<select [value]="posSourceType()" (change)="posSourceType.set($any($event.target).value);posVariantId.set('');posModifiers.set({})"><option value="product">Retail product</option><option value="menu_item">Restaurant menu item</option></select></label><label>{{posSourceType()==='product' ? 'Product' : 'Menu item'}}<select required [value]="posVariantId()" (change)="posVariantId.set($any($event.target).value);posModifiers.set({})"><option value="">Choose an active item</option>@if(posSourceType()==='product'){@for(product of products();track product.id){@if(product.status==='Active' && product.variantId){<option [value]="product.variantId">{{product.name}} · {{money(product.priceMinor,product.currency)}}</option>}}} @else {@for(item of availablePosMenuItems();track item.id){<option [value]="item.id">{{item.name}} · {{money(item.priceAmountMinor,item.currency)}}</option>}}</select></label>@if(posSourceType()==='menu_item' && selectedPosMenuItem(); as posMenuItem){@for(group of posMenuItem.modifierGroups || [];track group.id){<fieldset style="display:grid;gap:8px;min-width:220px;padding:12px;border:1px solid #e2e8f0;border-radius:9px"><legend style="font-size:13px;font-weight:700">{{group.name}} · choose {{group.minSelections===group.maxSelections ? group.maxSelections : group.minSelections+'–'+group.maxSelections}}</legend>@for(option of group.options;track option.id){<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" [checked]="(posModifiers()[group.id] || []).includes(option.id)" (change)="togglePosModifier(group.id,option.id,$any($event.target).checked,group.maxSelections)">{{option.name}} @if(option.priceDeltaMinor>0){<span class="muted">+{{money(option.priceDeltaMinor,storeCurrency())}}</span>}</label>}</fieldset>}}<label>Quantity<input type="number" min="1" max="10000" step="1" required [value]="posQuantity()" (input)="posQuantity.set($any($event.target).value)"></label><label>Fulfillment<select [value]="posFulfillment()" (change)="posFulfillment.set($any($event.target).value)"><option value="counter">Counter sale</option><option value="takeaway">Takeaway</option><option value="dine_in">Dine in</option><option value="delivery">Delivery</option><option value="service">Service</option></select></label><label>Note (optional)<input maxlength="1000" [value]="posCustomerNote()" (input)="posCustomerNote.set($any($event.target).value)" placeholder="Customer or receipt note"></label><button class="button primary small" type="submit" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posVariantId() || (posSourceType()==='menu_item' && !posModifiersValid())">{{posSaveBusy()?'Saving…':'Create POS order'}}</button></form>
+              <form class="customer-form" (submit)="addPosCartItem($event)"><label>Sale type<select [value]="posSourceType()" (change)="posSourceType.set($any($event.target).value);posVariantId.set('');posModifiers.set({})"><option value="product">Retail product</option><option value="menu_item">Restaurant menu item</option></select></label><label>{{posSourceType()==='product' ? 'Product' : 'Menu item'}}<select required [value]="posVariantId()" (change)="posVariantId.set($any($event.target).value);posModifiers.set({})"><option value="">Choose an active item</option>@if(posSourceType()==='product'){@for(product of products();track product.id){@if(product.status==='Active' && product.variantId){<option [value]="product.variantId">{{product.name}} · {{money(product.priceMinor,product.currency)}}</option>}}} @else {@for(item of availablePosMenuItems();track item.id){<option [value]="item.id">{{item.name}} · {{money(item.priceAmountMinor,item.currency)}}</option>}}</select></label>@if(posSourceType()==='menu_item' && selectedPosMenuItem(); as posMenuItem){@for(group of posMenuItem.modifierGroups || [];track group.id){<fieldset style="display:grid;gap:8px;min-width:220px;padding:12px;border:1px solid #e2e8f0;border-radius:9px"><legend style="font-size:13px;font-weight:700">{{group.name}} · choose {{group.minSelections===group.maxSelections ? group.maxSelections : group.minSelections+'–'+group.maxSelections}}</legend>@for(option of group.options;track option.id){<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" [checked]="(posModifiers()[group.id] || []).includes(option.id)" (change)="togglePosModifier(group.id,option.id,$any($event.target).checked,group.maxSelections)">{{option.name}} @if(option.priceDeltaMinor>0){<span class="muted">+{{money(option.priceDeltaMinor,storeCurrency())}}</span>}</label>}</fieldset>}}<label>Quantity<input type="number" min="1" max="10000" step="1" required [value]="posQuantity()" (input)="posQuantity.set($any($event.target).value)"></label><label>Fulfillment<select [value]="posFulfillment()" (change)="posFulfillment.set($any($event.target).value)"><option value="counter">Counter sale</option><option value="takeaway">Takeaway</option><option value="dine_in">Dine in</option><option value="delivery">Delivery</option><option value="service">Service</option></select></label><label>Note (optional)<input maxlength="1000" [value]="posCustomerNote()" (input)="posCustomerNote.set($any($event.target).value)" placeholder="Customer or receipt note"></label><button class="button primary small" type="submit" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posVariantId() || (posSourceType()==='menu_item' && !posModifiersValid())">{{posSaveBusy()?'Saving…':'＋ Add item to ticket'}}</button></form>
+              <section style="padding:16px 17px;border-bottom:1px solid #eef0eb">
+                <div class="panel-heading" style="padding:0 0 10px"><div><h3 style="margin:0;font-size:17px">Current ticket</h3><p style="margin:5px 0 0;color:#64748b;font-size:13px">Prices are estimates until the server validates the order.</p></div><b>{{posCart().length}} line{{posCart().length===1?'':'s'}}</b></div>
+                @if(posCart().length){
+                  <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>QTY</th><th>UNIT</th><th>LINE TOTAL</th><th></th></tr></thead><tbody>@for(line of posCart();track line.key){<tr><td><b>{{line.name}}</b>@if(line.metadata?.['modifiers']){<small class="muted">Modifiers selected</small>}</td><td>{{line.quantity}}</td><td>{{money(line.priceAmountMinor,line.currency)}}</td><td class="total">{{money(line.priceAmountMinor*line.quantity,line.currency)}}</td><td><button class="button secondary small" type="button" (click)="removePosCartItem(line.key)">Remove</button></td></tr>}</tbody></table></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:14px"><b>Estimated total</b><strong style="font-size:20px">{{money(posCartTotalMinor(),storeCurrency())}}</strong></div>
+                } @else {<p style="margin:8px 0 12px;color:#64748b;font-size:13px">Add products or restaurant dishes to start a ticket.</p>}
+                @if(posCartError()){<p role="alert" style="margin:8px 0;color:#a44737;font-size:13px">{{posCartError()}}</p>}
+                <button class="button primary" style="margin-top:12px" type="button" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posCart().length" (click)="createPosOrder()">Create POS order · {{money(posCartTotalMinor(),storeCurrency())}}</button>
+              </section>
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 17px;border-bottom:1px solid #eef0eb"><label style="display:grid;gap:6px;min-width:190px;color:#6f786a;font-size:13px;font-weight:700">Offline payment method<select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)" style="height:42px;padding:0 10px;border:1px solid #cbd5e1;border-radius:7px;background:white"><option value="cash">Cash</option><option value="card_terminal">External card terminal</option><option value="mobile_money">Mobile money</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select></label><span class="muted">Record only after payment is collected or confirmed.</span></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>ITEMS</th><th>FULFILLMENT</th><th>TOTAL</th><th>STATUS</th><th>PAYMENT / UPDATE</th></tr></thead><tbody>@for(order of posOrders();track order.id){<tr><td class="order-id">#{{order.orderNumber}}</td><td>@for(item of order.items || [];track item.id){<div>{{item.quantity}} × {{item.name}}</div>}</td><td>{{orderStatusLabel(order.fulfillment)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td><div style="display:grid;gap:7px;min-width:150px"><button class="button secondary small" type="button" [disabled]="posSaveBusy() || order.status==='cancelled'" (click)="recordPosPayment(order)">Record remaining payment</button>@if(order.status==='confirmed'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="preparing">Preparing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='preparing'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='ready'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="ready">Ready</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</div></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No POS orders yet. Open a register and create your first in-person sale.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{posOrders().length}} POS orders · payment records update the canonical order record; no payment processor is connected.</div></section>
           }
           @if (activeNav() === 'QR Studio') {
@@ -604,12 +614,14 @@ export class AppComponent {
   protected readonly posVariantId = signal('');
   protected readonly posSourceType = signal<'product' | 'menu_item'>('product');
   protected readonly posModifiers = signal<Record<string, string[]>>({});
+  protected readonly posCart = signal<PosCartLine[]>([]);
   protected readonly posQuantity = signal('1');
   protected readonly posFulfillment = signal('counter');
   protected readonly posCustomerNote = signal('');
   protected readonly posBusy = signal(false);
   protected readonly posSaveBusy = signal(false);
   protected readonly posError = signal('');
+  protected readonly posCartError = signal('');
   protected readonly customerFormOpen = signal(false);
   protected readonly customerSaveBusy = signal(false);
   protected readonly customerSaveError = signal('');
@@ -781,16 +793,54 @@ export class AppComponent {
     } finally { this.posBusy.set(false); }
   }
 
-  protected async createPosOrder(event: Event): Promise<void> {
+  protected addPosCartItem(event: Event): void {
     event.preventDefault();
-    const sessionId = this.selectedPosSessionId();
     const variantId = this.posVariantId();
     const quantity = Number(this.posQuantity());
     const sourceType = this.posSourceType();
     const product = sourceType === 'product' ? this.products().find(row => row.variantId === variantId && row.status === 'Active') : null;
-    const menuItem = sourceType === 'menu_item' ? this.menuItems().find(row => row.id === variantId && row.status === 'active' && row.availability !== 'unavailable' && this.menus().some(menu => menu.id === row.menuId && menu.status === 'active')) : null;
-    if (!sessionId || (sourceType === 'product' ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
-      this.posError.set('Choose an open register, an active and available item, and a valid whole-number quantity.');
+    const menuItem = sourceType === 'menu_item' ? this.selectedPosMenuItem() : null;
+    if (!this.selectedPosSessionId() || (sourceType === 'product' ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 || (sourceType === 'menu_item' && !this.posModifiersValid())) {
+      this.posCartError.set('Choose an open register, a valid active item, quantity, and all required modifier options.');
+      return;
+    }
+    const modifiers = sourceType === 'menu_item' ? this.selectedPosModifiersPayload() : [];
+    const modifierDelta = modifiers.reduce((sum, selection) => {
+      const group = menuItem?.modifierGroups?.find(candidate => candidate.id === selection.groupId);
+      return sum + selection.optionIds.reduce((subtotal, optionId) => subtotal + Number(group?.options.find(option => option.id === optionId)?.priceDeltaMinor ?? 0), 0);
+    }, 0);
+    const name = sourceType === 'product' ? product!.name : menuItem!.name;
+    const sourceItemId = sourceType === 'product' ? product!.id : menuItem!.id;
+    const sourceVariantId = sourceType === 'product' ? variantId : undefined;
+    const priceAmountMinor = sourceType === 'product' ? product!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
+    const currency = sourceType === 'product' ? product!.currency : menuItem!.currency;
+    const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
+    const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
+    this.posCartError.set('');
+    this.posCart.update(lines => {
+      const existing = lines.find(line => line.key === key);
+      if (!existing) return [...lines, { key, sourceType, sourceItemId, sourceVariantId, quantity, name, priceAmountMinor, currency, metadata }];
+      return lines.map(line => line.key === key ? { ...line, quantity: line.quantity + quantity } : line);
+    });
+    if (this.posCart().some(line => line.quantity > 10000)) {
+      this.posCart.update(lines => lines.filter(line => line.key !== key));
+      this.posCartError.set('A ticket line cannot exceed 10,000 units.');
+      return;
+    }
+    this.posQuantity.set('1');
+    if (sourceType === 'menu_item') this.posModifiers.set({});
+    this.notify('Item added to the POS ticket.');
+  }
+
+  protected removePosCartItem(key: string): void { this.posCart.update(lines => lines.filter(line => line.key !== key)); }
+  protected posCartTotalMinor(): number { return this.posCart().reduce((sum, line) => sum + line.priceAmountMinor * line.quantity, 0); }
+
+  protected async createPosOrder(): Promise<void> {
+    const sessionId = this.selectedPosSessionId();
+    const variantId = this.posVariantId();
+    const quantity = Number(this.posQuantity());
+    if (!sessionId || !this.posCart().length) {
+      this.posError.set('Choose an open register and add at least one item to the ticket.');
       return;
     }
     this.posSaveBusy.set(true); this.posError.set('');
@@ -801,14 +851,16 @@ export class AppComponent {
           sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
           customerNote: this.posCustomerNote().trim() || null,
           idempotencyKey: 'merchant-pos-' + crypto.randomUUID(),
-          items: [sourceType === 'product'
-            ? { sourceType: 'product', sourceItemId: product!.id, sourceVariantId: variantId, quantity }
-            : { sourceType: 'menu_item', sourceItemId: menuItem!.id, quantity, metadata: { modifiers: this.selectedPosModifiersPayload() } }]
+          items: this.posCart().map(line => ({
+            sourceType: line.sourceType, sourceItemId: line.sourceItemId,
+            ...(line.sourceVariantId ? { sourceVariantId: line.sourceVariantId } : {}),
+            quantity: line.quantity, ...(line.metadata ? { metadata: line.metadata } : {})
+          }))
         })
       });
       const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
       this.posOrders.set(Array.isArray(rows) ? rows : []);
-      this.posQuantity.set('1'); this.posCustomerNote.set('');
+      this.posQuantity.set('1'); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
       this.notify('POS order created with server-calculated pricing.');
     } catch (error) {
       this.posError.set(error instanceof Error ? error.message : 'Could not create this POS order.');
