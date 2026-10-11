@@ -51,6 +51,19 @@ async function requireMembership(request: FastifyRequest, reply: FastifyReply, o
   return true;
 }
 
+async function requireManagerRole(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
+  if (!request.identity) {
+    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
+    return false;
+  }
+  const result = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity.uid, 'active']);
+  if (!['owner', 'admin', 'manager'].includes(String(result.rows[0]?.role ?? ''))) {
+    await reply.code(403).send({ error: { code: 'ORGANIZATION_ROLE_FORBIDDEN', message: 'Only organization owners, admins, and managers can perform this action.', requestId: request.id } });
+    return false;
+  }
+  return true;
+}
+
 function camelize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(camelize);
   if (value && typeof value === 'object' && !(value instanceof Date)) {
@@ -603,6 +616,7 @@ app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organi
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = MenuInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The restaurant menu payload is invalid.');
   const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
@@ -623,6 +637,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
 app.get<{ Params: { organizationId: string; menuId: string } }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const menu = await pool.query('SELECT id FROM restaurant_menus WHERE id=$1 AND organization_id=$2', [menuId, organizationId]);
   if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
   const result = await pool.query('SELECT * FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,name LIMIT 500', [menuId, organizationId]);
@@ -664,6 +679,7 @@ const MenuItemAvailabilityInput = z.object({
 app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/status', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = MenuStatusInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu status payload is invalid.');
   const result = await pool.query(
@@ -677,6 +693,7 @@ app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>
 app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items/:itemId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId, itemId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = MenuItemAvailabilityInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu item update payload is invalid.');
   const result = await pool.query(
@@ -718,6 +735,7 @@ app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organi
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/domains', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = CustomDomainInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The custom domain payload is invalid.');
   const hostname = parsed.data.hostname.replace(/\.$/, '');
@@ -747,6 +765,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
 app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/organizations/:organizationId/domains/:domainId/verify', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, domainId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const domain = await pool.query(
     "SELECT id,hostname,verification_token,status FROM store_domains WHERE id=$1 AND organization_id=$2 AND kind='custom'",
     [domainId, organizationId]
@@ -780,6 +799,7 @@ app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/orga
 app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/organizations/:organizationId/domains/:domainId/disable', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, domainId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const result = await pool.query(
     "UPDATE store_domains SET status='disabled',is_primary=false,updated_at=$3 WHERE id=$1 AND organization_id=$2 RETURNING id,hostname,status,is_primary,updated_at",
     [domainId, organizationId, new Date()]
