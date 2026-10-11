@@ -1,8 +1,8 @@
 # Set up the Dollareus Neon database
 
-This guide is for a first-time setup. You do **not** need to create Dollareus tables one by one: the repository contains the schema and a setup command that creates the tables and indexes together.
+This guide covers a first install and subsequent schema upgrades. You do **not** need to create Dollareus tables one by one: the repository contains ordered SQL migrations and a command that applies them in order.
 
-> **Important:** use a dedicated, empty database for this first install. The current `pnpm db:setup` command is a fresh-install tool, not a migration system. It intentionally refuses to run if it finds any ordinary tables in the database's `public` schema. Never point it at a database that contains data you need to keep.
+> **Important:** use a dedicated, empty database for the first install. The migration runner refuses to initialize history over an existing non-empty schema it cannot identify. For an existing database without `schema_migrations`, stop and plan a reviewed baseline migration; do not drop tables or retry blindly.
 
 ## 1. Create or choose an empty Neon database
 
@@ -37,10 +37,10 @@ Run these commands from the repository root:
 
 ```bash
 pnpm install
-pnpm db:setup
+pnpm db:migrate
 ```
 
-The script reads `apps/api/db/schema.sql`, runs the schema inside a transaction, and prints the names of the tables it created. If it says the public schema is not empty, **stop**. Do not delete tables to make the command pass and do not retry against a database containing data. Confirm you selected the intended empty Dollareus database first.
+The migration runner applies files in `apps/api/db/migrations/` in filename order and records each applied migration and SHA-256 checksum in `public.schema_migrations`. Each migration and its history record are committed in the same transaction. A PostgreSQL advisory lock prevents two deployments from applying migrations concurrently. `pnpm db:setup` is retained as an alias for `pnpm db:migrate`.
 
 ## 4. Verify the tables in Neon
 
@@ -82,10 +82,12 @@ If the API reports a connection error, check that the URL belongs to the same Ne
 - Use separate Neon databases for staging and production.
 - Store production `DATABASE_URL` only in the API host's server-side environment/secret settings.
 - Confirm backups/retention and test a restore before accepting real business data.
-- Run the schema setup only on the intended empty database.
+- Run `pnpm db:migrate` as a controlled deployment step before releasing API code that depends on a new schema.
+- Never edit a migration that has already been applied; create the next numbered SQL file.
+- Back up production data before migrations that alter or remove columns, indexes, or constraints.
 - Verify the deployed API health endpoint and run a small staging workflow.
 - Do not treat query/connection spikes in Neon as proof that the full schema or application workflows are correct.
 
 ## If you already created tables
 
-Do not run `pnpm db:setup` against that database. Dollareus does not yet have a versioned migration runner for upgrading existing installations. Preserve the data, inspect which tables exist, and plan a reviewed migration before changing the schema.
+Do not initialize migrations against that database automatically. Dollareus now has a versioned migration runner, but an existing database with tables and no `schema_migrations` history must be inspected and deliberately baselined first. Preserve the data and plan a reviewed migration before changing the schema.
