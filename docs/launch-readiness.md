@@ -31,7 +31,7 @@ Last reviewed: 2026-10-11
 - [x] Replace hard-coded sample products and demo store identity with API-backed workspace/catalog state; show unavailable indicators instead of fabricated sales and inventory metrics.
 - [x] Implement first-run organization/store creation and draft product creation through the API, with loading/error states.
 - [ ] Finish onboarding and storefront configuration; implement product publishing, category management, additional variant management, images, and inventory changes. Basic product detail editing and archiving are now available.
-- [ ] Implement customer records, carts, orders, order items, payment states, fulfillment, cancellations/refunds, and transactional emails.
+- [ ] Finish merchant-facing customer records, carts, order operations, payment states, fulfillment, cancellation/refund controls, and transactional emails. API-level manual refund recording is implemented but requires fresh CI and database verification.
 - [ ] Implement and test restaurant menus/menu items, POS sessions/orders, QR/entry points, custom domains, and inventory endpoints if those modules are included in the first launch.
 - [ ] Implement object-storage uploads with server-side authorization, file type/size limits, and safe public/private access rules.
 - [ ] Complete organization membership roles and server-side authorization for every private route.
@@ -39,7 +39,7 @@ Last reviewed: 2026-10-11
 
 ### Payments, tax, and business correctness
 - [ ] Decide which country, business type, currency, and payment methods are supported for launch; do not advertise unsupported countries/modules.
-- [ ] Integrate a real payment provider and verify signed webhooks, duplicate-event handling, idempotency, payment failures, refunds, and reconciliation.
+- [ ] Integrate a real payment provider and verify signed webhooks, duplicate-event handling, idempotency, payment failures, actual provider refunds, and reconciliation. Current refund endpoints only record manual refunds; they do not transfer money.
 - [ ] Define tax calculation/invoice behavior with appropriate local review; test totals, discounts, shipping, rounding, and currency minor units.
 - [ ] Add order-number generation, stock reservation/decrement rules, and concurrent-order tests.
 
