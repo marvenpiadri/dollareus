@@ -103,7 +103,8 @@ export class AppComponent {
 
   constructor() {
     const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/';
-    const page = path === '/qr' ? 'qr' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
+    const authAction = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null;
+    const page = authAction === 'verify-email' || authAction === 'reset-password' ? 'login' : path === '/qr' ? 'qr' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
     this.publicPage.set(page);
     if (page === 'app' || page === 'login' || page === 'signup') void this.checkSession();
     else { this.authReady.set(true); this.workspaceLoading.set(false); }
