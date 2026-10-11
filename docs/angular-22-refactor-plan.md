@@ -56,8 +56,8 @@ Create folders as their feature boundaries are migrated; avoid empty placeholder
 - [x] Organize existing auth, public-home, and QR Studio standalone components under feature folders.
 - [x] Align Angular framework, CLI, build tooling, and TypeScript dependencies with Angular 22.
 - [x] Use a Node.js release supported by Angular 22 in CI.
-- [ ] Confirm CI build, API typecheck, and API smoke tests pass on this branch.
-- [ ] Review the generated diff for template/style extraction fidelity.
+- [x] Confirm CI build, API typecheck, and API smoke tests pass on this branch.
+- [x] Review the generated diff for template/style extraction fidelity (Angular 22 production build passed).
 
 ### B — Application shell and routing
 - [ ] Introduce explicit standalone application configuration and Angular Router route definitions.
