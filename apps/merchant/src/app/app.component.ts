@@ -746,7 +746,7 @@ export class AppComponent {
       if (optimized.size > 1024 * 1024) {
         const scaledCanvas = document.createElement('canvas');
         let scaleDown = 0.85;
-        while (optimized.size > 1024 * 1024 && scaleDown >= 0.35) {
+        while ((optimized?.size ?? Infinity) > 1024 * 1024 && scaleDown >= 0.35) {
           scaledCanvas.width = Math.max(1, Math.floor(canvas.width * scaleDown));
           scaledCanvas.height = Math.max(1, Math.floor(canvas.height * scaleDown));
           const scaledContext = scaledCanvas.getContext('2d', { alpha: false });
@@ -762,7 +762,7 @@ export class AppComponent {
         }
         if (optimized && optimized.size <= 1024 * 1024) { canvas.width = scaledCanvas.width; canvas.height = scaledCanvas.height; }
       }
-      if (optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
+      if (!optimized || optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
       const response = await fetch(this.apiBase() + '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
       const payload = await response.json().catch(() => ({})) as { data?: { contentUrl?: string }; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message ?? 'The image could not be uploaded.');
