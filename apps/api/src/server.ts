@@ -1591,7 +1591,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         productId: item.sourceType === 'menu_item' ? null : String(source.id),
         sku: item.sourceType === 'menu_item' || !source.sku ? null : String(source.sku),
         variantTitle: item.sourceType === 'menu_item' ? 'Menu item' : String(source.variant_title),
-        options: item.sourceType === 'menu_item' ? {} : (source.options ?? {}),
+        options: item.sourceType === 'menu_item' ? (modifierSnapshot.length ? { modifiers: modifierSnapshot } : {}) : (source.options ?? {}),
         name: item.sourceType === 'menu_item' ? String(source.name) : String(source.name) + (source.variant_title ? ' · ' + source.variant_title : ''),
         quantity: item.quantity, unitAmount, total: lineTotal, metadata: { ...(item.metadata ?? {}), ...(modifierSnapshot.length ? { modifierSnapshot } : {}) }
       });
