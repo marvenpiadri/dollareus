@@ -55,6 +55,7 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
 - [x] reimplement PostgreSQL-backed POS session/order APIs and add the initial retail POS workspace for opening/closing registers, creating server-priced product orders, and audited status transitions; restaurant menu-item UI and inventory deduction remain pending. POS orders are mirrored into canonical orders/order_items, so the existing manual payment/refund APIs are available from the Orders workspace; the POS screen does not yet include inline payment controls.
 - [x] add authenticated product media upload/retrieval routes backed by Neon S3-compatible object storage; browser-side WebP resizing/compression, 2400×2400 server dimension ceiling, 4 MiB optimized-upload limit, and metadata persistence are implemented. Configure `AWS_S3_BUCKET` on the API host and complete real-bucket round-trip verification.
+- [x] add the first developer API access layer: bearer credentials are organization-scoped, their token is only returned once, stored as a SHA-256 hash, scope-checked, revocable, and usage-metered. This is an API foundation, not yet a complete developer portal.
 - reimplement domain routes against PostgreSQL;
 - finish restaurant menu editing, publishing and modifier workflows;
 - [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
@@ -66,7 +67,7 @@ In progress. The public homepage and browser-side QR Studio are available withou
 - extend tenant-isolation, transaction, validation, and API integration tests;
 - run and resolve CI on the new implementation before live database/provider testing;
 - continue Angular merchant-dashboard integration and verify the new offline-payment UI in a real build;
-- add a scoped developer API product: per-client credentials, organization-bound permissions, usage metering, webhooks, API documentation, and paid plans;
+- [x] add organization-bound developer API credentials with hashed-at-rest tokens, read/write scopes, expiry, manager-only issue/list/revoke endpoints, usage events, and audit records; billing/quotas, webhooks, public API documentation, and merchant UI management remain pending;
 - add shared Dollareus/Mageus identity using a proper cross-domain OAuth/OIDC flow and stable user IDs; do not duplicate password stores or assume cookies work across unrelated domains;
 - Mageus is the default public storefront and discovery layer. Dollareus remains the business engine and API provider; add Mageus integration authorization and customer-facing storefront/ordering/booking flows there, not as a competing Dollareus storefront;
 
