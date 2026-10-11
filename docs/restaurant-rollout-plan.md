@@ -118,4 +118,8 @@ Enable online orders and external systems only after the in-restaurant workflow 
 
 ## Current execution position
 
-**Phase 1 is active and not yet complete.** Automated checks are green, but the browser/manual walkthrough and live URL/TLS/QR verification remain outstanding. Do not advance to Phase 2 until the Phase 1 exit gate is recorded. No real online payments should be accepted before the relevant payment-provider and reconciliation work is complete.
+**Phase 1 automated implementation is in place; live/manual acceptance is deferred for the owner to test later.** The user has explicitly asked to proceed with Phase 2 before recording the browser, live URL/TLS, and physical QR checks. Keep those Phase 1 checks open; do not represent them as passed.
+
+**Phase 2 — in progress:** existing create/edit/status APIs are supplemented by transactional full-list reorder endpoints for menus and menu items. Request examples and error contracts are documented in [Restaurant Phase 2 API](restaurant-phase-2-api.md). Next work: add/verify regression coverage for the new reorder requests, finish any missing server-side validation, and wire/confirm the merchant menu editor against these endpoints.
+
+No real online payments should be accepted before the relevant payment-provider and reconciliation work is complete.
