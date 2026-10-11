@@ -303,7 +303,14 @@ app.delete<{ Params: { organizationId: string; credentialId: string } }>('/api/v
 });
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
-app.get('/api/v1/health', async (request) => ({ data: { status: 'ok', service: 'dollareus-api', version: '0.2.0' }, requestId: request.id }));
+app.get('/api/v1/health', async (request, reply) => {
+  try {
+    await pool.query('SELECT 1');
+    return { data: { status: 'ok', service: 'dollareus-api', version: '0.2.0', checks: { database: 'ok' } }, requestId: request.id };
+  } catch {
+    return fail(reply, request, 503, 'DATABASE_UNAVAILABLE', 'The API database readiness check failed.');
+  }
+});
 
 app.post<{ Body: unknown }>('/api/v1/organizations', { preHandler: authenticate }, async (request, reply) => {
   const parsed = OrganizationInput.safeParse(request.body);
