@@ -9,7 +9,7 @@ Last reviewed: 2026-10-11
 ## P0 — required before any public account signup
 
 ### Runtime and database
-- [x] Latest GitHub Actions build, API TypeScript check, and PostgreSQL-backed HTTP smoke suite passed on `ba55d57cb1b15fcde82a98f99443b712851ec464`.
+- [x] Latest GitHub Actions build, API TypeScript check, and PostgreSQL-backed HTTP smoke suite passed on code commit `c09be0eb3de52d64fab64f19c7e4f4b8a9cfeda8` (tenant isolation, role restrictions, refunds, fulfillment, and POS canonical payment/refund flows included).
 - [ ] Create/use the intended empty Neon PostgreSQL database and run `pnpm db:setup`; verify all tables and indexes directly in Neon.
 - [ ] Confirm the API deployment can connect to Neon using a server-side `DATABASE_URL`; do not expose the URL to the browser.
 - [ ] Configure the merchant app's API base URL or a same-origin reverse proxy; configure `CORS_ORIGINS` to the exact production origin.
