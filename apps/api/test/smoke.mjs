@@ -369,6 +369,20 @@ try {
   const soldVariantStock = inventoryAfterPosSale.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
   if (Number(soldVariantStock?.quantityOnHand) !== 3) throw new Error('Completing a POS sale did not deduct tracked stock exactly once.');
   checks.push('POS completion deducts tracked inventory at the register location');
+  const posOversellOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'counter',
+      idempotencyKey: `smoke-pos-oversell-${suffix}`,
+      items: [{ sourceType: 'product', sourceItemId: activeProduct.payload?.data?.id, sourceVariantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 4 }]
+    })
+  });
+  await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
+  await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
+  await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
+  await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
+  checks.push('POS refuses to complete tracked sales beyond available stock');
+
 
   const canonicalOrders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
   const canonicalPosOrder = canonicalOrders.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
