@@ -428,6 +428,38 @@ try {
   const soldVariantStock = inventoryAfterPosSale.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
   if (Number(soldVariantStock?.quantityOnHand) !== 3) throw new Error('Completing a POS sale did not deduct tracked stock exactly once.');
   checks.push('POS completion deducts tracked inventory at the register location');
+
+  const posRaceOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      ...posPayload,
+      idempotencyKey: `smoke-pos-race-${suffix}`
+    })
+  });
+  const racePath = `${posBase}/orders/${posRaceOrder.payload?.data?.id}/status`;
+  const competingTransitions = await Promise.all(['preparing', 'cancelled'].map(async (status) => {
+    const response = await fetch(new URL(racePath, baseUrl), {
+      method: 'PATCH',
+      headers: authHeaders,
+      body: JSON.stringify({ status })
+    });
+    const text = await response.text();
+    let payload = {};
+    try { payload = text ? JSON.parse(text) : {}; } catch { /* Checked through the response status below. */ }
+    return { requestedStatus: status, statusCode: response.status, payload };
+  }));
+  const transitionCodes = competingTransitions.map((result) => result.statusCode).sort((a, b) => a - b);
+  if (transitionCodes[0] !== 200 || transitionCodes[1] !== 409) {
+    throw new Error(`Concurrent POS status changes should accept one transition and reject the stale one; received HTTP ${transitionCodes.join(', ')}.`);
+  }
+  const winningTransition = competingTransitions.find((result) => result.statusCode === 200)?.requestedStatus;
+  const reconciledRaceOrder = await request(`${posBase}/orders`, 200, { headers: authHeaders });
+  const raceOrderSnapshot = reconciledRaceOrder.payload?.data?.find((order) => order.id === posRaceOrder.payload?.data?.id);
+  if (raceOrderSnapshot?.status !== winningTransition || !Array.isArray(raceOrderSnapshot?.statusHistory) || raceOrderSnapshot.statusHistory.length !== 2) {
+    throw new Error('Concurrent POS status changes did not preserve one winning transition and one status-history entry.');
+  }
+  checks.push('concurrent POS status changes serialize and reject stale transitions');
+
   const posOversellOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({
