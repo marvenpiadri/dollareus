@@ -509,11 +509,23 @@ try {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', idempotencyKey: `viewer-payment-${suffix}` })
   });
-  const posPayment = await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`, 201, {
-    method: 'POST', headers: authHeaders,
-    body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` })
-  });
+  const posPaymentPath = `/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`;
+  const posPaymentBody = JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` });
+  const concurrentPaymentAttempts = await Promise.all([1, 2].map(async () => {
+    const response = await fetch(new URL(posPaymentPath, baseUrl), { method: 'POST', headers: authHeaders, body: posPaymentBody });
+    const text = await response.text();
+    let payload = {};
+    try { payload = text ? JSON.parse(text) : {}; } catch { /* Assert status and payload below. */ }
+    return { status: response.status, payload };
+  }));
+  const paymentResponseCodes = concurrentPaymentAttempts.map((attempt) => attempt.status).sort((a, b) => a - b);
+  const paymentIds = new Set(concurrentPaymentAttempts.map((attempt) => attempt.payload?.data?.id).filter(Boolean));
+  if (paymentResponseCodes[0] !== 200 || paymentResponseCodes[1] !== 201 || paymentIds.size !== 1) {
+    throw new Error(`Concurrent duplicate payment requests should create one record and replay it; received HTTP ${paymentResponseCodes.join(', ')} and ${paymentIds.size} unique payment IDs.`);
+  }
+  const posPayment = { payload: concurrentPaymentAttempts.find((attempt) => attempt.status === 201)?.payload };
   if (posPayment.payload?.data?.paymentStatus !== 'paid') throw new Error('POS order did not use the canonical manual payment workflow.');
+  checks.push('concurrent duplicate manual payment requests replay one idempotent payment record');
   await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 403, {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 100, reason: 'Viewer must not refund', idempotencyKey: `viewer-refund-${suffix}` })
