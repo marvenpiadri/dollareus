@@ -45,8 +45,8 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
 - reimplement the remaining menu, POS, entry-point, domain and media routes against PostgreSQL;\n- connect the merchant orders, customers and inventory screens to the new endpoints;
-- restore product editing and complete the merchant workflows;
-- add tenant-isolation, transaction, validation, and API integration tests;
+- finish order status/fulfillment actions and remaining merchant workflows;
+- extend tenant-isolation, transaction, validation, and API integration tests;\n- run and resolve CI on the new implementation before live database/provider testing;
 - connect the Angular merchant dashboard to the API;
 - add Mageus integration authorization and production storefront hosting;
 - run CI and resolve any failures before considering this cutover stable.
