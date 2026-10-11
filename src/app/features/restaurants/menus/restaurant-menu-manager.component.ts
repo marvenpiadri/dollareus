@@ -23,6 +23,7 @@ export class RestaurantMenuManagerComponent {
   protected readonly categories = signal<CategoryRow[]>([]);
   protected readonly selectedMenuId = signal('');
   protected readonly editingMenuItem = signal<MenuItemRow | null>(null);
+  protected readonly modifierDraft = signal<MenuModifierGroup[]>([]);
   protected readonly editingMenu = signal<MenuRow | null>(null);
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
@@ -100,8 +101,53 @@ export class RestaurantMenuManagerComponent {
   protected selectedMenuItems(): MenuItemRow[] {
     return this.menuItems().filter(item => item.menuId === this.selectedMenuId());
   }
-  protected modifierGroupsJson(item: MenuItemRow | null): string {
-    return JSON.stringify(item?.modifierGroups ?? [], null, 2);
+  protected openEditMenuItem(item: MenuItemRow): void {
+    this.editingMenuItem.set(item);
+    this.modifierDraft.set((item.modifierGroups ?? []).map(group => ({
+      ...group, options: group.options.map(option => ({ ...option }))
+    })));
+  }
+  protected addModifierGroup(): void {
+    if (this.modifierDraft().length >= 20) return;
+    const index = this.modifierDraft().length + 1;
+    this.modifierDraft.update(groups => [...groups, {
+      id: `modifier-${index}`, name: 'New choice', required: false,
+      minSelections: 0, maxSelections: 1, options: [{ id: 'option-1', name: 'Option 1', priceDeltaMinor: 0 }]
+    }]);
+  }
+  protected removeModifierGroup(index: number): void {
+    this.modifierDraft.update(groups => groups.filter((_, groupIndex) => groupIndex !== index));
+  }
+  protected updateModifierGroup(index: number, field: 'id' | 'name' | 'required' | 'minSelections' | 'maxSelections', value: string | boolean | number): void {
+    this.modifierDraft.update(groups => groups.map((group, groupIndex) => {
+      if (groupIndex !== index) return group;
+      const next = { ...group, [field]: value };
+      if (field === 'required' && value === true && next.minSelections < 1) next.minSelections = 1;
+      if (field === 'required' && value === false) next.minSelections = 0;
+      if (field === 'maxSelections' && typeof value === 'number' && next.minSelections > value) next.minSelections = value;
+      if (field === 'minSelections' && typeof value === 'number' && value > next.maxSelections) next.maxSelections = value;
+      return next;
+    }));
+  }
+  protected addModifierOption(groupIndex: number): void {
+    const group = this.modifierDraft()[groupIndex];
+    if (!group || group.options.length >= 30) return;
+    const index = group.options.length + 1;
+    this.modifierDraft.update(groups => groups.map((item, i) => i === groupIndex
+      ? { ...item, options: [...item.options, { id: `option-${index}`, name: `Option ${index}`, priceDeltaMinor: 0 }] }
+      : item));
+  }
+  protected removeModifierOption(groupIndex: number, optionIndex: number): void {
+    this.modifierDraft.update(groups => groups.map((group, i) => {
+      if (i !== groupIndex) return group;
+      const options = group.options.filter((_, j) => j !== optionIndex);
+      return { ...group, options, maxSelections: Math.max(1, Math.min(group.maxSelections, options.length)), minSelections: Math.min(group.minSelections, options.length) };
+    }));
+  }
+  protected updateModifierOption(groupIndex: number, optionIndex: number, field: 'id' | 'name' | 'priceDeltaMinor', value: string | number): void {
+    this.modifierDraft.update(groups => groups.map((group, i) => i === groupIndex
+      ? { ...group, options: group.options.map((option, j) => j === optionIndex ? { ...option, [field]: value } : option) }
+      : group));
   }
 
   protected async createCategory(event: Event): Promise<void> {
@@ -204,7 +250,7 @@ export class RestaurantMenuManagerComponent {
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     let modifierGroups: MenuModifierGroup[];
     try {
-      const parsedModifiers: unknown = JSON.parse(String(values.get('modifierGroupsJson') ?? '[]'));
+      const parsedModifiers: unknown = this.modifierDraft();
       if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
       const groups = parsedModifiers as unknown[];
       if (groups.length > 20) throw new Error('An item can have at most 20 modifier groups.');
