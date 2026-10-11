@@ -40,7 +40,7 @@ Do not enable an OAuth provider until its redirect URI, consent configuration, a
 - [ ] Create a test organization, store, category, product/variant, inventory location, restaurant menu, and menu item.
 - [ ] Publish/unpublish the storefront and verify public endpoints expose only published and available data.
 - [ ] Open the public restaurant menu from a QR link and confirm active menus, categories, allergens, dietary labels, and modifier choices render without a merchant login. This page is menu browsing only; online customer ordering is not available yet.
-- [ ] Exercise the POS with both a retail product and a restaurant menu item; record a cash/offline payment and verify the canonical order/payment history.
+- [ ] Exercise the POS with a multi-line ticket containing retail products and restaurant dishes, test required/optional modifier groups and distinct option prices, complete a tracked stock sale, verify insufficient-stock rejection, record a cash/offline payment, and verify canonical order/payment/refund history.
 - [ ] Verify refunds are described as manual records unless a real payment provider is integrated; no card charge or money transfer is performed by the current manual-payment workflow.
 - [ ] Verify branded QR destinations, custom-domain DNS instructions, public URLs, TLS, and routing from a real browser.
 - [ ] Verify product-media upload and responsive image retrieval against live storage.
