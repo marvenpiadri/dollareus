@@ -8,13 +8,15 @@
     "start": "ng serve",
     "build": "ng build",
     "serve:ssr": "node dist/dollareus/server/server.mjs",
-    "api:dev": "tsx watch apps/api/src/server.ts",
-    "api:start": "tsx apps/api/src/server.ts",
+    "api:dev": "node --env-file-if-exists=.env --import tsx --watch apps/api/src/server.ts",
+    "api:start": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
     "api:typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
     "ci": "pnpm build && pnpm api:typecheck",
-    "db:setup": "tsx apps/api/src/db/setup.ts"
+    "db:setup": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts"
   },
-  "engines": { "node": ">=22.22.3" },
+  "engines": {
+    "node": ">=22.22.3"
+  },
   "dependencies": {
     "@angular/common": "^22.0.0",
     "@angular/compiler": "^22.0.0",
