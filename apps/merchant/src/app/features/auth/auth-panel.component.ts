@@ -12,6 +12,7 @@ type AuthMode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 export class AuthPanelComponent {
   readonly signedIn = output<void>();
   protected readonly mode = signal<AuthMode>('login');
+  protected get apiBase(): string { return this.apiClient.baseUrl; }
   protected readonly busy = signal(false);
   protected readonly message = signal('');
   protected readonly error = signal('');
