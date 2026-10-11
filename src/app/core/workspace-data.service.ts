@@ -46,7 +46,7 @@ export class WorkspaceDataService {
     const storeCurrency = String(store.defaultCurrency ?? 'MAD');
     const [productRows, orderRows, inventoryRows, menuRows, categoryRows] = await Promise.all([
       this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/products`),
-      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/orders`),
+      this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/orders?storeId=${encodeURIComponent(storeId)}`),
       this.apiClient.request<any[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/inventory`),
       this.apiClient.request<MenuRow[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores/${encodeURIComponent(storeId)}/menus`),
       this.apiClient.request<CategoryRow[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores/${encodeURIComponent(storeId)}/categories`)
