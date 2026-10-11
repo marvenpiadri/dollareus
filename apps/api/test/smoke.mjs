@@ -591,6 +591,15 @@ try {
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'limited' })
   });
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'catalog', enabledExperiences: ['catalog'] })
+  });
+  await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 404);
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
+  });
+  checks.push('public restaurant menu is hidden when the menu experience is disabled');
+
   const publicMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
   const publicDish = publicMenu.payload?.data?.flatMap((item) => item.items ?? []).find((dish) => dish.id === menuItem.payload?.data?.id);
   if (!publicDish || publicDish.availability !== 'limited' || !publicDish.modifierGroups?.some((group) => group.id === 'size')) throw new Error('Published restaurant menu must expose limited-availability dishes and modifier groups, while excluding unavailable dishes.');
