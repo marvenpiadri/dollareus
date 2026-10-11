@@ -1,4 +1,5 @@
 import { Component, output, signal } from '@angular/core';
+import { ApiClientService } from '../../core/api/api-client.service';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 
@@ -11,14 +12,14 @@ type AuthMode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 export class AuthPanelComponent {
   readonly signedIn = output<void>();
   protected readonly mode = signal<AuthMode>('login');
+  protected get apiBase(): string { return this.apiClient.baseUrl; }
   protected readonly busy = signal(false);
   protected readonly message = signal('');
   protected readonly error = signal('');
   protected readonly lastEmail = signal('');
   protected readonly providers = signal({ google: false, facebook: false, emailFlows: false });
-  protected readonly apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
 
-  constructor() {
+  constructor(private readonly apiClient: ApiClientService) {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const action = params.get('auth');
@@ -31,10 +32,8 @@ export class AuthPanelComponent {
 
   private async loadProviders(): Promise<void> {
     try {
-      const response = await fetch(this.apiBase + '/api/v1/auth/providers');
-      if (!response.ok) return;
-      const payload = await response.json() as { data?: { google?: boolean; facebook?: boolean; emailFlows?: boolean } };
-      this.providers.set({ google: payload.data?.google === true, facebook: payload.data?.facebook === true, emailFlows: payload.data?.emailFlows === true });
+      const payload = await this.apiClient.request<{ google?: boolean; facebook?: boolean; emailFlows?: boolean }>('/api/v1/auth/providers');
+      this.providers.set({ google: payload?.google === true, facebook: payload?.facebook === true, emailFlows: payload?.emailFlows === true });
     } catch { /* Email/password authentication remains available when provider discovery fails. */ }
   }
 
@@ -55,14 +54,12 @@ export class AuthPanelComponent {
     if (mode !== 'forgot') body['password'] = String(values.get('password') ?? '');
     this.busy.set(true); this.error.set(''); this.message.set('');
     try {
-      const response = await fetch(this.apiBase + endpoint, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const payload = await response.json().catch(() => ({})) as { data?: { message?: string }; error?: { message?: string } };
-      if (!response.ok) throw new Error(payload.error?.message ?? 'The request could not be completed.');
+      const payload = await this.apiClient.request<{ message?: string }>(endpoint, { method: 'POST', body: JSON.stringify(body) });
       if (mode === 'register') {
         this.message.set('Your account is ready. Opening your workspace…');
         this.signedIn.emit();
       } else if (mode === 'forgot') {
-        this.message.set(payload.data?.message ?? 'If an account exists for that email, reset instructions will be sent.');
+        this.message.set(payload?.message ?? 'If an account exists for that email, reset instructions will be sent.');
       } else {
         this.signedIn.emit();
       }
@@ -76,13 +73,8 @@ export class AuthPanelComponent {
   protected async resendVerification(): Promise<void> {
     this.busy.set(true); this.error.set(''); this.message.set('');
     try {
-      const response = await fetch(this.apiBase + '/api/v1/auth/email/verification/request', {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: this.lastEmail() })
-      });
-      const payload = await response.json().catch(() => ({})) as { data?: { message?: string }; error?: { message?: string } };
-      if (!response.ok) throw new Error(payload.error?.message ?? 'Could not request a verification email.');
-      this.message.set(payload.data?.message ?? 'If the account needs verification, an email will be sent.');
+      const payload = await this.apiClient.request<{ message?: string }>('/api/v1/auth/email/verification/request', { method: 'POST', body: JSON.stringify({ email: this.lastEmail() }) });
+      this.message.set(payload?.message ?? 'If the account needs verification, an email will be sent.');
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Could not request a verification email.');
     } finally { this.busy.set(false); }
@@ -105,9 +97,7 @@ export class AuthPanelComponent {
   private async runAction(path: string, body: Record<string, string>, success: string, fallback: string): Promise<void> {
     this.busy.set(true); this.error.set(''); this.message.set('');
     try {
-      const response = await fetch(this.apiBase + path, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const payload = await response.json().catch(() => ({})) as { error?: { message?: string } };
-      if (!response.ok) throw new Error(payload.error?.message ?? fallback);
+      await this.apiClient.request(path, { method: 'POST', body: JSON.stringify(body) });
       this.message.set(success);
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : fallback);

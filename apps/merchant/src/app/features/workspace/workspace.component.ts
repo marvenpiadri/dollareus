@@ -1,23 +1,13 @@
 import { DatePipe } from '@angular/common';
 import { AuthPanelComponent } from '../auth/auth-panel.component';
 import { Router } from '@angular/router';
+import { ApiClientService } from '../../core/api/api-client.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-type ProductStatus = 'Active' | 'Draft' | 'Archived';
-interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; categoryIds?: string[]; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
-interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
-interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
-interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
-interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-type PosCartLine = { key: string; sourceType: 'product' | 'menu_item'; sourceItemId: string; sourceVariantId?: string; quantity: number; name: string; priceAmountMinor: number; currency: string; metadata?: Record<string, unknown> };
-type MenuModifierOption = { id: string; name: string; priceDeltaMinor: number };
-type MenuModifierGroup = { id: string; name: string; required: boolean; minSelections: number; maxSelections: number; options: MenuModifierOption[] };
-interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; modifierGroups?: MenuModifierGroup[]; metadata?: Record<string, unknown>; }
-interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
-interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
-type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
-interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null; estimatedDeliveryDate: string | null; notes: string | null; createdAt: string; updatedAt: string; }
+import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, EntryPointRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+
 
 @Component({
   selector: 'dlr-workspace',
@@ -50,16 +40,13 @@ export class WorkspaceComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  constructor(private readonly router: Router) { void this.checkSession(); }
+  constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService) { void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
-    const apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
     try {
-      const response = await fetch(apiBase + '/api/v1/auth/session', { credentials: 'include' });
-      this.authenticated.set(response.ok);
-      if (response.ok) await this.loadWorkspace();
-    } catch {
-      this.authenticated.set(false);
+      const authenticated = await this.sessionService.isAuthenticated();
+      this.authenticated.set(authenticated);
+      if (authenticated) await this.loadWorkspace();
     } finally {
       this.authReady.set(true);
     }
@@ -74,9 +61,8 @@ export class WorkspaceComponent {
   }
 
   protected async signOut(): Promise<void> {
-    const apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
     try {
-      await fetch(apiBase + '/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+      await this.sessionService.signOut();
     } finally {
       this.authenticated.set(false);
       void this.router.navigateByUrl('/login');
@@ -88,21 +74,12 @@ export class WorkspaceComponent {
       this.onboardingStage.set('organization');
     }
   }
-  private apiBase(): string { return ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, ''); }
-
-  private async apiRequest(path: string, init: RequestInit = {}): Promise<any> {
-    const response = await fetch(this.apiBase() + path, { ...init, credentials: 'include', headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
-    const payload = await response.json().catch(() => ({})) as { data?: any; error?: { message?: string } };
-    if (!response.ok) throw new Error(payload.error?.message ?? `Request failed (${response.status}).`);
-    return payload.data;
-  }
-
   private async loadWorkspace(): Promise<void> {
     this.workspaceLoading.set(true);
     this.workspaceError.set('');
     this.onboardingError.set('');
     try {
-      const organizations = await this.apiRequest('/api/v1/organizations');
+      const organizations = await this.apiClient.request('/api/v1/organizations');
       const organization = Array.isArray(organizations) ? organizations[0] : null;
       if (!organization) {
         this.organizationId.set('');
@@ -111,7 +88,7 @@ export class WorkspaceComponent {
         return;
       }
       this.organizationId.set(organization.id);
-      const stores = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`);
+      const stores = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`);
       const store = Array.isArray(stores) ? stores[0] : null;
       if (!store) {
         this.onboardingStage.set('store');
@@ -126,7 +103,7 @@ export class WorkspaceComponent {
       this.storeExperience.set(store.defaultExperience === 'menu' || store.defaultExperience === 'catalog' || store.defaultExperience === 'services' ? store.defaultExperience : 'commerce');
       this.storeEnabledExperiences.set(Array.isArray(store.enabledExperiences) && store.enabledExperiences.length ? store.enabledExperiences : ['commerce']);
       this.onboardingStage.set('ready');
-      const rows = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
+      const rows = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
       const products = Array.isArray(rows) ? rows : [];
       this.products.set(products.filter((p: any) => p.storeId === store.id).map((p: any): ProductRow => {
         const variant = Array.isArray(p.variants) ? p.variants[0] : null;
@@ -136,18 +113,18 @@ export class WorkspaceComponent {
           id: String(p.id), name, slug: String(p.slug ?? ''), description: typeof p.description === 'string' ? p.description : null, category: 'Uncategorized', categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [], sku: variant?.sku ? String(variant.sku) : '—', variantId: String(variant?.id ?? ''),
           priceMinor: Number(variant?.amountMinor ?? 0), currency: String(variant?.currency ?? store.defaultCurrency ?? 'MAD'),
           stock: null, status, initials: name.split(/\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
-          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiBase() + String(p.media[0].contentUrl) + '?width=300' : null
+          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
         };
       }));
       const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, entryPointRows, categoryRows] = await Promise.all([
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/entry-points'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/entry-points'),
+        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
@@ -162,11 +139,11 @@ export class WorkspaceComponent {
       this.inventory.set(Array.isArray(inventoryRows) ? inventoryRows as InventoryRow[] : []);
       const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
       this.menus.set(loadedMenus);
-      const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
+      const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
       const savedEntryPoints = Array.isArray(entryPointRows) ? entryPointRows as EntryPointRow[] : [];
       this.entryPoints.set(await Promise.all(savedEntryPoints.map(async (point) => {
         try {
-          const publicPoint = await this.apiRequest('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
+          const publicPoint = await this.apiClient.request('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
           return { ...point, targetUrl: typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : null, targetUrlPath: String(publicPoint?.targetUrlPath ?? '') };
         } catch { return { ...point, targetUrl: null, targetUrlPath: '/' + this.storeSlug() + point.targetPath }; }
       })));
@@ -207,7 +184,7 @@ export class WorkspaceComponent {
     const values = new FormData(event.currentTarget as HTMLFormElement);
     this.onboardingBusy.set(true); this.onboardingError.set('');
     try {
-      const organization = await this.apiRequest('/api/v1/organizations', { method: 'POST', body: JSON.stringify({ name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim() }) });
+      const organization = await this.apiClient.request('/api/v1/organizations', { method: 'POST', body: JSON.stringify({ name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim() }) });
       this.organizationId.set(organization.id);
       this.onboardingStage.set('store');
     } catch (error) {
@@ -220,7 +197,7 @@ export class WorkspaceComponent {
     const values = new FormData(event.currentTarget as HTMLFormElement);
     this.onboardingBusy.set(true); this.onboardingError.set('');
     try {
-      const store = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
+      const store = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
         name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim(), description: null,
         businessType: 'general', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
         defaultExperience: 'commerce', enabledExperiences: ['commerce'], published: false, theme: {}
@@ -354,7 +331,7 @@ export class WorkspaceComponent {
     this.paymentReference.set('');
     this.paymentNote.set('');
     try {
-      const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
+      const details = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
       this.paymentDetails.set(details);
     } catch (error) {
       this.orderActionError.set(error instanceof Error ? error.message : 'Could not load payment history.');
@@ -374,7 +351,7 @@ export class WorkspaceComponent {
     this.paymentSaveBusy.set(true);
     this.orderActionError.set('');
     try {
-      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments', {
+      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments', {
         method: 'POST',
         body: JSON.stringify({
           method: this.paymentMethod(),
@@ -403,7 +380,7 @@ export class WorkspaceComponent {
     this.paymentSaveBusy.set(true);
     this.orderActionError.set('');
     try {
-      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments/' + encodeURIComponent(paymentId), {
+      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments/' + encodeURIComponent(paymentId), {
         method: 'PATCH', body: JSON.stringify({ status })
       });
       this.orders.update(rows => rows.map(row => row.resourceId === order.resourceId ? { ...row, paymentStatus: String(result.paymentStatus ?? row.paymentStatus) } : row));
@@ -417,7 +394,7 @@ export class WorkspaceComponent {
   }
 
   private async refreshPaymentDetails(order: OrderRow): Promise<void> {
-    const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
+    const details = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
     this.paymentDetails.set(details);
   }
 
@@ -430,7 +407,7 @@ export class WorkspaceComponent {
     if (!label) { this.posError.set('Enter a register name.'); return; }
     this.posBusy.set(true); this.posError.set('');
     try {
-      const session = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions', {
+      const session = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions', {
         method: 'POST', body: JSON.stringify({ label, terminalType: this.posTerminalType() })
       });
       this.posSessions.update(rows => [session, ...rows.filter(row => row.id !== session.id)]);
@@ -446,7 +423,7 @@ export class WorkspaceComponent {
     if (!sessionId) return;
     this.posBusy.set(true); this.posError.set('');
     try {
-      const closed = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions/' + encodeURIComponent(sessionId) + '/close', {
+      const closed = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions/' + encodeURIComponent(sessionId) + '/close', {
         method: 'PATCH', body: JSON.stringify({})
       });
       this.posSessions.update(rows => rows.map(row => row.id === sessionId ? closed : row));
@@ -506,7 +483,7 @@ export class WorkspaceComponent {
     }
     this.posSaveBusy.set(true); this.posError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders', {
         method: 'POST',
         body: JSON.stringify({
           sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
@@ -519,7 +496,7 @@ export class WorkspaceComponent {
           }))
         })
       });
-      const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
+      const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
       this.posOrders.set(Array.isArray(rows) ? rows : []);
       this.posQuantity.set('1'); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
       this.notify('POS order created with server-calculated pricing.');
@@ -533,14 +510,14 @@ export class WorkspaceComponent {
     this.posSaveBusy.set(true); this.posError.set('');
     try {
       const endpoint = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.id) + '/payments';
-      const details = await this.apiRequest(endpoint);
+      const details = await this.apiClient.request(endpoint);
       const balance = Number(details?.balanceMinor);
       if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('The order payment balance could not be verified.');
       if (balance === 0) {
         this.notify('This order is already fully paid.');
         return;
       }
-      await this.apiRequest(endpoint, {
+      await this.apiClient.request(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           method: this.paymentMethod(),
@@ -561,10 +538,10 @@ export class WorkspaceComponent {
     if (!order?.id || status === order.status) return;
     this.posSaveBusy.set(true); this.posError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders/' + encodeURIComponent(order.id) + '/status', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders/' + encodeURIComponent(order.id) + '/status', {
         method: 'PATCH', body: JSON.stringify({ status })
       });
-      const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
+      const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
       this.posOrders.set(Array.isArray(rows) ? rows : []);
       this.notify('POS order status updated and audited.');
     } catch (error) {
@@ -601,7 +578,7 @@ export class WorkspaceComponent {
     this.refundSaveBusy.set(true);
     this.orderActionError.set('');
     try {
-      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/refunds', {
+      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/refunds', {
         method: 'POST',
         body: JSON.stringify({
           paymentId,
@@ -629,8 +606,8 @@ export class WorkspaceComponent {
   private async refreshRefundDetails(order: OrderRow): Promise<void> {
     const base = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId);
     const [refunds, payments] = await Promise.all([
-      this.apiRequest(base + '/refunds'),
-      this.apiRequest(base + '/payments')
+      this.apiClient.request(base + '/refunds'),
+      this.apiClient.request(base + '/payments')
     ]);
     this.refundDetails.set({
       refunds: Array.isArray(refunds) ? refunds : [],
@@ -652,7 +629,7 @@ export class WorkspaceComponent {
     this.shipmentEstimatedDate.set('');
     this.shipmentNotes.set('');
     try {
-      const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/fulfillments');
+      const details = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/fulfillments');
       this.shipmentDetails.set(details);
       const latest = Array.isArray(details.fulfillments) ? details.fulfillments[0] as ShipmentDetails | undefined : undefined;
       if (latest) {
@@ -700,11 +677,11 @@ export class WorkspaceComponent {
     this.orderActionError.set('');
     try {
       const base = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/fulfillments';
-      await this.apiRequest(createNew ? base : base + '/' + encodeURIComponent(latest!.id), {
+      await this.apiClient.request(createNew ? base : base + '/' + encodeURIComponent(latest!.id), {
         method: createNew ? 'POST' : 'PATCH',
         body: JSON.stringify(payload)
       });
-      const details = await this.apiRequest(base);
+      const details = await this.apiClient.request(base);
       this.shipmentDetails.set(details);
       const current = Array.isArray(details.fulfillments) ? details.fulfillments[0] as ShipmentDetails | undefined : undefined;
       if (current) {
@@ -727,7 +704,7 @@ export class WorkspaceComponent {
     if (status === order.status || !order.resourceId) return;
     this.orderActionBusyId.set(order.resourceId); this.orderActionError.set('');
     try {
-      const updated = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId), { method: 'PATCH', body: JSON.stringify({ status }) });
+      const updated = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId), { method: 'PATCH', body: JSON.stringify({ status }) });
       this.orders.update((rows) => rows.map((row) => row.resourceId === order.resourceId ? { ...row, status: String(updated.status ?? status) as OrderRow['status'] } : row));
       this.notify('Order status updated and audited.');
     } catch (error) { this.orderActionError.set(error instanceof Error ? error.message : 'Could not update order status.'); }
@@ -738,7 +715,7 @@ export class WorkspaceComponent {
     if (!this.organizationId()) return;
     this.apiCredentialBusy.set(true);
     this.apiCredentialError.set('');
-    try { this.apiCredentials.set(await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials')); }
+    try { this.apiCredentials.set(await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials')); }
     catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not load API credentials.'); }
     finally { this.apiCredentialBusy.set(false); }
   }
@@ -752,7 +729,7 @@ export class WorkspaceComponent {
     const expiresAt = expiry === 'never' ? undefined : new Date(Date.now() + Number(expiry) * 86400000).toISOString();
     this.apiCredentialBusy.set(true); this.apiCredentialError.set(''); this.apiCredentialToken.set('');
     try {
-      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials', { method: 'POST', body: JSON.stringify({ name, scopes, ...(expiresAt ? { expiresAt } : {}) }) });
+      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials', { method: 'POST', body: JSON.stringify({ name, scopes, ...(expiresAt ? { expiresAt } : {}) }) });
       this.apiCredentialToken.set(String(result.token ?? ''));
       this.apiCredentialName.set('External integration');
       form.reset();
@@ -765,7 +742,7 @@ export class WorkspaceComponent {
     if (!credential?.id || !globalThis.confirm('Revoke "' + String(credential.name) + '"? Applications using this token will stop working.')) return;
     this.apiCredentialBusy.set(true); this.apiCredentialError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials/' + encodeURIComponent(credential.id), { method: 'DELETE', body: JSON.stringify({}) });
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials/' + encodeURIComponent(credential.id), { method: 'DELETE', body: JSON.stringify({}) });
       await this.loadApiCredentials(); this.notify('API credential revoked.');
     } catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not revoke API credential.'); }
     finally { this.apiCredentialBusy.set(false); }
@@ -785,7 +762,7 @@ export class WorkspaceComponent {
     this.qrBusy.set(true); this.qrError.set('');
     try {
       const enabled = Array.from(new Set([...this.storeEnabledExperiences(), this.storeExperience()]));
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/storefront', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/storefront', {
         method: 'PATCH',
         body: JSON.stringify({ published: !this.storePublished(), defaultExperience: this.storeExperience(), enabledExperiences: enabled })
       });
@@ -798,7 +775,7 @@ export class WorkspaceComponent {
     event.preventDefault();
     this.qrBusy.set(true); this.qrError.set('');
     try {
-      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points', {
+      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points', {
         method: 'POST',
         body: JSON.stringify({
           storeId: this.storeId(), type: 'qr', targetPath: this.qrTargetPath(),
@@ -846,7 +823,7 @@ export class WorkspaceComponent {
     if (!id) return;
     this.qrBusy.set(true); this.qrError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(id), {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(id), {
         method: 'PATCH',
         body: JSON.stringify({ branding: {
           brandName: this.qrBrandName().trim() || null,
@@ -861,7 +838,7 @@ export class WorkspaceComponent {
   protected async toggleQrEntryPoint(point: EntryPointRow): Promise<void> {
     this.qrBusy.set(true); this.qrError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(point.id), {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(point.id), {
         method: 'PATCH', body: JSON.stringify({ status: point.status === 'active' ? 'disabled' : 'active' })
       });
       await this.loadWorkspace(); this.notify(point.status === 'active' ? 'QR entry point disabled.' : 'QR entry point enabled.');
@@ -905,7 +882,7 @@ export class WorkspaceComponent {
     if (!name || !slug || !this.storeId()) { this.menuError.set('Enter a category name and URL slug.'); return; }
     this.categoryBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
         method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
       });
       form.reset();
@@ -925,7 +902,7 @@ export class WorkspaceComponent {
     if (!name || !slug || servicePeriods.length === 0) return;
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      const created = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
+      const created = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
         method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods, status: 'draft' })
       });
       await this.loadWorkspace();
@@ -948,7 +925,7 @@ export class WorkspaceComponent {
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id), {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id), {
         method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, servicePeriods })
       });
       await this.loadWorkspace();
@@ -974,7 +951,7 @@ export class WorkspaceComponent {
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
         method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', categoryId, allergens, dietaryLabels, availability: 'available', metadata: {} })
       });
       await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
@@ -1004,7 +981,7 @@ export class WorkspaceComponent {
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
         method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, priceAmountMinor: Math.round(price * 100), categoryId, allergens, dietaryLabels, modifierGroups })
       });
       this.editingMenuItem.set(null);
@@ -1021,7 +998,7 @@ export class WorkspaceComponent {
     [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/menus/reorder', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/menus/reorder', {
         method: 'PUT', body: JSON.stringify({ menuIds: ordered.map(row => row.id) })
       });
       await this.loadWorkspace();
@@ -1037,7 +1014,7 @@ export class WorkspaceComponent {
     [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/reorder', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/reorder', {
         method: 'PUT', body: JSON.stringify({ itemIds: ordered.map(row => row.id) })
       });
       await this.loadWorkspace();
@@ -1048,7 +1025,7 @@ export class WorkspaceComponent {
   protected async setMenuStatus(menu: MenuRow, status: 'draft' | 'active'): Promise<void> {
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id) + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id) + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
       await this.loadWorkspace(); this.notify(status === 'active' ? 'Menu published.' : 'Menu unpublished.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu status.'); }
     finally { this.menuBusy.set(false); }
@@ -1056,7 +1033,7 @@ export class WorkspaceComponent {
   protected async setMenuItemAvailability(item: MenuItemRow, availability: 'available' | 'unavailable' | 'limited'): Promise<void> {
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ availability }) });
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ availability }) });
       this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, availability } : row));
       this.notify('Item availability updated.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item availability.'); await this.loadWorkspace(); }
@@ -1065,7 +1042,7 @@ export class WorkspaceComponent {
   protected async setMenuItemStatus(item: MenuItemRow, status: 'draft' | 'active'): Promise<void> {
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ status }) });
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ status }) });
       this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, status } : row));
       this.notify(status === 'active' ? 'Menu item published.' : 'Menu item unpublished.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item status.'); }
@@ -1113,7 +1090,7 @@ export class WorkspaceComponent {
         if (optimized && optimized.size <= 1024 * 1024) { canvas.width = scaledCanvas.width; canvas.height = scaledCanvas.height; }
       }
       if (!optimized || optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
-      const response = await fetch(this.apiBase() + '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
+      const response = await fetch(this.apiClient.url('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
       const payload = await response.json().catch(() => ({})) as { data?: { contentUrl?: string }; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message ?? 'The image could not be uploaded.');
       this.imageUploadNote.set('Uploaded ' + canvas.width + ' × ' + canvas.height + ' WebP · ' + (optimized.size / 1024).toFixed(0) + ' KB. Original: ' + (file.size / 1024).toFixed(0) + ' KB.');
@@ -1134,7 +1111,7 @@ export class WorkspaceComponent {
     this.productSaveBusy.set(true); this.productSaveError.set('');
     try {
       if (editing) {
-        await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products/${encodeURIComponent(editing.id)}`, {
+        await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products/${encodeURIComponent(editing.id)}`, {
           method: 'PATCH', body: JSON.stringify({
             name, slug, description, status: String(values.get('status') ?? 'draft'),
             categoryIds: values.getAll('categoryIds').map(String),
@@ -1142,7 +1119,7 @@ export class WorkspaceComponent {
           })
         });
       } else {
-        await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products`, { method: 'POST', body: JSON.stringify({
+        await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products`, { method: 'POST', body: JSON.stringify({
           storeId: this.storeId(), slug, name, description, status: 'draft', kind: 'physical',
           availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: values.getAll('categoryIds').map(String),
           variants: [{ id: crypto.randomUUID(), sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
@@ -1165,7 +1142,7 @@ export class WorkspaceComponent {
     if (!displayName && !email && !phone) { this.customerSaveError.set('Enter a name, email or phone number.'); return; }
     this.customerSaveBusy.set(true); this.customerSaveError.set('');
     try {
-      const customer = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/customers', {
+      const customer = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/customers', {
         method: 'POST', body: JSON.stringify({ displayName, email, phone, metadata: {} })
       });
       this.customers.update((rows) => [{ id: String(customer.id), displayName: String(customer.displayName ?? ''), email: customer.email ?? null, phone: customer.phone ?? null }, ...rows]);
@@ -1195,7 +1172,7 @@ export class WorkspaceComponent {
     }
     this.inventoryBusy.set(true); this.inventoryError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
         method: 'PUT', body: JSON.stringify({ locationId, variantId, quantityOnHand, reorderPoint })
       });
       await this.loadWorkspace(); this.notify('Stock level saved.');
@@ -1210,7 +1187,7 @@ export class WorkspaceComponent {
     if (!name) return;
     this.inventoryBusy.set(true); this.inventoryError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/locations', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/locations', {
         method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name })
       });
       await this.loadWorkspace(); this.notify('Inventory location created.');
@@ -1230,7 +1207,7 @@ export class WorkspaceComponent {
     }
     this.inventoryBusy.set(true); this.inventoryError.set('');
     try {
-      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
         method: 'PUT', body: JSON.stringify({ locationId: item.locationId, variantId: item.variantId, quantityOnHand, reorderPoint })
       });
       await this.loadWorkspace(); this.notify('Stock level updated.');

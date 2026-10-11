@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { ApiClientService } from '../../../core/api/api-client.service';
 
 @Component({
   selector: 'dlr-public-menu',
@@ -14,7 +15,7 @@ export class PublicMenuComponent {
   protected readonly publicMenuLoading = signal(false);
   protected readonly publicMenuError = signal('');
 
-  constructor(private readonly route: ActivatedRoute) {
+  constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService) {
     const routeSlug = this.route.snapshot.paramMap.get('storeSlug') ?? '';
     const hostnameLabels = typeof window !== 'undefined' ? window.location.hostname.toLowerCase().split('.') : [];
     const hostStoreSlug = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/menu' && hostnameLabels.length >= 3 ? hostnameLabels[0] : '';
@@ -38,17 +39,6 @@ export class PublicMenuComponent {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
 
-  private apiBase(): string {
-    return ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
-  }
-
-  private async apiRequest(path: string): Promise<any> {
-    const response = await fetch(this.apiBase() + path, { credentials: 'include' });
-    const payload = await response.json().catch(() => ({})) as { data?: any; error?: { message?: string } };
-    if (!response.ok) throw new Error(payload.error?.message ?? `Request failed (${response.status}).`);
-    return payload.data;
-  }
-
   private async loadPublicMenu(storeSlug: string): Promise<void> {
     if (!storeSlug) {
       this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
@@ -59,8 +49,8 @@ export class PublicMenuComponent {
     try {
       const encodedSlug = encodeURIComponent(storeSlug);
       const [store, menus] = await Promise.all([
-        this.apiRequest('/api/v1/public/stores/' + encodedSlug),
-        this.apiRequest('/api/v1/public/stores/' + encodedSlug + '/menus')
+        this.apiClient.request('/api/v1/public/stores/' + encodedSlug),
+        this.apiClient.request('/api/v1/public/stores/' + encodedSlug + '/menus')
       ]);
       this.publicMenuStore.set(store);
       this.publicMenus.set(Array.isArray(menus) ? menus : []);
