@@ -32,7 +32,7 @@ Last reviewed: 2026-10-11
 - [x] Implement first-run organization/store creation and draft product creation through the API, with loading/error states.
 - [ ] Finish onboarding and storefront configuration; implement product publishing, category management, additional variant management, images, and inventory changes. Basic product detail editing and archiving are now available.
 - [ ] Finish merchant-facing carts, cancellation/refund edge cases, and transactional emails. Manual refund history/recording UI and the refund API are implemented and covered by CI; refunds only record an offline action and do not transfer money.
-- [ ] Complete restaurant POS menu-item workflows, POS payment recording, and inventory reservation/deduction. The initial retail POS session/order workflow is implemented and covered by the latest CI run. QR/entry-point APIs exist; domain management and media upload remain incomplete.
+- [ ] Complete restaurant POS menu-item workflows, POS payment recording, and inventory reservation/deduction. The retail POS session/order workflow is implemented and covered by CI. POS orders share canonical order/payment/refund records; manual payment/refund actions are available from Orders, but not yet inline in the POS screen. Inventory deduction and restaurant menu-item UI remain pending. QR/entry-point APIs exist; domain management and media upload remain incomplete.
 - [ ] Implement object-storage uploads with server-side authorization, file type/size limits, and safe public/private access rules.
 - [ ] Complete organization membership roles and server-side authorization for every private route.
 - [ ] Ensure public storefront APIs only expose published data and never leak drafts or private merchant/customer information.
