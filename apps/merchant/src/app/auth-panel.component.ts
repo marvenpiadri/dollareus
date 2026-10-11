@@ -19,9 +19,11 @@ export class AuthPanelComponent {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const action = new URLSearchParams(window.location.search).get('auth');
+      const params = new URLSearchParams(window.location.search);
+      const action = params.get('auth');
       if (action === 'verify-email') this.mode.set('verify');
-      if (action === 'reset-password') this.mode.set('reset');
+      else if (action === 'reset-password') this.mode.set('reset');
+      else if (window.location.pathname === '/signup' || params.get('mode') === 'register') this.mode.set('register');
     }
   }
 
@@ -46,8 +48,8 @@ export class AuthPanelComponent {
       const payload = await response.json().catch(() => ({})) as { data?: { message?: string }; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message ?? 'The request could not be completed.');
       if (mode === 'register') {
-        this.setMode('login');
-        this.message.set('Your account was created. Check your inbox for the verification link before signing in.');
+        this.message.set('Your account is ready. Opening your workspace…');
+        this.signedIn.emit();
       } else if (mode === 'forgot') {
         this.message.set(payload.data?.message ?? 'If an account exists for that email, reset instructions will be sent.');
       } else {
