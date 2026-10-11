@@ -60,7 +60,7 @@ function readWebpDimensions(buffer: Buffer): { width: number; height: number } |
   const chunk = buffer.toString('ascii', 12, 16);
   if (chunk === 'VP8X' && buffer.length >= 30) return { width: 1 + buffer.readUIntLE(24, 3), height: 1 + buffer.readUIntLE(27, 3) };
   if (chunk === 'VP8 ' && buffer.length >= 30) return { width: buffer.readUInt16LE(26) & 0x3fff, height: buffer.readUInt16LE(28) & 0x3fff };
-  if (chunk === 'VP8L' && buffer.length >= 25 && buffer[21] === 0x2f) { const b0=buffer[22]!, b1=buffer[23]!, b2=buffer[24]!, b3=buffer[25]!; return { width: 1 + (((b1 & 0x3f) << 8) | b0), height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6)) }; }
+  if (chunk === 'VP8L' && buffer.length >= 25 && buffer[20] === 0x2f) { const b0=buffer[21]!, b1=buffer[22]!, b2=buffer[23]!, b3=buffer[24]!; return { width: 1 + (((b1 & 0x3f) << 8) | b0), height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6)) }; }
   return null;
 }
 
@@ -199,7 +199,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
   const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
   const result = await pool.query(
-    'SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'sku\',v.sku,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency,\'status\',v.status,\'barcode\',v.barcode,\'weightGrams\',v.weight_grams,\'metadata\',v.metadata) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), \'[]\'::jsonb) AS variants FROM products p WHERE p.organization_id=$1 ORDER BY p.updated_at DESC LIMIT $2',
+    'SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'sku\',v.sku,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency,\'status\',v.status,\'barcode\',v.barcode,\'weightGrams\',v.weight_grams,\'metadata\',v.metadata) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), \'[]\'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',m.id,\'altText\',m.alt_text,\'width\',m.width,\'height\',m.height,\'byteSize\',m.byte_size,\'position\',m.position,\'contentUrl\',\'/api/v1/organizations/\' || m.organization_id || \'/products/\' || m.product_id || \'/media/\' || m.id || \'/content\') ORDER BY m.position,m.created_at) FROM product_media m WHERE m.product_id=p.id AND m.organization_id=p.organization_id), \'[]\'::jsonb) AS media FROM products p WHERE p.organization_id=$1 ORDER BY p.updated_at DESC LIMIT $2',
     [organizationId, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
