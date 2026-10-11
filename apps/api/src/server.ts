@@ -250,6 +250,217 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/cat
   return { data: camelize(products.rows), requestId: request.id };
 });
 
+
+const CategoryInput = z.object({
+  storeId: z.string().min(1).max(100), name: z.string().trim().min(1).max(120), slug: Slug,
+  description: z.string().max(5000).nullable().optional(), position: z.number().int().nonnegative().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional()
+}).strict();
+const CustomerInput = z.object({
+  email: z.string().trim().email().max(254).nullable().optional(), phone: z.string().trim().max(80).nullable().optional(),
+  firstName: z.string().trim().max(120).nullable().optional(), lastName: z.string().trim().max(120).nullable().optional(),
+  displayName: z.string().trim().max(180).nullable().optional(), notes: z.string().max(5000).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+}).strict().refine((value) => Boolean(value.email || value.phone || value.displayName || value.firstName || value.lastName), { message: 'Provide at least a name, email or phone number.' });
+const InventoryLocationInput = z.object({
+  storeId: z.string().min(1).max(100), name: z.string().trim().min(1).max(180)
+}).strict();
+const InventoryAdjustmentInput = z.object({
+  locationId: z.string().min(1).max(100), variantId: z.string().min(1).max(100),
+  quantityOnHand: z.number().int().nonnegative().max(2147483647),
+  reorderPoint: z.number().int().nonnegative().max(2147483647).nullable().optional()
+}).strict();
+const OrderInput = z.object({
+  storeId: z.string().min(1).max(100), customerId: z.string().min(1).max(100).nullable().optional(),
+  customerEmail: z.string().trim().email().max(254).nullable().optional(), notes: z.string().max(5000).nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(180).optional(),
+  items: z.array(z.object({ variantId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(10000) }).strict()).min(1).max(100)
+}).strict().refine((value) => new Set(value.items.map((item) => item.variantId)).size === value.items.length, { message: 'Each variant can appear only once in an order.' });
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/categories', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const result = await pool.query('SELECT id,organization_id,store_id,name,slug,description,position,status,created_at,updated_at FROM categories WHERE organization_id=$1 AND store_id=$2 ORDER BY position,name LIMIT 200', [organizationId, storeId]);
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/categories', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = CategoryInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The category payload is invalid.');
+  const now = new Date();
+  const id = randomUUID();
+  try {
+    const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
+    if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+    const result = await pool.query(
+      'INSERT INTO categories (id,organization_id,store_id,name,slug,description,position,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING id,organization_id,store_id,name,slug,description,position,status,created_at,updated_at',
+      [id, organizationId, parsed.data.storeId, parsed.data.name, parsed.data.slug, parsed.data.description ?? null, parsed.data.position ?? 0, parsed.data.status ?? 'active', now]
+    );
+    return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'CATEGORY_CONFLICT', 'A category with this slug already exists in the selected store.');
+    throw error;
+  }
+});
+
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; search?: string } }>('/api/v1/organizations/:organizationId/customers', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
+  const search = (request.query.search ?? '').trim().slice(0, 120);
+  const result = await pool.query(
+    'SELECT id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at FROM customers WHERE organization_id=$1 AND ($2=\'\' OR COALESCE(display_name,\'\') ILIKE $3 OR COALESCE(first_name,\'\') ILIKE $3 OR COALESCE(last_name,\'\') ILIKE $3 OR COALESCE(email,\'\') ILIKE $3 OR COALESCE(phone,\'\') ILIKE $3) ORDER BY created_at DESC LIMIT $4',
+    [organizationId, search, `%${search}%`, limit]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/customers', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = CustomerInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid customer name, email or phone.');
+  const now = new Date();
+  const id = randomUUID();
+  const result = await pool.query(
+    'INSERT INTO customers (id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$10) RETURNING id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at',
+    [id, organizationId, parsed.data.email?.toLowerCase() ?? null, parsed.data.phone ?? null, parsed.data.firstName ?? null, parsed.data.lastName ?? null, parsed.data.displayName ?? null, parsed.data.notes ?? null, JSON.stringify(parsed.data.metadata ?? {}), now]
+  );
+  return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+});
+
+app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organizationId/inventory', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const result = await pool.query(
+    'SELECT l.id AS location_id,l.store_id,l.name AS location_name,l.status AS location_status,v.id AS variant_id,v.sku,v.title AS variant_title,p.id AS product_id,p.name AS product_name,il.quantity_on_hand,il.quantity_reserved,il.reorder_point,il.updated_at FROM inventory_locations l LEFT JOIN inventory_levels il ON il.location_id=l.id LEFT JOIN product_variants v ON v.id=il.variant_id LEFT JOIN products p ON p.id=v.product_id WHERE l.organization_id=$1 ORDER BY l.created_at,l.name,p.name,v.title LIMIT 500',
+    [organizationId]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/inventory/locations', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = InventoryLocationInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid store and inventory location name.');
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const now = new Date();
+  const id = randomUUID();
+  const result = await pool.query('INSERT INTO inventory_locations (id,organization_id,store_id,name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6) RETURNING id,organization_id,store_id,name,status,created_at,updated_at', [id, organizationId, parsed.data.storeId, parsed.data.name, 'active', now]);
+  return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+});
+
+app.put<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/inventory/levels', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = InventoryAdjustmentInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The inventory adjustment payload is invalid.');
+  const now = new Date();
+  try {
+    const location = await pool.query('SELECT id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3', [parsed.data.locationId, organizationId, 'active']);
+    if (!location.rowCount) return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The inventory location does not exist or is inactive.');
+    const variant = await pool.query('SELECT id FROM product_variants WHERE id=$1 AND organization_id=$2', [parsed.data.variantId, organizationId]);
+    if (!variant.rowCount) return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The product variant does not exist in this organization.');
+    const result = await pool.query(
+      'INSERT INTO inventory_levels (organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at) VALUES ($1,$2,$3,$4,0,$5,$6) ON CONFLICT (location_id,variant_id) DO UPDATE SET quantity_on_hand=EXCLUDED.quantity_on_hand,reorder_point=EXCLUDED.reorder_point,updated_at=EXCLUDED.updated_at RETURNING organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at',
+      [organizationId, parsed.data.locationId, parsed.data.variantId, parsed.data.quantityOnHand, parsed.data.reorderPoint ?? null, now]
+    );
+    return { data: camelize(result.rows[0]), requestId: request.id };
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23514') return fail(reply, request, 409, 'INVENTORY_BELOW_RESERVED', 'On-hand quantity cannot be lower than the quantity already reserved.');
+    throw error;
+  }
+});
+
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
+  const result = await pool.query(
+    "SELECT o.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
+    [organizationId, limit]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = OrderInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The order payload is invalid.');
+  const client = await pool.connect();
+  const now = new Date();
+  const orderId = randomUUID();
+  try {
+    await client.query('BEGIN');
+    if (parsed.data.idempotencyKey) {
+      const existing = await client.query('SELECT id FROM orders WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
+      if (existing.rowCount) {
+        await client.query('COMMIT');
+        const order = await pool.query("SELECT o.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.id=$1 AND o.organization_id=$2", [existing.rows[0].id, organizationId]);
+        return { data: camelize(order.rows[0]), requestId: request.id };
+      }
+    }
+    const store = await client.query('SELECT id,default_currency FROM stores WHERE id=$1 AND organization_id=$2 AND status IN ($3,$4) FOR SHARE', [parsed.data.storeId, organizationId, 'active', 'setup']);
+    if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist or is unavailable.'); }
+    let customerEmail = parsed.data.customerEmail?.toLowerCase() ?? null;
+    if (parsed.data.customerId) {
+      const customer = await client.query('SELECT id,email FROM customers WHERE id=$1 AND organization_id=$2', [parsed.data.customerId, organizationId]);
+      if (!customer.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'CUSTOMER_NOT_FOUND', 'The selected customer does not exist in this organization.'); }
+      customerEmail = customerEmail ?? customer.rows[0].email;
+    }
+    const variantIds = parsed.data.items.map((item) => item.variantId);
+    const variants = await client.query(
+      "SELECT v.id AS variant_id,v.product_id,v.sku,v.title AS variant_title,v.options,v.price_amount_minor,v.currency,p.name AS product_name FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=ANY($1::text[]) AND v.organization_id=$2 AND p.organization_id=$2 AND p.store_id=$3 AND p.status='active' AND v.status='active' FOR SHARE OF v,p",
+      [variantIds, organizationId, parsed.data.storeId]
+    );
+    if (variants.rowCount !== variantIds.length) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_ORDER_ITEMS', 'Every order item must be an active product variant in the selected store.'); }
+    const byId = new Map(variants.rows.map((variant: any) => [variant.variant_id, variant]));
+    let subtotal = 0;
+    const lineItems = parsed.data.items.map((item) => {
+      const variant = byId.get(item.variantId)!;
+      const unitAmount = Number(variant.price_amount_minor);
+      const lineTotal = unitAmount * item.quantity;
+      if (!Number.isSafeInteger(unitAmount) || !Number.isSafeInteger(lineTotal) || lineTotal < 0) throw new Error('The selected price exceeds the supported order amount.');
+      subtotal += lineTotal;
+      if (!Number.isSafeInteger(subtotal)) throw new Error('The order total exceeds the supported amount.');
+      if (variant.currency.trim() !== store.rows[0].default_currency.trim()) throw new Error('All order items must use the store currency.');
+      return { ...item, variant, unitAmount, lineTotal };
+    });
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
+    const numberResult = await client.query('SELECT COALESCE(MAX(order_number),0)+1 AS order_number FROM orders WHERE organization_id=$1', [organizationId]);
+    const orderNumber = Number(numberResult.rows[0].order_number);
+    await client.query(
+      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,notes,metadata,idempotency_key,placed_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,0,0,$10,$11,$12,$13::jsonb,$14,$15,$15,$15)',
+      [orderId, organizationId, parsed.data.storeId, parsed.data.customerId ?? null, orderNumber, 'pending', 'unpaid', 'unfulfilled', store.rows[0].default_currency.trim(), subtotal, customerEmail, parsed.data.notes ?? null, JSON.stringify({}), parsed.data.idempotencyKey ?? null, now]
+    );
+    for (const line of lineItems) {
+      await client.query(
+        'INSERT INTO order_items (id,organization_id,order_id,product_id,variant_id,sku_snapshot,product_name_snapshot,variant_title_snapshot,options_snapshot,quantity,unit_amount_minor,discount_minor,tax_minor,total_minor,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,0,0,$12,$13)',
+        [randomUUID(), organizationId, orderId, line.variant.product_id, line.variant.variant_id, line.variant.sku, line.variant.product_name, line.variant.variant_title, JSON.stringify(line.variant.options ?? {}), line.quantity, line.unitAmount, line.lineTotal, now]
+      );
+    }
+    await client.query('COMMIT');
+    const result = await pool.query("SELECT o.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.id=$1 AND o.organization_id=$2", [orderId, organizationId]);
+    return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (error instanceof Error && error.message.includes('supported order amount')) return fail(reply, request, 400, 'ORDER_AMOUNT_TOO_LARGE', error.message);
+    if (error instanceof Error && error.message.includes('store currency')) return fail(reply, request, 400, 'ORDER_CURRENCY_MISMATCH', error.message);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'ORDER_CONFLICT', 'The order could not be created due to a duplicate order or idempotency key.');
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23503') return fail(reply, request, 400, 'INVALID_RELATIONSHIP', 'A customer, store or product reference is invalid for this organization.');
+    throw error;
+  } finally { client.release(); }
+});
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
