@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { AuthPanelComponent } from './auth-panel.component';
+import { PublicHomeComponent } from './public-home.component';
+import { QrStudioComponent } from './qr-studio.component';
 
 type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'Online store' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
@@ -9,9 +11,13 @@ interface OrderRow { id: string; customer: string; channel: string; totalMinor: 
 @Component({
   selector: 'dlr-root',
   standalone: true,
-  imports: [AuthPanelComponent],
+  imports: [AuthPanelComponent, PublicHomeComponent, QrStudioComponent],
   template: `
-    @if (!authReady()) {
+    @if (publicPage() === 'home') {
+      <dlr-public-home />
+    } @else if (publicPage() === 'qr') {
+      <dlr-qr-studio />
+    } @else if (!authReady()) {
       <main class="auth-loading"><span class="brand-mark">d.</span><p>Preparing your workspace…</p></main>
     } @else if (!authenticated()) {
       <dlr-auth-panel (signedIn)="onSignedIn()" />
@@ -93,8 +99,14 @@ export class AppComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
+  protected readonly publicPage = signal<'home' | 'qr' | 'login' | 'signup' | 'app'>('home');
+
   constructor() {
-    void this.checkSession();
+    const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/';
+    const page = path === '/qr' ? 'qr' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
+    this.publicPage.set(page);
+    if (page === 'app' || page === 'login' || page === 'signup') void this.checkSession();
+    else { this.authReady.set(true); this.workspaceLoading.set(false); }
   }
 
   private async checkSession(): Promise<void> {
@@ -117,6 +129,8 @@ export class AppComponent {
   }
 
   protected onSignedIn(): void {
+    this.publicPage.set('app');
+    if (typeof window !== 'undefined') window.history.replaceState({}, '', '/app');
     this.authenticated.set(true);
     this.authReady.set(true);
     this.workspaceLoading.set(true);
@@ -129,6 +143,8 @@ export class AppComponent {
       await fetch(apiBase + '/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
     } finally {
       this.authenticated.set(false);
+      this.publicPage.set('login');
+      if (typeof window !== 'undefined') window.history.replaceState({}, '', '/login');
       this.products.set([]);
       this.organizationId.set('');
       this.storeId.set('');
