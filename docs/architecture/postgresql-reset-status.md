@@ -53,14 +53,31 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
 - reimplement POS, domain and media routes against PostgreSQL;
 - finish restaurant menu editing, publishing and modifier workflows;
-- add shipping/fulfillment tracking and COD collection reconciliation; add refund records and controls (offline payment tracking is now implemented, but refunds and gateway processing are not);
+- [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
+- [ ] verify the shipping UI/API in CI and against the intended Neon schema; COD collection is recorded through the existing manual/offline payment workflow.
+- [ ] add refund records and controls (online payment gateway processing remains intentionally deferred);
+- improve merchant workspace readability and align its palette with X-Facture's midnight/navy and money-green design tokens (implemented; build verification pending);
 - finish the remaining merchant workspace screens and operational actions;
 - extend tenant-isolation, transaction, validation, and API integration tests;
 - run and resolve CI on the new implementation before live database/provider testing;
 - continue Angular merchant-dashboard integration and verify the new offline-payment UI in a real build;
-- add Mageus integration authorization and production storefront hosting;
+- add a scoped developer API product: per-client credentials, organization-bound permissions, usage metering, webhooks, API documentation, and paid plans;
+- add shared Dollareus/Mageus identity using a proper cross-domain OAuth/OIDC flow and stable user IDs; do not duplicate password stores or assume cookies work across unrelated domains;
+- Mageus is the default public storefront and discovery layer. Dollareus remains the business engine and API provider; add Mageus integration authorization and customer-facing storefront/ordering/booking flows there, not as a competing Dollareus storefront;
 
 
 ## Operational note
 
 The schema setup is intentionally not automatic on API startup. It is a one-time, explicit operation against an empty database. It does not drop existing objects or migrate old records. The live Neon schema has not yet been verified from this development session.
+
+## Product architecture decision — 2026-10-11
+
+Dollareus is the operational engine and API provider, not a public storefront product. The merchant workspace is one client of the same APIs that Mageus and authorized third-party applications will consume. A business should be able to manage menus, products, prices, stock, orders, reservations, and fulfillment in Dollareus while its Mageus page or custom branded website reflects those changes through the API.
+
+Mageus owns public storefronts, publishing, magazines, communities, discovery, and the customer-facing purchase/booking experience by default. Customers should be able to check out as guests; optional customer accounts can use the shared identity. The shared-account implementation must use a proper identity protocol for cross-domain SSO, preserve app-specific authorization, and never allow one organization or API client to access another organization's records.
+
+Long-term delivery integrations (including third-party food delivery services) should be added as adapters on top of the core order/fulfillment APIs. A marketplace is not part of the current launch scope.
+
+## Verification note
+
+The shipment endpoints and UI and the visual readability/palette changes are committed to main, but this development session has not run the repository build or exercised the endpoints against Neon. Treat those checks as pending until CI and database smoke tests confirm them.
