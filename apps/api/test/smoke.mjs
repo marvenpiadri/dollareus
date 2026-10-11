@@ -142,13 +142,27 @@ try {
   });
   const menuItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 200, { headers: authHeaders });
   if (!menuItems.payload?.data?.some((item) => item.id === menuItem.payload?.data?.id)) throw new Error('Restaurant menu item did not persist.');
+  const publishedMenu = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ status: 'active' })
+  });
+  if (publishedMenu.payload?.data?.status !== 'active') throw new Error('Restaurant menu could not be published.');
+  const unavailableItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ availability: 'unavailable' })
+  });
+  if (unavailableItem.payload?.data?.availability !== 'unavailable') throw new Error('Restaurant menu item availability could not be updated.');
+  const invalidMenuUpdate = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 400, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ status: 'published' })
+  });
   const entryPoint = await request(`/api/v1/organizations/${organizationId}/entry-points`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, type: 'qr', targetPath: '/menu' })
   });
   const entryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
   if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id)) throw new Error('QR entry point did not persist.');
-  checks.push('restaurant menus, menu items, and managed QR entry points');
+  checks.push('restaurant menu publishing, item availability controls, and managed QR entry points');
 
   const productId = `product-${suffix}`;
   const product = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
