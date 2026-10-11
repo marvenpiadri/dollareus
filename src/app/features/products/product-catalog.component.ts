@@ -188,6 +188,7 @@ export class ProductCatalogComponent {
     const values = new FormData(event.currentTarget as HTMLFormElement);
     const name = String(values.get('name') ?? '').trim();
     const editing = this.editingProduct();
+    let imageUploadTriggeredRefresh = false;
     const slug = String(values.get('slug') ?? '').trim();
     const description = String(values.get('description') ?? '').trim() || null;
     const price = Number(values.get('price'));
@@ -223,6 +224,7 @@ export class ProductCatalogComponent {
           };
           this.editingProduct.set(createdProduct);
           await this.uploadProductImage({ currentTarget: { files: [image], value: '' } } as unknown as Event);
+          imageUploadTriggeredRefresh = true;
           if (this.imageUploadError()) {
             this.productSaveError.set('Product saved, but its image could not be uploaded: ' + this.imageUploadError());
             this.dataChanged.emit();
@@ -234,7 +236,7 @@ export class ProductCatalogComponent {
       }
       this.productEditorOpen.set(false); this.editingProduct.set(null);
       this.pendingProductImage.set(null);
-      this.dataChanged.emit();
+      if (!imageUploadTriggeredRefresh) this.dataChanged.emit();
       this.notifyRequested.emit(editing ? 'Product changes saved.' : 'Draft product saved to your catalog.');
     } catch (error) {
       this.productSaveError.set(error instanceof Error ? error.message : 'Could not save this product.');
