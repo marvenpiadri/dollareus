@@ -589,7 +589,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const id = randomUUID();
   const result = await pool.query(
     'INSERT INTO customers (id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$10) RETURNING id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at',
-    [id, organizationId, parsed.data.email?.toLowerCase() ?? null, parsed.data.phone ?? null, parsed.data.firstName ?? null, parsed.data.lastName ?? null, parsed.data.displayName ?? null, parsed.data.notes ?? null, JSON.stringify(parsed.data.metadata ?? {}), now]
+    [id, organizationId, parsed.data.email?.toLowerCase() ?? null, parsed.data.phone ?? null, parsed.data.firstName ?? null, parsed.data.lastName ?? null, parsed.data.displayName ?? null, parsed.data.notes ?? null, JSON.stringify({ ...(parsed.data.metadata ?? {}), modifierGroups: parsed.data.modifierGroups ?? [] }), now]
   );
   return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
 });
@@ -875,8 +875,8 @@ app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; 
     if (!category.rowCount) return fail(reply, request, 404, 'CATEGORY_NOT_FOUND', 'The selected category does not exist in this menu’s store.');
   }
   const result = await pool.query(
-    'UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),category_id=CASE WHEN $8 THEN $9 ELSE category_id END,allergens=COALESCE($10,allergens),dietary_labels=COALESCE($11,dietary_labels),metadata=COALESCE($12::jsonb,metadata),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING *',
-    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date(), parsed.data.categoryId !== undefined, parsed.data.categoryId ?? null, parsed.data.allergens ?? null, parsed.data.dietaryLabels ?? null, parsed.data.metadata === undefined ? null : JSON.stringify(parsed.data.metadata)]
+    'UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),category_id=CASE WHEN $8 THEN $9 ELSE category_id END,allergens=COALESCE($10,allergens),dietary_labels=COALESCE($11,dietary_labels),metadata=CASE WHEN $12::jsonb IS NOT NULL THEN $12::jsonb WHEN $13::jsonb IS NOT NULL THEN jsonb_set(metadata,'{modifierGroups}',$13::jsonb,true) ELSE metadata END,updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING *',
+    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date(), parsed.data.categoryId !== undefined, parsed.data.categoryId ?? null, parsed.data.allergens ?? null, parsed.data.dietaryLabels ?? null, parsed.data.metadata === undefined ? null : JSON.stringify(parsed.data.metadata), parsed.data.modifierGroups === undefined ? null : JSON.stringify(parsed.data.modifierGroups)]
   );
   if (!result.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The selected menu item does not exist in this menu and organization.');
   return { data: camelize(result.rows[0]), requestId: request.id };
@@ -1515,7 +1515,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       let source: any;
       if (item.sourceType === 'menu_item') {
         source = (await client.query(
-          "SELECT i.id,i.menu_id,i.name,i.price_amount_minor AS amount_minor,i.currency,i.status,i.availability,m.status AS menu_status FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id WHERE i.id=$1 AND i.organization_id=$2 AND i.store_id=$3 FOR SHARE OF i,m",
+          "SELECT i.id,i.menu_id,i.name,i.price_amount_minor AS amount_minor,i.currency,i.status,i.availability,i.metadata,m.status AS menu_status FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id WHERE i.id=$1 AND i.organization_id=$2 AND i.store_id=$3 FOR SHARE OF i,m",
           [item.sourceItemId, organizationId, storeId]
         )).rows[0];
         if (!source || source.status !== 'active' || source.availability === 'unavailable' || source.menu_status !== 'active') {
