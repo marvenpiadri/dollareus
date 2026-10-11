@@ -124,6 +124,14 @@ const StoreInput = z.object({
   enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1),
   published: z.boolean(), theme: z.record(z.string(), z.unknown())
 }).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' });
+const StorefrontPatchInput = z.object({
+  published: z.boolean().optional(),
+  defaultExperience: z.enum(['commerce', 'menu', 'catalog', 'services']).optional(),
+  enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1).optional(),
+  seoTitle: z.string().trim().max(180).nullable().optional(),
+  seoDescription: z.string().trim().max(320).nullable().optional(),
+  theme: z.record(z.string(), z.unknown()).optional()
+}).strict().refine(value => Object.keys(value).length > 0, 'At least one storefront field must be supplied.');
 const VariantInput = z.object({
   id: z.string().min(1).max(100), sku: z.string().max(100).nullable(), title: z.string().trim().min(1).max(180),
   options: z.record(z.string(), z.string()), amountMinor: z.number().int().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/),
@@ -359,6 +367,25 @@ app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organiza
   if (!await requireMembership(request, reply, organizationId)) return;
   const result = await pool.query('SELECT s.*, f.default_experience, f.enabled_experiences, f.published, f.seo_title, f.seo_description, f.theme FROM stores s LEFT JOIN store_frontends f ON f.store_id=s.id WHERE s.organization_id=$1 ORDER BY s.updated_at DESC LIMIT 100', [organizationId]);
   return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/storefront', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = StorefrontPatchInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The storefront settings payload is invalid.');
+  const current = await pool.query('SELECT s.id,s.status,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
+  if (!current.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const row = current.rows[0];
+  const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
+  const enabledExperiences = parsed.data.enabledExperiences ?? row.enabled_experiences;
+  if (!enabledExperiences.includes(defaultExperience)) return fail(reply, request, 400, 'INVALID_DEFAULT_EXPERIENCE', 'The default experience must be included in enabled experiences.');
+  const result = await pool.query(
+    'UPDATE store_frontends SET default_experience=$1,enabled_experiences=$2,published=$3,seo_title=$4,seo_description=$5,theme=$6::jsonb,updated_at=$7 WHERE store_id=$8 AND organization_id=$9 RETURNING store_id,organization_id,default_experience,enabled_experiences,published,seo_title,seo_description,theme,updated_at',
+    [defaultExperience, enabledExperiences, parsed.data.published ?? row.published, parsed.data.seoTitle === undefined ? row.seo_title : parsed.data.seoTitle, parsed.data.seoDescription === undefined ? row.seo_description : parsed.data.seoDescription, JSON.stringify(parsed.data.theme ?? row.theme ?? {}), new Date(), storeId, organizationId]
+  );
+  return { data: camelize(result.rows[0]), requestId: request.id };
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', async (request, reply) => {
