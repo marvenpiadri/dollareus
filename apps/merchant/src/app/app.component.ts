@@ -79,7 +79,7 @@ interface InventoryRow { locationId: string; locationName: string; storeId: stri
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Totals are calculated from active catalog prices on the server.</p></div></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>TOTAL</th></tr></thead><tbody>@for(order of orders();track order.id){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{order.status}}</span></td><td class="total">{{money(order.totalMinor,order.currency)}}</td></tr>} @empty {<tr><td colspan="4" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
           }
           @if (activeNav() === 'Customers') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="customerFormOpen.update(v => !v)">＋ Add customer</button></div>
+            <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
               @if(customerFormOpen()){<form class="customer-form" (submit)="createCustomer($event)"><label>Display name<input name="displayName" maxlength="180" placeholder="Customer name"></label><label>Email<input name="email" type="email" maxlength="254" placeholder="customer@example.com"></label><label>Phone<input name="phone" maxlength="80" placeholder="+212…"></label>@if(customerSaveError()){<p role="alert">{{customerSaveError()}}</p>}<button class="button primary" type="submit" [disabled]="customerSaveBusy()">{{customerSaveBusy()?'Saving…':'Save customer'}}</button></form>}
               <div class="table-wrap"><table><thead><tr><th>CUSTOMER</th><th>EMAIL</th><th>PHONE</th></tr></thead><tbody>@for(customer of customers();track customer.id){<tr><td>{{customer.displayName || 'Unnamed customer'}}</td><td>{{customer.email || '—'}}</td><td>{{customer.phone || '—'}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No customer records yet. Add a customer to get started.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{customers().length}} customers</div></section>
           }
@@ -87,6 +87,7 @@ interface InventoryRow { locationId: string; locationName: string; storeId: stri
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Inventory</h2><p>Adjust stock by variant and location. Reserved quantities are protected.</p></div></div>
               <form class="customer-form" (submit)="createInventoryLocation($event)"><label>New location<input name="name" required maxlength="180" placeholder="e.g. Main stockroom"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Add location'}}</button></form>
               @if(inventoryError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:11px">{{inventoryError()}}</p>}
+              <form class="customer-form" (submit)="createInventoryLevel($event)"><label>Location<select name="locationId" required><option value="">Choose a location</option>@for(location of locationOptions();track location.id){<option [value]="location.id">{{location.name}}</option>}</select></label><label>Product variant<select name="variantId" required><option value="">Choose a product</option>@for(product of products();track product.variantId){@if(product.variantId){<option [value]="product.variantId">{{product.name}} · {{product.sku}}</option>}}</select></label><label>Quantity on hand<input name="quantityOnHand" type="number" min="0" required value="0"></label><label>Reorder point<input name="reorderPoint" type="number" min="0" placeholder="Optional"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Set stock level'}}</button></form>
               <div class="table-wrap"><table><thead><tr><th>LOCATION</th><th>PRODUCT</th><th>ON HAND</th><th>RESERVED</th><th>REORDER</th><th>ADJUST STOCK</th></tr></thead><tbody>@for(item of inventory();track item.locationId + ':' + (item.variantId || 'empty')){<tr><td>{{item.locationName}}</td><td>{{item.productName || 'No stock assigned'}}</td><td>{{item.quantityOnHand ?? '—'}}</td><td>{{item.quantityReserved ?? '—'}}</td><td>{{item.reorderPoint ?? '—'}}</td><td>@if(item.variantId){<form class="inline-adjust" (submit)="adjustInventory($event,item)"><input name="quantityOnHand" type="number" min="0" required [value]="item.quantityOnHand ?? 0" aria-label="New on-hand quantity"><input name="reorderPoint" type="number" min="0" [value]="item.reorderPoint ?? ''" aria-label="Reorder point" placeholder="Reorder"><button type="submit" aria-label="Save stock adjustment">Save</button></form>} @else {<span class="muted">Add a variant first</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">Create a stock location to start tracking inventory.</td></tr>}</tbody></table></div><div class="panel-footer">Stock levels are persisted in PostgreSQL</div></section>
           }
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
@@ -364,6 +365,35 @@ export class AppComponent {
       this.customerFormOpen.set(false); this.notify('Customer saved to your database.');
     } catch (error) { this.customerSaveError.set(error instanceof Error ? error.message : 'Could not save this customer.'); }
     finally { this.customerSaveBusy.set(false); }
+  }
+
+  protected toggleCustomerForm(): void { this.customerFormOpen.update((value) => !value); }
+
+  protected locationOptions(): { id: string; name: string }[] {
+    const unique = new Map<string, string>();
+    for (const item of this.inventory()) unique.set(item.locationId, item.locationName);
+    return Array.from(unique, ([id, name]) => ({ id, name }));
+  }
+
+  protected async createInventoryLevel(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const locationId = String(values.get('locationId') ?? '');
+    const variantId = String(values.get('variantId') ?? '');
+    const quantityOnHand = Number(values.get('quantityOnHand'));
+    const rawReorderPoint = String(values.get('reorderPoint') ?? '').trim();
+    const reorderPoint = rawReorderPoint ? Number(rawReorderPoint) : null;
+    if (!locationId || !variantId || !Number.isInteger(quantityOnHand) || quantityOnHand < 0 || (reorderPoint !== null && (!Number.isInteger(reorderPoint) || reorderPoint < 0))) {
+      this.inventoryError.set('Choose a location and product, then enter valid non-negative whole-number quantities.'); return;
+    }
+    this.inventoryBusy.set(true); this.inventoryError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
+        method: 'PUT', body: JSON.stringify({ locationId, variantId, quantityOnHand, reorderPoint })
+      });
+      await this.loadWorkspace(); this.notify('Stock level saved.');
+    } catch (error) { this.inventoryError.set(error instanceof Error ? error.message : 'Could not set stock level.'); }
+    finally { this.inventoryBusy.set(false); }
   }
 
   protected async createInventoryLocation(event: Event): Promise<void> {
