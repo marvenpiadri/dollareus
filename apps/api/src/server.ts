@@ -653,6 +653,39 @@ app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>(
   }
 });
 
+const MenuStatusInput = z.object({ status: z.enum(['draft', 'active', 'archived']) }).strict();
+const MenuItemAvailabilityInput = z.object({
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  availability: z.enum(['available', 'unavailable', 'limited']).optional(),
+  position: z.number().int().nonnegative().optional()
+}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be provided.' });
+
+app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/status', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = MenuStatusInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu status payload is invalid.');
+  const result = await pool.query(
+    'UPDATE restaurant_menus SET status=$3,updated_at=$4 WHERE id=$1 AND organization_id=$2 RETURNING id,store_id,slug,name,status,position,updated_at',
+    [menuId, organizationId, parsed.data.status, new Date()]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+  return { data: camelize(result.rows[0]), requestId: request.id };
+});
+
+app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items/:itemId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId, itemId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = MenuItemAvailabilityInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu item update payload is invalid.');
+  const result = await pool.query(
+    'UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING id,menu_id,slug,name,status,availability,position,updated_at',
+    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date()]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The selected menu item does not exist in this menu and organization.');
+  return { data: camelize(result.rows[0]), requestId: request.id };
+});
+
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/menus', async (request, reply) => {
   const store = await pool.query('SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
