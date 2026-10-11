@@ -1648,14 +1648,14 @@ app.patch<{ Params: { organizationId: string; storeId: string; sessionId: string
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
 
-const posOrderProjection = `SELECT o.*,
+const posOrderProjection = `SELECT o.*,canonical_order.status AS canonical_status,canonical_order.payment_status AS payment_status,
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id',l.id,'sourceType',l.source_type,'sourceItemId',l.source_item_id,
     'sourceVariantId',l.source_variant_id,'sourceMenuId',l.source_menu_id,
     'name',l.name_snapshot,'quantity',l.quantity,'unitAmountMinor',l.unit_amount_minor,
     'lineTotalMinor',l.line_total_minor,'currency',l.currency,'metadata',l.metadata_snapshot
   ) ORDER BY l.created_at,l.id) FROM pos_order_lines l WHERE l.order_id=o.id AND l.organization_id=o.organization_id), '[]'::jsonb) AS items
-  FROM pos_orders o`;
+  FROM pos_orders o LEFT JOIN orders canonical_order ON canonical_order.id=o.id AND canonical_order.organization_id=o.organization_id`;
 
 app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/orders', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, storeId } = request.params;
