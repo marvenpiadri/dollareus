@@ -385,7 +385,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
   const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
   const result = await pool.query(
-    "SELECT o.*, CASE WHEN o.payment_status='paid' THEN 'paid' WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.order_id=o.id AND p.organization_id=o.organization_id AND p.status='succeeded'),0)>0 THEN 'partially_paid' ELSE o.payment_status END AS effective_payment_status, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
+    "SELECT o.*, COALESCE(o.metadata->>'channel','Mageus') AS channel, CASE WHEN o.payment_status='paid' THEN 'paid' WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.order_id=o.id AND p.organization_id=o.organization_id AND p.status='succeeded'),0)>0 THEN 'partially_paid' ELSE o.payment_status END AS effective_payment_status, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
     [organizationId, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
@@ -1045,7 +1045,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
   const orderId = randomUUID();
   try {
     await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [storeId]);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
     const store = await client.query('SELECT id,default_currency,business_type FROM stores WHERE id=$1 AND organization_id=$2 AND status IN ($3,$4) FOR SHARE', [storeId, organizationId, 'active', 'setup']);
     if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist or is unavailable.'); }
     const session = await client.query("SELECT id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3 AND status='open' FOR SHARE", [parsed.data.sessionId, organizationId, storeId]);
@@ -1059,7 +1059,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       }
     }
     const currency = String(store.rows[0].default_currency).trim();
-    const lines: Array<{ sourceType: string; sourceItemId: string; sourceVariantId: string | null; sourceMenuId: string | null; name: string; quantity: number; unitAmount: number; total: number; metadata: Record<string, unknown> }> = [];
+    const lines: Array<{ sourceType: string; sourceItemId: string; sourceVariantId: string | null; sourceMenuId: string | null; productId: string | null; sku: string | null; variantTitle: string; options: Record<string, unknown>; name: string; quantity: number; unitAmount: number; total: number; metadata: Record<string, unknown> }> = [];
     let subtotal = 0;
     for (const item of parsed.data.items) {
       let source: any;
@@ -1074,7 +1074,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       } else {
         if (!item.sourceVariantId) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_VARIANT_REQUIRED', 'Product and service lines require an active variant.'); }
         source = (await client.query(
-          "SELECT p.id,p.name,p.kind,p.status AS product_status,p.store_id,v.id AS variant_id,v.title AS variant_title,v.price_amount_minor AS amount_minor,v.currency,v.status AS variant_status,v.options FROM products p JOIN product_variants v ON v.product_id=p.id AND v.organization_id=p.organization_id WHERE p.id=$1 AND v.id=$2 AND p.organization_id=$3 AND p.store_id=$4 FOR SHARE OF p,v",
+          "SELECT p.id,p.name,p.kind,p.status AS product_status,p.store_id,v.id AS variant_id,v.sku,v.title AS variant_title,v.price_amount_minor AS amount_minor,v.currency,v.status AS variant_status,v.options FROM products p JOIN product_variants v ON v.product_id=p.id AND v.organization_id=p.organization_id WHERE p.id=$1 AND v.id=$2 AND p.organization_id=$3 AND p.store_id=$4 FOR SHARE OF p,v",
           [item.sourceItemId, item.sourceVariantId, organizationId, storeId]
         )).rows[0];
         const expectedKind = item.sourceType === 'service' ? 'service' : undefined;
@@ -1095,13 +1095,28 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         sourceType: item.sourceType, sourceItemId: item.sourceItemId,
         sourceVariantId: item.sourceVariantId ?? null,
         sourceMenuId: item.sourceType === 'menu_item' ? String(source.menu_id) : null,
+        productId: item.sourceType === 'menu_item' ? null : String(source.id),
+        sku: item.sourceType === 'menu_item' || !source.sku ? null : String(source.sku),
+        variantTitle: item.sourceType === 'menu_item' ? 'Menu item' : String(source.variant_title),
+        options: item.sourceType === 'menu_item' ? {} : (source.options ?? {}),
         name: item.sourceType === 'menu_item' ? String(source.name) : String(source.name) + (source.variant_title ? ' · ' + source.variant_title : ''),
         quantity: item.quantity, unitAmount, total: lineTotal, metadata: item.metadata ?? {}
       });
     }
-    const numberResult = await client.query('SELECT COALESCE(MAX(order_number),0)+1 AS order_number FROM pos_orders WHERE store_id=$1', [storeId]);
+    const numberResult = await client.query('SELECT GREATEST(COALESCE((SELECT MAX(order_number) FROM orders WHERE organization_id=$1),0),COALESCE((SELECT MAX(order_number) FROM pos_orders WHERE organization_id=$1),0))+1 AS order_number', [organizationId]);
     const orderNumber = Number(numberResult.rows[0].order_number);
     const history = [{ status: 'confirmed', actorUserId: request.identity!.uid, at: now.toISOString() }];
+    const canonicalMetadata = {
+      channel: parsed.data.channel === 'qr' ? 'QR' : 'POS',
+      posChannel: parsed.data.channel,
+      posOrderId: orderId,
+      fulfillment: parsed.data.fulfillment,
+      tableLabel: parsed.data.tableLabel ?? null
+    };
+    await client.query(
+      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,billing_address_snapshot,shipping_address_snapshot,notes,metadata,idempotency_key,placed_at,created_at,updated_at) VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,0,0,0,$9,NULL,NULL,NULL,$10,$11::jsonb,$12,$13,$13,$13)',
+      [orderId, organizationId, storeId, orderNumber, 'confirmed', 'unpaid', 'unfulfilled', currency, subtotal, parsed.data.customerNote ?? null, JSON.stringify(canonicalMetadata), parsed.data.idempotencyKey ? 'pos:' + storeId + ':' + parsed.data.idempotencyKey : null, now]
+    );
     await client.query(
       'INSERT INTO pos_orders (id,organization_id,store_id,session_id,order_number,status,channel,fulfillment,table_label,customer_note,currency,subtotal_minor,tax_minor,discount_minor,total_minor,created_by,status_history,idempotency_key,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,$12,$13,$14::jsonb,$15,$16,$16)',
       [orderId, organizationId, storeId, parsed.data.sessionId, orderNumber, 'confirmed', parsed.data.channel, parsed.data.fulfillment, parsed.data.tableLabel ?? null, parsed.data.customerNote ?? null, currency, subtotal, request.identity!.uid, JSON.stringify(history), parsed.data.idempotencyKey ?? null, now]
@@ -1110,6 +1125,10 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       await client.query(
         'INSERT INTO pos_order_lines (id,organization_id,order_id,source_type,source_item_id,source_variant_id,source_menu_id,name_snapshot,quantity,unit_amount_minor,line_total_minor,currency,metadata_snapshot,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14)',
         [randomUUID(), organizationId, orderId, line.sourceType, line.sourceItemId, line.sourceVariantId, line.sourceMenuId, line.name, line.quantity, line.unitAmount, line.total, currency, JSON.stringify(line.metadata), now]
+      );
+      await client.query(
+        'INSERT INTO order_items (id,organization_id,order_id,product_id,variant_id,sku_snapshot,product_name_snapshot,variant_title_snapshot,options_snapshot,quantity,unit_amount_minor,discount_minor,tax_minor,total_minor,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,0,0,$12,$13)',
+        [randomUUID(), organizationId, orderId, line.productId, line.sourceVariantId, line.sku, line.name, line.variantTitle, JSON.stringify(line.options), line.quantity, line.unitAmount, line.total, now]
       );
     }
     await client.query(
@@ -1144,6 +1163,11 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
     const history = Array.isArray(result.rows[0].status_history) ? result.rows[0].status_history : [];
     history.push({ status: next, actorUserId: request.identity!.uid, at: now.toISOString() });
     const updated = await client.query('UPDATE pos_orders SET status=$1,status_history=$2::jsonb,updated_at=$3 WHERE id=$4 AND organization_id=$5 AND store_id=$6 RETURNING id', [next, JSON.stringify(history), now, orderId, organizationId, storeId]);
+    const canonicalStatus = next === 'preparing' || next === 'ready' ? 'processing' : next;
+    await client.query(
+      "UPDATE orders SET status=CASE WHEN status='refunded' THEN status ELSE $1 END,fulfillment_status=CASE WHEN $2 THEN 'fulfilled' ELSE fulfillment_status END,updated_at=$3 WHERE id=$4 AND organization_id=$5",
+      [canonicalStatus, next === 'completed', now, orderId, organizationId]
+    );
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
       [randomUUID(), organizationId, request.identity!.uid, 'pos.order_status_changed', 'pos_order', orderId, request.id, JSON.stringify({ from: current, to: next }), now]
