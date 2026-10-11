@@ -12,6 +12,9 @@ export class RestaurantMenuManagerComponent {
   readonly organizationId = input.required<string>();
   readonly storeId = input.required<string>();
   readonly currency = input('MAD');
+  readonly initialMenus = input<MenuRow[] | null>(null);
+  readonly initialMenuItems = input<MenuItemRow[] | null>(null);
+  readonly initialCategories = input<CategoryRow[] | null>(null);
   readonly notifyRequested = output<string>();
   readonly dataChanged = output<void>();
 
@@ -31,7 +34,19 @@ export class RestaurantMenuManagerComponent {
     effect(() => {
       const organizationId = this.organizationId();
       const storeId = this.storeId();
-      if (organizationId && storeId) void this.load();
+      const initialMenus = this.initialMenus();
+      const initialMenuItems = this.initialMenuItems();
+      const initialCategories = this.initialCategories();
+      if (!organizationId || !storeId) return;
+      if (initialMenus && initialMenuItems && initialCategories) {
+        this.menus.set(initialMenus);
+        this.menuItems.set(initialMenuItems);
+        this.categories.set(initialCategories);
+        if (!initialMenus.some(menu => menu.id === this.selectedMenuId())) this.selectedMenuId.set(initialMenus[0]?.id ?? '');
+        this.menuBusy.set(false);
+        return;
+      }
+      void this.load();
     });
   }
 
