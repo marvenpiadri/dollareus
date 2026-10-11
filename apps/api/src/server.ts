@@ -759,7 +759,7 @@ app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/orga
   try {
     records = (await resolveTxt(verificationName)).map((parts) => parts.join(''));
   } catch {
-    const updated = await pool.query(
+    await pool.query(
       'UPDATE store_domains SET status=$3,last_checked_at=$4,updated_at=$4 WHERE id=$1 AND organization_id=$2 RETURNING id,hostname,status,last_checked_at,updated_at',
       [domainId, organizationId, 'verification_required', new Date()]
     );
