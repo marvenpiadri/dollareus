@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { AuthPanelComponent } from '../auth/auth-panel.component';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
@@ -20,7 +21,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, AuthPanelComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
