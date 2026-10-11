@@ -2,6 +2,8 @@
 
 Last updated: 2026-10-11
 
+Latest verification: GitHub Actions CI passes on `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77` (Angular build, API typecheck, and PostgreSQL API smoke suite). This validates the CI PostgreSQL service, not the user's live Neon database.
+
 ## Non-negotiable product boundaries
 
 - **Dollareus is the business operating system and API provider.** It owns operational data and workflows: organizations, products, menus, inventory, POS, customer/CRM records, orders, offline payment records, reservations, fulfillment, and audit history.
@@ -34,8 +36,8 @@ Last updated: 2026-10-11
 - [x] Product, order, customer, inventory, and offline-payment interfaces.
 - [x] Shipment tracking controls in the order manager.
 - [x] Apply X-Facture's midnight/navy + money-green palette and improve baseline type/control sizes.
-- [ ] Build-verify the Angular app and API typecheck; resolve every failure before calling the phase complete.
-- [ ] Verify responsive layouts, keyboard focus, readable form labels, error states, and empty/loading states.
+- [x] Build-verify the Angular app and API typecheck in GitHub Actions; fix the existing payment-panel template markup error.
+- [ ] Visually verify responsive layouts, keyboard focus, readable form labels, error states, and empty/loading states in a browser.
 - [ ] Finish product editing/publishing, POS checkout, media management, refunds, and remaining operational actions.
 
 ## Phase 4 — turn the API into a sellable developer product
