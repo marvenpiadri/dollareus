@@ -817,16 +817,15 @@ export class AppComponent {
     const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
     const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
     this.posCartError.set('');
-    this.posCart.update(lines => {
-      const existing = lines.find(line => line.key === key);
-      if (!existing) return [...lines, { key, sourceType, sourceItemId, sourceVariantId, quantity, name, priceAmountMinor, currency, metadata }];
-      return lines.map(line => line.key === key ? { ...line, quantity: line.quantity + quantity } : line);
-    });
-    if (this.posCart().some(line => line.quantity > 10000)) {
-      this.posCart.update(lines => lines.filter(line => line.key !== key));
+    const existingLine = this.posCart().find(line => line.key === key);
+    if (existingLine && existingLine.quantity + quantity > 10000) {
       this.posCartError.set('A ticket line cannot exceed 10,000 units.');
       return;
     }
+    this.posCart.update(lines => {
+      if (!existingLine) return [...lines, { key, sourceType, sourceItemId, sourceVariantId, quantity, name, priceAmountMinor, currency, metadata }];
+      return lines.map(line => line.key === key ? { ...line, quantity: line.quantity + quantity } : line);
+    });
     this.posQuantity.set('1');
     if (sourceType === 'menu_item') this.posModifiers.set({});
     this.notify('Item added to the POS ticket.');
@@ -837,8 +836,6 @@ export class AppComponent {
 
   protected async createPosOrder(): Promise<void> {
     const sessionId = this.selectedPosSessionId();
-    const variantId = this.posVariantId();
-    const quantity = Number(this.posQuantity());
     if (!sessionId || !this.posCart().length) {
       this.posError.set('Choose an open register and add at least one item to the ticket.');
       return;
