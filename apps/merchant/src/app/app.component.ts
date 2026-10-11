@@ -79,7 +79,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
           <section class="panel product-panel"><div class="panel-heading product-heading"><div><h2>Products</h2><p>Keep your catalog organized and ready to sell.</p></div><div class="product-actions"><label class="product-search">⌕ <input aria-label="Filter products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"></label><button class="button primary small" type="button" (click)="addProduct()">＋ Add product</button></div></div><div class="filters">@for(filter of filters;track filter){<button type="button" [class.selected]="productFilter() === filter" (click)="productFilter.set(filter)">{{ filter }} <span>{{ filterCount(filter) }}</span></button>}</div><div class="table-wrap"><table class="products-table"><thead><tr><th>PRODUCT</th><th>STATUS</th><th>INVENTORY</th><th>CATEGORY</th><th>PRICE</th><th></th></tr></thead><tbody>@for(product of filteredProducts();track product.id){<tr><td><div class="product-cell"><span class="product-art" [class]="product.tone">{{ product.initials }}</span><span><b>{{ product.name }}</b><small>SKU: {{ product.sku }}</small></span></div></td><td><span class="status" [class]="product.status === 'Active' ? 'paid' : product.status === 'Draft' ? 'draft' : 'pending'">{{ product.status }}</span></td><td [class.low]="product.stock !== null && product.stock > 0 && product.stock < 10" [class.empty]="product.stock === 0">{{ product.stock === null ? 'Not tracked' : product.stock === 0 ? 'Out of stock' : product.stock + ' in stock' }}</td><td class="muted">{{ product.category }}</td><td class="total">{{ money(product.priceMinor,product.currency) }}</td><td><button class="more" type="button" [attr.aria-label]="'More options for ' + product.name" (click)="editProduct(product)">···</button></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No products match your search. <button type="button" (click)="search.set('');productFilter.set('All')">Clear filters</button></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ filteredProducts().length }} of {{ products().length }} database products <button type="button" (click)="selectNav('Products')">View product catalog →</button></div></section>
           }
           @if (activeNav() === 'Orders') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Track offline payments here. Dollareus does not process online payments.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th><th>PAYMENTS</th><th>SHIPPING</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td><td><button class="button secondary small" type="button" (click)="openPaymentTracker(order)">{{selectedPaymentOrder()?.resourceId===order.resourceId?'Viewing':'Track payment'}}</button></td><td><button class="button secondary small" type="button" (click)="openShipmentTracker(order)">{{selectedShipmentOrder()?.resourceId===order.resourceId?'Viewing':'Track shipment'}}</button></td></tr>} @empty {<tr><td colspan="8" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
+            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Track offline payments here. Dollareus does not process online payments.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th><th>PAYMENTS</th><th>SHIPPING</th><th>REFUNDS</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td><td><button class="button secondary small" type="button" (click)="openPaymentTracker(order)">{{selectedPaymentOrder()?.resourceId===order.resourceId?'Viewing':'Track payment'}}</button></td><td><button class="button secondary small" type="button" (click)="openShipmentTracker(order)">{{selectedShipmentOrder()?.resourceId===order.resourceId?'Viewing':'Track shipment'}}</button></td><td><button class="button secondary small" type="button" (click)="openRefundTracker(order)">{{selectedRefundOrder()?.resourceId===order.resourceId?'Viewing':'Refunds'}}</button></td></tr>} @empty {<tr><td colspan="9" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
             @if(selectedPaymentOrder(); as paymentOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Payment tracking · {{paymentOrder.id}}</h2><p>Record cash, cash on delivery, bank transfer, mobile money, card-terminal, or other offline payments. Confirm receipt manually.</p></div><button class="button secondary small" type="button" (click)="selectedPaymentOrder.set(null);paymentDetails.set(null)">Close</button></div>@if(paymentDetailsBusy()){<p style="padding:16px">Loading payment history…</p>} @else if(paymentDetails()){<div style="display:flex;gap:20px;flex-wrap:wrap;padding:12px 17px"><div><small>Total</small><strong style="display:block">{{money(paymentDetails().totalMinor,paymentDetails().currency)}}</strong></div><div><small>Recorded as received</small><strong style="display:block">{{money(paymentDetails().paidAmountMinor,paymentDetails().currency)}}</strong></div><div><small>Remaining balance</small><strong style="display:block">{{money(paymentDetails().balanceMinor,paymentDetails().currency)}}</strong></div></div><form class="customer-form" (submit)="recordManualPayment($event)"><label>Method<select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)"><option value="cash">Cash</option><option value="cash_on_delivery">Cash on delivery</option><option value="bank_transfer">Bank transfer</option><option value="mobile_money">Mobile money</option><option value="card_terminal">Card terminal</option><option value="other">Other</option></select></label><label>Amount ({{paymentDetails().currency}})<input type="number" min="0.01" step="0.01" required [value]="paymentAmount()" (input)="paymentAmount.set($any($event.target).value)" placeholder="0.00"></label><label>Reference (optional)<input maxlength="200" [value]="paymentReference()" (input)="paymentReference.set($any($event.target).value)" placeholder="Receipt or transfer reference"></label><label>Note (optional)<input maxlength="1000" [value]="paymentNote()" (input)="paymentNote.set($any($event.target).value)" placeholder="Who collected it, transfer details…"></label><label>Receipt status<select [value]="paymentRecordStatus()" (change)="paymentRecordStatus.set($any($event.target).value)"><option value="succeeded">Received / verified</option><option value="pending">Expected / not yet received</option></select></label><button class="button primary small" type="submit" [disabled]="paymentSaveBusy()"> {{paymentSaveBusy()?'Saving…':'Record offline payment'}} </button></form><div class="table-wrap"><table><thead><tr><th>DATE</th><th>METHOD</th><th>REFERENCE / NOTE</th><th>AMOUNT</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>@for(payment of paymentDetails().payments;track payment.id){<tr><td>{{payment.createdAt}}</td><td>{{orderStatusLabel(payment.providerPayload?.method ?? 'other')}}</td><td>{{payment.providerPayload?.reference || payment.providerPayload?.note || '—'}}</td><td class="total">{{money(payment.amountMinor,payment.currency)}}</td><td>{{orderStatusLabel(payment.status)}}</td><td>@if(payment.status==='pending'){<button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'succeeded')">Confirm received</button><button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'cancelled')">Cancel</button>} @else {<span class="muted">Recorded</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No payment records yet. Record the first offline payment above.</td></tr>}</tbody></table></div>}</section>}
             @if(selectedShipmentOrder(); as shipmentOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Shipment tracking · {{shipmentOrder.id}}</h2><p>Record the courier and delivery progress. For cash on delivery, record collected cash separately under Track payment.</p></div><button class="button secondary small" type="button" (click)="selectedShipmentOrder.set(null);shipmentDetails.set(null)">Close</button></div>
               @if(shipmentBusy()){<p style="padding:18px">Loading shipment details…</p>} @else {
@@ -95,6 +95,12 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 @if(orderActionError()){<p role="alert" style="padding:8px 17px;color:#b91c1c;font-size:13px">{{orderActionError()}}</p>}
                 @if(shipmentDetails(); as shipmentData){<div class="table-wrap"><table><thead><tr><th>STAGE</th><th>COURIER</th><th>TRACKING</th><th>EXPECTED</th><th>NOTES</th><th>UPDATED</th></tr></thead><tbody>@for(shipment of shipmentData.fulfillments;track shipment.id){<tr><td><span class="status" [class]="statusClass(shipment.stage)">{{orderStatusLabel(shipment.stage)}}</span></td><td>{{shipment.carrier || 'Not assigned'}}</td><td>@if(shipment.trackingUrl){<a [href]="shipment.trackingUrl" target="_blank" rel="noopener noreferrer">{{shipment.trackingNumber || 'Open tracking'}}</a>} @else { {{shipment.trackingNumber || '—'}} }</td><td>{{shipment.estimatedDeliveryDate || '—'}}</td><td>{{shipment.notes || '—'}}</td><td>{{shipment.updatedAt | date:'mediumDate'}}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No shipment has been recorded yet.</td></tr>}</tbody></table></div>}
               }
+            </section>}
+            @if(selectedRefundOrder(); as refundOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Refunds · {{refundOrder.id}}</h2><p>Record money already returned through your offline process. This does not initiate a bank or payment-provider transfer.</p></div><button class="button secondary small" type="button" (click)="selectedRefundOrder.set(null);refundDetails.set(null)">Close</button></div>
+              @if(refundBusy()){<p style="padding:18px">Loading refund history…</p>} @else if(refundDetails(); as refundData){
+                <form class="customer-form" (submit)="recordRefund($event)"><label>Successful payment<select required [value]="refundPaymentId()" (change)="refundPaymentId.set($any($event.target).value)"><option value="">Choose a recorded payment</option>@for(payment of refundData.payments;track payment.id){@if(payment.status==='succeeded'){<option [value]="payment.id">{{orderStatusLabel(payment.providerPayload?.method ?? 'other')}} · {{money(payment.amountMinor,payment.currency)}} · {{payment.createdAt | date:'mediumDate'}}</option>}}</select></label><label>Refund amount ({{refundData.currency}})<input type="number" min="0.01" step="0.01" required [value]="refundAmount()" (input)="refundAmount.set($any($event.target).value)" placeholder="0.00"></label><label>Reason / reference<input maxlength="1000" [value]="refundReason()" (input)="refundReason.set($any($event.target).value)" placeholder="Customer return, duplicate payment…"></label><button class="button primary small" type="submit" [disabled]="refundSaveBusy() || !refundPaymentId()">{{refundSaveBusy()?'Saving…':'Record manual refund'}}</button></form>
+                <div class="table-wrap"><table><thead><tr><th>DATE</th><th>AMOUNT</th><th>REASON</th><th>STATUS</th></tr></thead><tbody>@for(refund of refundData.refunds;track refund.id){<tr><td>{{refund.createdAt | date:'medium'}}</td><td class="total">{{money(refund.amountMinor,refund.currency)}}</td><td>{{refund.reason || '—'}}</td><td>{{orderStatusLabel(refund.status)}}</td></tr>} @empty {<tr><td colspan="4" class="empty-state">No refunds recorded for this order.</td></tr>}</tbody></table></div>
+              } @else {<p style="padding:18px">Refund details are unavailable. Close this panel and try again.</p>}
             </section>}
           }
           @if (activeNav() === 'Customers') {
@@ -330,6 +336,13 @@ export class AppComponent {
   protected readonly paymentReference = signal('');
   protected readonly paymentNote = signal('');
   protected readonly paymentRecordStatus = signal('succeeded');
+  protected readonly selectedRefundOrder = signal<OrderRow | null>(null);
+  protected readonly refundDetails = signal<{ refunds: any[]; payments: any[]; totalMinor: number; currency: string } | null>(null);
+  protected readonly refundBusy = signal(false);
+  protected readonly refundSaveBusy = signal(false);
+  protected readonly refundPaymentId = signal('');
+  protected readonly refundAmount = signal('');
+  protected readonly refundReason = signal('');
   protected readonly selectedShipmentOrder = signal<OrderRow | null>(null);
   protected readonly shipmentDetails = signal<{ orderId: string; fulfillments: ShipmentDetails[] } | null>(null);
   protected readonly shipmentBusy = signal(false);
@@ -428,6 +441,74 @@ export class AppComponent {
     this.paymentDetails.set(details);
   }
 
+
+  protected async openRefundTracker(order: OrderRow): Promise<void> {
+    this.selectedRefundOrder.set(order);
+    this.refundDetails.set(null);
+    this.refundPaymentId.set('');
+    this.refundAmount.set('');
+    this.refundReason.set('');
+    this.orderActionError.set('');
+    this.refundBusy.set(true);
+    try {
+      await this.refreshRefundDetails(order);
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not load refund history.');
+    } finally {
+      this.refundBusy.set(false);
+    }
+  }
+
+  protected async recordRefund(event: Event): Promise<void> {
+    event.preventDefault();
+    const order = this.selectedRefundOrder();
+    const paymentId = this.refundPaymentId();
+    const amount = Number(this.refundAmount());
+    if (!order || !paymentId || !Number.isFinite(amount) || amount <= 0) {
+      this.orderActionError.set('Choose a successful payment and enter a valid refund amount.');
+      return;
+    }
+    this.refundSaveBusy.set(true);
+    this.orderActionError.set('');
+    try {
+      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/refunds', {
+        method: 'POST',
+        body: JSON.stringify({
+          paymentId,
+          amountMinor: Math.round(amount * 100),
+          reason: this.refundReason().trim() || null,
+          idempotencyKey: 'merchant-refund-' + crypto.randomUUID()
+        })
+      });
+      this.orders.update(rows => rows.map(row => row.resourceId === order.resourceId ? {
+        ...row,
+        paymentStatus: String(result.paymentStatus ?? row.paymentStatus),
+        status: result.paymentStatus === 'refunded' ? 'refunded' : row.status
+      } : row));
+      this.refundAmount.set('');
+      this.refundReason.set('');
+      await this.refreshRefundDetails(order);
+      this.notify('Manual refund recorded and audited. No payment-provider transfer was initiated.');
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not record this refund.');
+    } finally {
+      this.refundSaveBusy.set(false);
+    }
+  }
+
+  private async refreshRefundDetails(order: OrderRow): Promise<void> {
+    const base = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId);
+    const [refunds, payments] = await Promise.all([
+      this.apiRequest(base + '/refunds'),
+      this.apiRequest(base + '/payments')
+    ]);
+    this.refundDetails.set({
+      refunds: Array.isArray(refunds) ? refunds : [],
+      payments: Array.isArray(payments.payments) ? payments.payments : [],
+      totalMinor: Number(payments.totalMinor ?? order.totalMinor),
+      currency: String(payments.currency ?? order.currency)
+    });
+  }
 
   protected async openShipmentTracker(order: OrderRow): Promise<void> {
     this.selectedShipmentOrder.set(order);
