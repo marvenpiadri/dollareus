@@ -588,6 +588,52 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
   return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath: row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path }, requestId: request.id };
 });
 
+
+const OrderStatusUpdateInput = z.object({ status: z.enum(['confirmed', 'processing', 'completed', 'cancelled']) }).strict();
+
+app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = OrderStatusUpdateInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Choose a supported order status.');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,status,payment_status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE', [orderId, organizationId]);
+    if (!current.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    const from = String(current.rows[0].status);
+    const to = parsed.data.status;
+    if (from === to) { await client.query('COMMIT'); return { data: { id: orderId, status: from }, requestId: request.id }; }
+    const allowed: Record<string, string[]> = {
+      pending: ['confirmed', 'cancelled'],
+      confirmed: ['processing', 'cancelled'],
+      processing: ['completed', 'cancelled'],
+      completed: [],
+      cancelled: [],
+      refunded: []
+    };
+    if (!allowed[from]?.includes(to)) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'INVALID_ORDER_TRANSITION', 'This order cannot move from ' + from + ' to ' + to + '.');
+    }
+    if (to === 'cancelled' && current.rows[0].payment_status !== 'unpaid' && current.rows[0].payment_status !== 'failed') {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'REFUND_REQUIRED', 'A paid or authorized order must go through the refund workflow before cancellation.');
+    }
+    const now = new Date();
+    const updated = await client.query('UPDATE orders SET status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4 RETURNING id,status,payment_status,updated_at', [to, now, orderId, organizationId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.status_changed', 'order', orderId, request.id, JSON.stringify({ from, to }), now]
+    );
+    await client.query('COMMIT');
+    return { data: camelize(updated.rows[0]), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
