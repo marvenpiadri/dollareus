@@ -9,7 +9,7 @@ This is a staged rollout checklist, not a claim that production infrastructure i
 - [ ] Create a dedicated Neon PostgreSQL database for staging and a separate one for production.
 - [ ] Store each environment's `DATABASE_URL` only in the API host's server-side secret settings.
 - [ ] Confirm backups/retention are enabled and test a restore before production data is accepted.
-- [ ] On a genuinely empty database only, review and run the repository's one-time `pnpm db:setup` command. Do not rerun it blindly against an existing database.
+- [ ] Follow the [first-time Neon database setup guide](../neon-database-setup.md). On a genuinely empty database only, review and run the repository's one-time `pnpm db:setup` command. Do not rerun it blindly against an existing database.
 - [ ] Compare the resulting tables/indexes against `apps/api/db/schema.sql` and confirm the deployed API can execute authenticated smoke workflows.
 
 Neon usage charts showing query/connection spikes are supporting evidence of database activity, not a complete health or correctness test.
