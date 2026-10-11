@@ -1057,7 +1057,7 @@ app.patch<{ Params: { organizationId: string; entryPointId: string }; Body: unkn
 
 app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entryPointId', async (request, reply) => {
   const result = await pool.query(
-    "SELECT e.id,e.type,e.target_path,e.branding,s.slug AS store_slug,s.name AS store_name FROM entry_points e JOIN stores s ON s.id=e.store_id AND s.organization_id=e.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE e.id=$1 AND e.status='active' AND s.status='active' AND f.published=true LIMIT 1",
+    "SELECT e.id,e.type,e.target_path,e.branding,s.slug AS store_slug,s.name AS store_name FROM entry_points e JOIN stores s ON s.id=e.store_id AND s.organization_id=e.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE e.id=$1 AND e.status='active' AND s.status='active' AND f.published=true AND (e.target_path<>'/menu' OR 'menu'=ANY(f.enabled_experiences)) AND (e.target_path<>'/catalog' OR 'catalog'=ANY(f.enabled_experiences) OR 'commerce'=ANY(f.enabled_experiences)) LIMIT 1",
     [request.params.entryPointId]
   );
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
