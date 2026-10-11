@@ -7,7 +7,7 @@ Dollareus is an API-first business operating system for retailers, restaurants, 
 ## Product principles
 
 - **API-first:** Dollareus serves its own interfaces and authorized external clients such as Mageus through stable, versioned APIs.
-- **One source of truth, many experiences:** a store owns its catalog; menus, storefronts, Mageus pages, QR links, and external clients are presentations or channels over the same records.
+- **One source of truth, many experiences:** a store owns its catalog; Mageus storefronts, QR links, and external client apps are presentations or channels over the same records.
 - **Modular by business need:** commerce fundamentals are shared; restaurant, retail, services, and digital-goods capabilities are optional modules.
 - **One source of truth:** Dollareus owns commerce records; Mageus and external applications consume authorized API projections rather than duplicating business data.
 - **API as a product:** external developers and client businesses can pay to use scoped Dollareus APIs to power their own branded websites and apps.
