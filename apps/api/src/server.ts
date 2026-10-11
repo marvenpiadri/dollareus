@@ -1849,7 +1849,7 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
     const inventoryDeductions: Array<{ variantId: string; locationId: string; quantity: number }> = [];
     if (next === 'completed') {
       const lines = await client.query(
-        "SELECT DISTINCT l.source_variant_id AS variant_id,l.quantity,p.kind FROM pos_order_lines l JOIN product_variants v ON v.id=l.source_variant_id AND v.organization_id=l.organization_id JOIN products p ON p.id=v.product_id AND p.organization_id=v.organization_id WHERE l.order_id=$1 AND l.organization_id=$2 AND l.source_type='product' AND p.kind IN ('physical','food')",
+        "SELECT l.source_variant_id AS variant_id,SUM(l.quantity)::text AS quantity,p.kind FROM pos_order_lines l JOIN product_variants v ON v.id=l.source_variant_id AND v.organization_id=l.organization_id JOIN products p ON p.id=v.product_id AND p.organization_id=v.organization_id WHERE l.order_id=$1 AND l.organization_id=$2 AND l.source_type='product' AND p.kind IN ('physical','food') GROUP BY l.source_variant_id,p.kind ORDER BY l.source_variant_id",
         [orderId, organizationId]
       );
       const session = await client.query('SELECT location_id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3', [result.rows[0].session_id, organizationId, storeId]);
