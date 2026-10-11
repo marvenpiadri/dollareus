@@ -13,6 +13,7 @@ import { WorkspaceShellComponent } from '../../layout/workspace-shell/workspace-
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
+import { WorkspaceDataService } from '../../core/workspace-data.service';
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
@@ -40,7 +41,7 @@ export class WorkspaceComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService) { void this.checkSession(); }
+  constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService, private readonly workspaceData: WorkspaceDataService) { void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
     try {
@@ -79,69 +80,19 @@ export class WorkspaceComponent {
     this.workspaceError.set('');
     this.onboardingError.set('');
     try {
-      const organizations = await this.apiClient.request('/api/v1/organizations');
-      const organization = Array.isArray(organizations) ? organizations[0] : null;
-      if (!organization) {
-        this.organizationId.set('');
-        this.onboardingStage.set('organization');
-        this.products.set([]);
-        return;
-      }
-      this.organizationId.set(organization.id);
-      const stores = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`);
-      const store = Array.isArray(stores) ? stores[0] : null;
-      if (!store) {
-        this.onboardingStage.set('store');
-        this.products.set([]);
-        return;
-      }
-      this.storeId.set(store.id);
-      this.storeCurrency.set(String(store.defaultCurrency ?? 'MAD'));
-      this.storeName.set(store.name);
-      this.storeSlug.set(store.slug);
-      this.onboardingStage.set('ready');
-      const rows = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
-      const products = Array.isArray(rows) ? rows : [];
-      this.products.set(products.filter((p: any) => p.storeId === store.id).map((p: any): ProductRow => {
-        const variant = Array.isArray(p.variants) ? p.variants[0] : null;
-        const status: ProductStatus = p.status === 'active' ? 'Active' : p.status === 'archived' ? 'Archived' : 'Draft';
-        const name = String(p.name ?? 'Untitled product');
-        return {
-          id: String(p.id), name, slug: String(p.slug ?? ''), description: typeof p.description === 'string' ? p.description : null, category: 'Uncategorized', categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [], sku: variant?.sku ? String(variant.sku) : '—', variantId: String(variant?.id ?? ''),
-          priceMinor: Number(variant?.amountMinor ?? 0), currency: String(variant?.currency ?? store.defaultCurrency ?? 'MAD'),
-          stock: null, status, initials: name.split(/\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
-          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
-        };
-      }));
-      const [orderRows, inventoryRows, menuRows, categoryRows] = await Promise.all([
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
-      ]);
-      this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
-        id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
-        channel: String(order.channel ?? 'Mageus'), totalMinor: Number(order.totalMinor ?? 0), currency: String(order.currency ?? store.defaultCurrency ?? 'MAD'),
-        status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.effectivePaymentStatus ?? order.paymentStatus ?? 'unpaid')
-      })));
-      this.categories.set(Array.isArray(categoryRows) ? categoryRows as CategoryRow[] : []);
-      this.inventory.set(Array.isArray(inventoryRows) ? inventoryRows as InventoryRow[] : []);
-      const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
-      this.menus.set(loadedMenus);
-      const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
-      this.menuItems.set(itemGroups.flatMap((group, index) => (Array.isArray(group) ? group : []).map((item: any): MenuItemRow => ({
-        id: String(item.id), menuId: String(item.menuId ?? loadedMenus[index].id), slug: String(item.slug ?? ''), name: String(item.name ?? ''),
-        description: typeof item.description === 'string' ? item.description : null, priceAmountMinor: Number(item.priceAmountMinor ?? 0), currency: String(item.currency ?? store.defaultCurrency ?? 'MAD'),
-        status: String(item.status ?? 'draft') as MenuItemRow['status'], availability: String(item.availability ?? 'available') as MenuItemRow['availability'], position: Number(item.position ?? 0),
-        categoryId: typeof item.categoryId === 'string' ? item.categoryId : null,
-        allergens: Array.isArray(item.allergens) ? item.allergens.map(String) : [],
-        dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
-        modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
-      }))));
-      this.products.update((rows) => rows.map((product) => {
-        const levels = this.inventory().filter((item) => item.variantId === product.variantId && item.quantityOnHand !== null);
-        return { ...product, stock: levels.length ? levels.reduce((sum, item) => sum + Number(item.quantityOnHand ?? 0), 0) : null };
-      }));
+      const snapshot = await this.workspaceData.load();
+      this.organizationId.set(snapshot.organizationId);
+      this.storeId.set(snapshot.storeId);
+      this.storeCurrency.set(snapshot.storeCurrency);
+      this.storeName.set(snapshot.storeName);
+      this.storeSlug.set(snapshot.storeSlug);
+      this.onboardingStage.set(snapshot.stage);
+      this.products.set(snapshot.products);
+      this.orders.set(snapshot.orders);
+      this.categories.set(snapshot.categories);
+      this.inventory.set(snapshot.inventory);
+      this.menus.set(snapshot.menus);
+      this.menuItems.set(snapshot.menuItems);
     } catch (error) {
       this.workspaceError.set(error instanceof Error ? error.message : 'An unexpected error occurred while loading your workspace.');
     } finally {
