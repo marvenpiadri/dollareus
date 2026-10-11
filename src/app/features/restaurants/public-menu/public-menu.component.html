@@ -15,6 +15,7 @@
             @for(menu of publicMenus();track menu.id){
               <section style="padding:26px 0;border-bottom:1px solid #dce2d7">
                 <h2 style="margin:0;font-size:25px;letter-spacing:-.025em">{{menu.name}}</h2>
+                @if(menu.servicePeriods?.length){<p style="display:flex;gap:6px;flex-wrap:wrap;margin:9px 0 0">@for(period of menu.servicePeriods;track period){<span style="padding:4px 8px;border-radius:999px;background:#edf0e9;color:#53604d;font-size:11px;font-weight:750">{{period}}</span>}</p>}
                 @if(menu.description){<p style="margin:8px 0 18px;color:#667260;line-height:1.6">{{menu.description}}</p>}
                 @else {<div style="height:14px"></div>}
                 @for(section of publicMenuSections(menu);track section.name){
