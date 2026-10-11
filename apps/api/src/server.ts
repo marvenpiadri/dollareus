@@ -599,10 +599,24 @@ const MenuItemInput = z.object({
   availability: z.enum(['available', 'unavailable', 'limited']), position: z.number().int().nonnegative().optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 }).strict();
+const EntryPointBranding = z.object({
+  brandName: z.string().trim().max(120).nullable().optional(),
+  foregroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  logoUrl: z.string().url().max(2048).refine(value => value.startsWith('https://'), 'Logo URL must use HTTPS.').nullable().optional(),
+  frame: z.enum(['none', 'bottom-label', 'top-label']).optional(),
+  label: z.string().trim().max(80).nullable().optional()
+}).strict();
 const EntryPointInput = z.object({
   storeId: z.string().min(1).max(100), type: z.enum(['direct-link', 'qr', 'embed']),
-  targetPath: z.enum(['/', '/menu', '/catalog', '/services'])
+  targetPath: z.enum(['/', '/menu', '/catalog', '/services']),
+  branding: EntryPointBranding.optional()
 }).strict();
+const EntryPointPatch = z.object({
+  status: z.enum(['active', 'disabled']).optional(),
+  branding: EntryPointBranding.optional()
+}).strict().refine(value => value.status !== undefined || value.branding !== undefined, 'At least one field must be supplied.');
 
 app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/menus', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, storeId } = request.params;
@@ -811,7 +825,7 @@ app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/orga
 app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/entry-points', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, storeId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
-  const result = await pool.query('SELECT id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at FROM entry_points WHERE organization_id=$1 AND store_id=$2 ORDER BY created_at DESC LIMIT 200', [organizationId, storeId]);
+  const result = await pool.query('SELECT id,organization_id,store_id,type,target_path,status,branding,created_by,created_at,updated_at FROM entry_points WHERE organization_id=$1 AND store_id=$2 ORDER BY created_at DESC LIMIT 200', [organizationId, storeId]);
   return { data: camelize(result.rows), requestId: request.id };
 });
 
@@ -823,28 +837,33 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
   const now = new Date();
-  const result = await pool.query('INSERT INTO entry_points (id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8) RETURNING id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at', [randomUUID(), organizationId, parsed.data.storeId, parsed.data.type, parsed.data.targetPath, 'active', request.identity!.uid, now]);
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const result = await pool.query('INSERT INTO entry_points (id,organization_id,store_id,type,target_path,status,branding,created_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$9) RETURNING id,organization_id,store_id,type,target_path,status,branding,created_by,created_at,updated_at', [randomUUID(), organizationId, parsed.data.storeId, parsed.data.type, parsed.data.targetPath, 'active', JSON.stringify(parsed.data.branding ?? {}), request.identity!.uid, now]);
   return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
 });
 
 app.patch<{ Params: { organizationId: string; entryPointId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/entry-points/:entryPointId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, entryPointId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
-  const parsed = z.object({ status: z.enum(['active', 'disabled']) }).strict().safeParse(request.body);
-  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The entry-point status is invalid.');
-  const result = await pool.query('UPDATE entry_points SET status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4 RETURNING id,organization_id,store_id,type,target_path,status,created_by,created_at,updated_at', [parsed.data.status, new Date(), entryPointId, organizationId]);
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = EntryPointPatch.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The entry-point update is invalid.');
+  const current = await pool.query('SELECT branding FROM entry_points WHERE id=$1 AND organization_id=$2', [entryPointId, organizationId]);
+  if (!current.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The entry point does not exist in this organization.');
+  const branding = parsed.data.branding === undefined ? current.rows[0].branding : parsed.data.branding;
+  const result = await pool.query('UPDATE entry_points SET status=COALESCE($1,status),branding=$2::jsonb,updated_at=$3 WHERE id=$4 AND organization_id=$5 RETURNING id,organization_id,store_id,type,target_path,status,branding,created_by,created_at,updated_at', [parsed.data.status ?? null, JSON.stringify(branding ?? {}), new Date(), entryPointId, organizationId]);
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The entry point does not exist in this organization.');
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
 
 app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entryPointId', async (request, reply) => {
   const result = await pool.query(
-    "SELECT e.id,e.type,e.target_path,s.slug AS store_slug,s.name AS store_name FROM entry_points e JOIN stores s ON s.id=e.store_id AND s.organization_id=e.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE e.id=$1 AND e.status='active' AND s.status='active' AND f.published=true LIMIT 1",
+    "SELECT e.id,e.type,e.target_path,e.branding,s.slug AS store_slug,s.name AS store_name FROM entry_points e JOIN stores s ON s.id=e.store_id AND s.organization_id=e.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE e.id=$1 AND e.status='active' AND s.status='active' AND f.published=true LIMIT 1",
     [request.params.entryPointId]
   );
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
   const row = result.rows[0];
-  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath: row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path }, requestId: request.id };
+  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath: row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path, branding: row.branding ?? {} }, requestId: request.id };
 });
 
 
