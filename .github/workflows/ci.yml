@@ -19,6 +19,23 @@ jobs:
           node-version: 24
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm build
+      - name: Verify the production SSR server returns rendered HTML
+        run: |
+          pnpm serve:ssr > /tmp/dollareus-ssr.log 2>&1 &
+          ssr_pid=$!
+          trap 'kill "$ssr_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if node -e "fetch('http://127.0.0.1:4000/').then(async r => { const html = await r.text(); process.exit(r.ok && html.includes('<dlr-root') && html.includes('Dollareus') ? 0 : 1) }).catch(() => process.exit(1))"; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/dollareus-ssr.log
+            exit 1
+          fi
       - run: pnpm api:typecheck
 
   api-smoke:
@@ -49,9 +66,6 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10.12.1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
       - run: pnpm install --no-frozen-lockfile
       - name: Create a fresh test schema
         run: pnpm db:setup
