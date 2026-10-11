@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { AuthPanelComponent } from '../auth/auth-panel.component';
+import { Router } from '@angular/router';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
@@ -49,7 +50,7 @@ export class WorkspaceComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  constructor() { void this.checkSession(); }
+  constructor(private readonly router: Router) { void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
     const apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
@@ -65,7 +66,7 @@ export class WorkspaceComponent {
   }
 
   protected onSignedIn(): void {
-    if (typeof window !== 'undefined') window.history.replaceState({}, '', '/app');
+    void this.router.navigateByUrl('/app');
     this.authenticated.set(true);
     this.authReady.set(true);
     this.workspaceLoading.set(true);
@@ -78,8 +79,7 @@ export class WorkspaceComponent {
       await fetch(apiBase + '/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
     } finally {
       this.authenticated.set(false);
-      this.publicPage.set('login');
-      if (typeof window !== 'undefined') window.history.replaceState({}, '', '/login');
+      void this.router.navigateByUrl('/login');
       this.products.set([]);
       this.organizationId.set('');
       this.storeId.set('');
