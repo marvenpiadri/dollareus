@@ -109,8 +109,10 @@ export class RestaurantMenuManagerComponent {
   }
   protected addModifierGroup(): void {
     if (this.modifierDraft().length >= 20) return;
-    const index = this.modifierDraft().length + 1;
-    this.modifierDraft.update(groups => [...groups, {
+    const groups = this.modifierDraft();
+    let index = groups.length + 1;
+    while (groups.some(group => group.id === `modifier-${index}`)) index++;
+    this.modifierDraft.set([...groups, {
       id: `modifier-${index}`, name: 'New choice', required: false,
       minSelections: 0, maxSelections: 1, options: [{ id: 'option-1', name: 'Option 1', priceDeltaMinor: 0 }]
     }]);
@@ -132,7 +134,8 @@ export class RestaurantMenuManagerComponent {
   protected addModifierOption(groupIndex: number): void {
     const group = this.modifierDraft()[groupIndex];
     if (!group || group.options.length >= 30) return;
-    const index = group.options.length + 1;
+    let index = group.options.length + 1;
+    while (group.options.some(option => option.id === `option-${index}`)) index++;
     this.modifierDraft.update(groups => groups.map((item, i) => i === groupIndex
       ? { ...item, options: [...item.options, { id: `option-${index}`, name: `Option ${index}`, priceDeltaMinor: 0 }] }
       : item));
