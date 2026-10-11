@@ -27,7 +27,7 @@ async function request(path, expectedStatus, init = {}) {
 const checks = [];
 try {
   const health = await request('/api/v1/health', 200);
-  if (health.payload?.data?.status !== 'ok') throw new Error('Health endpoint did not return status=ok.');
+  if (health.payload?.data?.status !== 'ok' || health.payload?.data?.checks?.database !== 'ok') throw new Error('Health endpoint did not confirm database readiness.');
   const authProviders = await request('/api/v1/auth/providers', 200);
   if (typeof authProviders.payload?.data?.emailFlows !== 'boolean' || typeof authProviders.payload?.data?.google !== 'boolean' || typeof authProviders.payload?.data?.facebook !== 'boolean') {
     throw new Error('Auth provider discovery did not return explicit configuration flags.');
