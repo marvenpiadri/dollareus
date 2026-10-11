@@ -219,6 +219,9 @@ try {
     body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 500, reason: 'POS smoke test partial refund', idempotencyKey: `smoke-pos-refund-${suffix}` })
   });
   if (posRefund.payload?.data?.paymentStatus !== 'partially_refunded') throw new Error('POS order did not use the canonical refund workflow.');
+  const canonicalOrdersAfterRefund = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
+  const canonicalPosAfterRefund = canonicalOrdersAfterRefund.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
+  if (canonicalPosAfterRefund?.effectivePaymentStatus !== 'partially_refunded') throw new Error('Order listing did not preserve the POS order refund state.');
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
   const posClosed = await request(`${posBase}/sessions/${posSession.payload?.data?.id}/close`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({}) });
   if (posClosed.payload?.data?.status !== 'closed') throw new Error('POS session did not close.');
