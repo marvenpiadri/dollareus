@@ -1,6 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { AuthPanelComponent } from '../auth/auth-panel.component';
 import { RestaurantMenuManagerComponent } from '../restaurants/menus/restaurant-menu-manager.component';
+import { CustomerManagementComponent } from '../customers/customer-management.component';
+import { InventoryManagementComponent } from '../inventory/inventory-management.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -13,7 +15,7 @@ import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow,
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
