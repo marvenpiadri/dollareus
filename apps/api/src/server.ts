@@ -167,6 +167,7 @@ const ProductInput = z.object({
 const ProductPatchInput = z.object({
   slug: Slug.optional(), name: z.string().trim().min(1).max(180).optional(),
   description: z.string().max(10000).nullable().optional(), status: z.enum(['draft', 'active', 'archived']).optional(),
+  categoryIds: z.array(z.string().min(1).max(100)).max(100).optional(),
   variant: z.object({
     id: z.string().min(1).max(100), sku: z.string().max(100).nullable(), title: z.string().trim().min(1).max(180),
     amountMinor: z.number().int().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/)
@@ -315,7 +316,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
   const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
   const result = await pool.query(
-    'SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'sku\',v.sku,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency,\'status\',v.status,\'barcode\',v.barcode,\'weightGrams\',v.weight_grams,\'metadata\',v.metadata) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), \'[]\'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',m.id,\'altText\',m.alt_text,\'width\',m.width,\'height\',m.height,\'byteSize\',m.byte_size,\'position\',m.position,\'contentUrl\',\'/api/v1/organizations/\' || m.organization_id || \'/products/\' || m.product_id || \'/media/\' || m.id || \'/content\') ORDER BY m.position,m.created_at) FROM product_media m WHERE m.product_id=p.id AND m.organization_id=p.organization_id), \'[]\'::jsonb) AS media FROM products p WHERE p.organization_id=$1 ORDER BY p.updated_at DESC LIMIT $2',
+    'SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'sku\',v.sku,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency,\'status\',v.status,\'barcode\',v.barcode,\'weightGrams\',v.weight_grams,\'metadata\',v.metadata) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id), \'[]\'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(pc.category_id ORDER BY pc.created_at) FROM product_categories pc WHERE pc.product_id=p.id AND pc.organization_id=p.organization_id), \'[]\'::jsonb) AS category_ids, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',m.id,\'altText\',m.alt_text,\'width\',m.width,\'height\',m.height,\'byteSize\',m.byte_size,\'position\',m.position,\'contentUrl\',\'/api/v1/organizations/\' || m.organization_id || \'/products/\' || m.product_id || \'/media/\' || m.id || \'/content\') ORDER BY m.position,m.created_at) FROM product_media m WHERE m.product_id=p.id AND m.organization_id=p.organization_id), \'[]\'::jsonb) AS media FROM products p WHERE p.organization_id=$1 ORDER BY p.updated_at DESC LIMIT $2',
     [organizationId, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
@@ -361,7 +362,7 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
   try {
     await client.query('BEGIN');
     const existing = await client.query<{ slug: string; name: string; description: string | null; status: string }>(
-      'SELECT slug, name, description, status FROM products WHERE id=$1 AND organization_id=$2 FOR UPDATE',
+      'SELECT slug, name, description, status, store_id FROM products WHERE id=$1 AND organization_id=$2 FOR UPDATE',
       [productId, organizationId]
     );
     if (!existing.rowCount) {
@@ -369,6 +370,20 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
       return fail(reply, request, 404, 'PRODUCT_NOT_FOUND', 'The product does not exist in this organization.');
     }
     const current = existing.rows[0]!;
+    if (parsed.data.categoryIds !== undefined) {
+      const uniqueCategoryIds = [...new Set(parsed.data.categoryIds)];
+      if (uniqueCategoryIds.length !== parsed.data.categoryIds.length) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 400, 'DUPLICATE_CATEGORY', 'A product category may only be selected once.');
+      }
+      if (uniqueCategoryIds.length) {
+        const validCategories = await client.query('SELECT id FROM categories WHERE organization_id=$1 AND store_id=$2 AND id=ANY($3::text[])', [organizationId, current.store_id, uniqueCategoryIds]);
+        if (validCategories.rowCount !== uniqueCategoryIds.length) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 400, 'INVALID_CATEGORY', 'Every product category must belong to this product’s store.');
+        }
+      }
+    }
     const slug = parsed.data.slug ?? current.slug;
     const name = parsed.data.name ?? current.name;
     const description = parsed.data.description === undefined ? current.description : parsed.data.description;
@@ -377,6 +392,12 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
       'UPDATE products SET slug=$1,name=$2,description=$3,status=$4,updated_by=$5,updated_at=$6 WHERE id=$7 AND organization_id=$8',
       [slug, name, description, status, request.identity!.uid, now, productId, organizationId]
     );
+    if (parsed.data.categoryIds !== undefined) {
+      await client.query('DELETE FROM product_categories WHERE product_id=$1 AND organization_id=$2', [productId, organizationId]);
+      for (const categoryId of parsed.data.categoryIds) {
+        await client.query('INSERT INTO product_categories (product_id,category_id,organization_id,store_id,created_at) VALUES ($1,$2,$3,$4,$5)', [productId, categoryId, organizationId, current.store_id, now]);
+      }
+    }
     if (parsed.data.variant) {
       const variant = parsed.data.variant;
       const updatedVariant = await client.query(
