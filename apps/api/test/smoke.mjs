@@ -175,9 +175,14 @@ try {
   if (Number(order.payload?.data?.totalMinor) !== 2598 || order.payload?.data?.status !== 'pending' || order.payload?.data?.items?.length !== 1) throw new Error('Order totals or immutable item snapshots are incorrect.');
   const replay = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
   if (replay.payload?.data?.id !== order.payload?.data?.id) throw new Error('Order idempotency key did not return the existing order.');
+  await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'confirmed' }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'processing' }) });
+  const completed = await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
+  if (completed.payload?.data?.status !== 'completed') throw new Error('Valid order status transitions did not persist.');
+  await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'pending' }) });
   const orders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
   if (!orders.payload?.data?.some((item) => item.id === order.payload?.data?.id)) throw new Error('Created order did not appear in order listing.');
-  checks.push('server-priced order creation, snapshots, idempotency and listing');
+  checks.push('server-priced orders, snapshots, idempotency, audited status transitions and listing');
 
   const variantIdForPatch = product.payload?.data?.variants?.[0]?.id;
   if (!variantIdForPatch) throw new Error('Product creation did not return its variant id.');
