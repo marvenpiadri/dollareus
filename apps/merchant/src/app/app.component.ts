@@ -75,7 +75,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
           </section>
           <section class="two-column">
             <article class="panel"><div class="panel-heading"><div><h2>Recent orders</h2><p>A quick look at your latest sales.</p></div><button type="button" (click)="selectNav('Orders')">View all orders →</button></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>CHANNEL</th><th>TOTAL</th><th>STATUS</th></tr></thead><tbody>@for(order of orders();track order.id){<tr><td class="order-id">{{ order.id }}</td><td>{{ order.customer }}</td><td><span class="channel-dot" [class.mageus]="order.channel === 'Mageus'" [class.pos]="order.channel === 'POS'"></span>{{ order.channel }}</td><td class="total">{{ money(order.totalMinor,order.currency) }}</td><td><span class="status" [class]="statusClass(order.status)">{{ orderStatusLabel(order.status) }}</span></td></tr>} @empty {<tr><td colspan="5" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ orders().length }} recent orders <button type="button" (click)="selectNav('Orders')">Open order manager →</button></div></article>
-            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Custom website / app</b><small>Dollareus API access</small></span><em>API access planned</em></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus storefront</b><small>Default public storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="openQrStudio()">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
+            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Custom website / app</b><small>Dollareus API access</small></span><em><button type="button" (click)="selectNav('API & channels')">Manage API access</button></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus storefront</b><small>Default public storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="openQrStudio()">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
           </section>
           }
           @if (activeNav() === 'Overview' || activeNav() === 'Products') {
@@ -152,7 +152,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <button class="button secondary" type="button" (click)="selectedQrId.set('')">Cancel editing</button>
                 </form>
               }
-              <p class="muted" style="padding:0 17px 16px">Branding and destination records are saved in Dollareus. Final QR image preview/export and production storefront URL resolution are still being connected; use the standalone generator for immediate PNG/SVG downloads.</p>
+              <p class="muted" style="padding:0 17px 16px">Branding and destinations are saved in Dollareus. Generate QR opens the standalone branded PNG/SVG exporter; public URL, TLS, and logo CORS behavior still need production verification.</p>
             </section>
           }
           @if (activeNav() === 'Customers') {
@@ -196,6 +196,32 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               @if(inventoryError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{inventoryError()}}</p>}
               <form class="customer-form" (submit)="createInventoryLevel($event)"><label>Location<select name="locationId" required><option value="">Choose a location</option>@for(location of locationOptions();track location.id){<option [value]="location.id">{{location.name}}</option>}</select></label><label>Product variant<select name="variantId" required><option value="">Choose a product</option>@for(product of products();track product.variantId){@if(product.variantId){<option [value]="product.variantId">{{product.name}} · {{product.sku}}</option>}}</select></label><label>Quantity on hand<input name="quantityOnHand" type="number" min="0" required value="0"></label><label>Reorder point<input name="reorderPoint" type="number" min="0" placeholder="Optional"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Set stock level'}}</button></form>
               <div class="table-wrap"><table><thead><tr><th>LOCATION</th><th>PRODUCT</th><th>ON HAND</th><th>RESERVED</th><th>REORDER</th><th>ADJUST STOCK</th></tr></thead><tbody>@for(item of inventory();track item.locationId + ':' + (item.variantId || 'empty')){<tr><td>{{item.locationName}}</td><td>{{item.productName || 'No stock assigned'}}</td><td>{{item.quantityOnHand ?? '—'}}</td><td>{{item.quantityReserved ?? '—'}}</td><td>{{item.reorderPoint ?? '—'}}</td><td>@if(item.variantId){<form class="inline-adjust" (submit)="adjustInventory($event,item)"><input name="quantityOnHand" type="number" min="0" required [value]="item.quantityOnHand ?? 0" aria-label="New on-hand quantity"><input name="reorderPoint" type="number" min="0" [value]="item.reorderPoint ?? ''" aria-label="Reorder point" placeholder="Reorder"><button type="submit" aria-label="Save stock adjustment">Save</button></form>} @else {<span class="muted">Add a variant first</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">Create a stock location to start tracking inventory.</td></tr>}</tbody></table></div><div class="panel-footer">Stock levels are persisted in PostgreSQL</div></section>
+          }
+          @if (activeNav() === 'API & channels') {
+            <section class="panel product-panel">
+              <div class="panel-heading"><div><h2>Developer API access</h2><p>Create organization-scoped credentials for websites, apps, and approved integrations.</p></div><span class="status-pill">Metered</span></div>
+              <div style="padding:0 17px 15px;color:#64748b;font-size:13px;line-height:1.6">Tokens are shown once and stored as hashes. Read credentials can retrieve data; write credentials can change data. Keep tokens server-side and never place them in public browser code.</div>
+              <form class="customer-form" (submit)="createApiCredential($event)">
+                <label>Credential name<input name="name" required maxlength="120" [value]="apiCredentialName()" (input)="apiCredentialName.set($any($event.target).value)" placeholder="Mageus integration"></label>
+                <label>Permissions<select name="scopes" [value]="apiCredentialScopes()" (change)="apiCredentialScopes.set($any($event.target).value)"><option value="read">Read only</option><option value="write">Write only</option><option value="read,write">Read and write</option></select></label>
+                <label>Expiry<select name="expiry" [value]="apiCredentialExpiry()" (change)="apiCredentialExpiry.set($any($event.target).value)"><option value="30">30 days</option><option value="90">90 days</option><option value="180">180 days</option><option value="365">365 days</option><option value="never">No expiry</option></select></label>
+                <button class="button primary" type="submit" [disabled]="apiCredentialBusy() || !organizationId()">{{apiCredentialBusy()?'Creating…':'＋ Create API credential'}}</button>
+              </form>
+              @if(apiCredentialError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{apiCredentialError()}}</p>}
+              @if(apiCredentialToken()){
+                <section style="margin:0 17px 16px;padding:14px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4">
+                  <b style="font-size:14px;color:#1f6f2c">Copy your new token now</b>
+                  <p style="margin:5px 0 10px;color:#64748b;font-size:13px">This is the only time the full token will be displayed.</p>
+                  <code style="display:block;overflow-wrap:anywhere;padding:10px;border:1px solid #d1fae5;border-radius:7px;background:white;color:#0f172a;font-size:13px">{{apiCredentialToken()}}</code>
+                  <div style="display:flex;gap:8px;margin-top:10px"><button class="button secondary small" type="button" (click)="copyApiCredentialToken()">Copy token</button><button class="button secondary small" type="button" (click)="apiCredentialToken.set('')">Hide token</button></div>
+                </section>
+              }
+              <div class="table-wrap"><table><thead><tr><th>CREDENTIAL</th><th>PERMISSIONS</th><th>CREATED</th><th>LAST USED</th><th>EXPIRY / STATUS</th><th></th></tr></thead><tbody>
+                @for(credential of apiCredentials();track credential.id){<tr><td><b>{{credential.name}}</b><div class="muted">{{credential.tokenPrefix}}…</div></td><td>{{credential.scopes.join(', ')}}</td><td>{{credential.createdAt || '—'}}</td><td>{{credential.lastUsedAt || 'Not used yet'}}</td><td>@if(credential.revokedAt){<span class="status draft">Revoked</span>} @else if(credential.expiresAt){ {{credential.expiresAt}} } @else {No expiry}</td><td>@if(!credential.revokedAt){<button class="button secondary small" type="button" [disabled]="apiCredentialBusy()" (click)="revokeApiCredential(credential)">Revoke</button>}</td></tr>}
+                @empty {<tr><td colspan="6" class="empty-state">No API credentials yet. Create one for a trusted server-side integration.</td></tr>}
+              </tbody></table></div>
+              <div class="panel-footer"><span>Requests are metered per credential. Billing quotas, webhooks, and public developer docs are still in progress.</span><button type="button" (click)="loadApiCredentials()">Refresh credentials ↻</button></div>
+            </section>
           }
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
         </div>
@@ -477,6 +503,13 @@ export class AppComponent {
   protected readonly customerSaveError = signal('');
   protected readonly inventoryBusy = signal(false);
   protected readonly inventoryError = signal('');
+  protected readonly apiCredentials = signal<any[]>([]);
+  protected readonly apiCredentialName = signal('External integration');
+  protected readonly apiCredentialScopes = signal('read');
+  protected readonly apiCredentialExpiry = signal('90');
+  protected readonly apiCredentialBusy = signal(false);
+  protected readonly apiCredentialError = signal('');
+  protected readonly apiCredentialToken = signal('');
   protected readonly orderActionBusyId = signal('');
   protected readonly orderActionError = signal('');
   protected readonly selectedPaymentOrder = signal<OrderRow | null>(null);
@@ -836,7 +869,53 @@ export class AppComponent {
     finally { this.orderActionBusyId.set(''); }
   }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'QR Studio' ? 'Create and manage branded QR entry points for menus and storefronts.' : this.activeNav() === 'Menus' ? 'Build restaurant menus, publish items, and control availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
-  protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected async loadApiCredentials(): Promise<void> {
+    if (!this.organizationId()) return;
+    this.apiCredentialBusy.set(true);
+    this.apiCredentialError.set('');
+    try { this.apiCredentials.set(await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials')); }
+    catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not load API credentials.'); }
+    finally { this.apiCredentialBusy.set(false); }
+  }
+  protected async createApiCredential(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = event.target as HTMLFormElement;
+    const values = new FormData(form);
+    const name = String(values.get('name') ?? '').trim();
+    const scopes = String(values.get('scopes') ?? 'read').split(',') as ('read' | 'write')[];
+    const expiry = String(values.get('expiry') ?? '90');
+    const expiresAt = expiry === 'never' ? undefined : new Date(Date.now() + Number(expiry) * 86400000).toISOString();
+    this.apiCredentialBusy.set(true); this.apiCredentialError.set(''); this.apiCredentialToken.set('');
+    try {
+      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials', { method: 'POST', body: JSON.stringify({ name, scopes, ...(expiresAt ? { expiresAt } : {}) }) });
+      this.apiCredentialToken.set(String(result.token ?? ''));
+      this.apiCredentialName.set('External integration');
+      form.reset();
+      await this.loadApiCredentials();
+      this.notify('API credential created. Copy its token before hiding it.');
+    } catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not create API credential.'); }
+    finally { this.apiCredentialBusy.set(false); }
+  }
+  protected async revokeApiCredential(credential: any): Promise<void> {
+    if (!credential?.id || !globalThis.confirm('Revoke "' + String(credential.name) + '"? Applications using this token will stop working.')) return;
+    this.apiCredentialBusy.set(true); this.apiCredentialError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials/' + encodeURIComponent(credential.id), { method: 'DELETE', body: JSON.stringify({}) });
+      await this.loadApiCredentials(); this.notify('API credential revoked.');
+    } catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not revoke API credential.'); }
+    finally { this.apiCredentialBusy.set(false); }
+  }
+  protected copyApiCredentialToken(): void {
+    const token = this.apiCredentialToken();
+    if (!token || !globalThis.navigator?.clipboard) { this.apiCredentialError.set('Clipboard access is unavailable. Select and copy the token manually.'); return; }
+    void globalThis.navigator.clipboard.writeText(token).then(() => this.notify('API token copied.')).catch(() => this.apiCredentialError.set('Could not access the clipboard. Select and copy the token manually.'));
+  }
+  protected selectNav(item: NavItem): void {
+    this.activeNav.set(item);
+    if (item === 'API & channels') { void this.loadApiCredentials(); return; }
+    if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
+    if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.');
+  }
   protected async toggleStorefrontPublishing(): Promise<void> {
     this.qrBusy.set(true); this.qrError.set('');
     try {
