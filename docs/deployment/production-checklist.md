@@ -46,7 +46,7 @@ Do not enable an OAuth provider until its redirect URI, consent configuration, a
 
 ## 4. Pilot gate
 
-Only invite a small number of test merchants after staging checks pass. Keep real payments disabled; use a documented manual payment process and support contact. Before a public commerce launch, close the remaining P0 items in [launch readiness](../launch-readiness.md), including stock reservation/deduction and cancellation restoration, payment-provider integration and webhook verification, tax/business rules, authentication security review, domain activation/TLS, and operational recovery.
+Only invite a small number of test merchants after staging checks pass. Keep real payments disabled; use a documented manual payment process and support contact. Before a public commerce launch, close the remaining P0 items in [launch readiness](../launch-readiness.md), including inventory reservation before completion, menu ingredient/BOM stock, stock restoration for cancellations/refunds, payment-provider integration and webhook verification, tax/business rules, authentication security review, domain activation/TLS, and operational recovery.
 
 ## 5. POS integration direction
 
