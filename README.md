@@ -51,7 +51,7 @@ pnpm build       # Browser + server production build
 pnpm serve:ssr   # Run the production SSR server after building
 pnpm api:dev     # API: http://localhost:3000
 pnpm build
-pnpm api:typecheck # API static type checks
+pnpm api:typecheck # Type-check the API
 pnpm ci
 ```
 
