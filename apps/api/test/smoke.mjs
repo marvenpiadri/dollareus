@@ -758,8 +758,8 @@ try {
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
   });
-  const publishedMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
-  const publishedModifierDish = publishedMenu.payload?.data?.flatMap((entry) => entry.items ?? []).find((dish) => dish.id === secondDish.payload?.data?.id);
+  const publicModifierProjection = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  const publishedModifierDish = publicModifierProjection.payload?.data?.flatMap((entry) => entry.items ?? []).find((dish) => dish.id === secondDish.payload?.data?.id);
   if (publishedModifierDish?.modifierGroups?.[0]?.id !== 'extras'
       || Number(publishedModifierDish?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 250) {
     throw new Error('Published restaurant menu did not expose the latest modifier configuration.');
