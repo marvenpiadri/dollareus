@@ -23,9 +23,10 @@ This plan deliberately finishes one restaurant capability at a time. Do not star
 - [ ] Latest CI passes and a browser-level staging walkthrough passes.
 
 ### Current evidence and remaining work
-- Implemented: menu/menu-item APIs, manager authorization, category/allergen/dietary fields, modifier persistence and public projection, public menu page, storefront publishing, QR destinations.
-- Implemented in this step: public menu label for limited-availability dishes; smoke coverage that unavailable dishes are excluded and limited dishes remain visible with modifier groups.
-- Automated build/API smoke runs for the limited-availability UI and public-menu filtering test passed. Still required before phase closure: test the public menu in a browser at mobile/desktop widths, verify real deployed URL/TLS and QR behavior, and confirm the live database/schema.
+- Implemented: manager-authorized menu creation, editing of menu name/slug/description/service periods, publish/unpublish, dish creation and editing (name/slug/description/price/category/allergens/dietary labels/modifier groups), availability controls, public menu rendering, storefront publishing, and branded QR destinations.
+- Public menu API now requires the store to be published and the `menu` experience to be enabled. The product catalog API independently requires `commerce` or `catalog` to be enabled. Automated smoke coverage verifies the menu is hidden when that experience is disabled, while an enabled catalog remains accessible.
+- Latest build, API type-check, and PostgreSQL-backed API smoke tests passed after menu editing and public experience gating: [run 38170647095](https://github.com/marvenpiadri/dollareus/actions/runs/38170647095).
+- Still required before Phase 1 closure: browser-level mobile/desktop walkthrough, visual/accessibility review, live database/schema verification, and real deployed URL/TLS/QR verification.
 
 ## Phase 2 — Restaurant POS ticket workflow
 
