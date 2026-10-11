@@ -42,7 +42,7 @@ The POS is **smart because it adapts to the store's enabled domains and fulfillm
 - `GET/POST /api/v1/organizations/:organizationId/stores/:storeId/pos/orders`
 - `PATCH /api/v1/organizations/:organizationId/stores/:storeId/pos/orders/:orderId/status` — validated order transitions with actor/time history.
 
-The current order-creation route re-reads canonical item prices on the server, rejects inactive or cross-store items, checks the session is open, snapshots line names/prices, and assigns an order number. It creates an order in a confirmed state; it does **not** capture a payment, calculate jurisdictional taxes, apply discounts, decrement inventory, or send kitchen tickets. Do not present those capabilities as implemented.
+The current order-creation route re-reads canonical product/menu/service prices on the server, rejects inactive or cross-store items, checks the session is open, snapshots line names/prices, and assigns an order number. The initial merchant POS screen supports opening/closing registers and retail product orders with validated status transitions. Orders are stored in the POS-specific tables; the current POS UI does **not** record payment, calculate jurisdictional taxes, apply discounts, decrement inventory, or send kitchen tickets. Restaurant menu-item orders are supported by the API but not yet exposed in the POS UI. Do not present those capabilities as implemented.
 
 ## Important safety and correctness requirements before production
 
