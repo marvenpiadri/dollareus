@@ -385,7 +385,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
   const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
   const result = await pool.query(
-    "SELECT o.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
+    "SELECT o.*, CASE WHEN o.payment_status='paid' THEN 'paid' WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.order_id=o.id AND p.organization_id=o.organization_id AND p.status='succeeded'),0)>0 THEN 'partially_paid' ELSE o.payment_status END AS effective_payment_status, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
     [organizationId, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
@@ -614,7 +614,7 @@ app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organi
   const paid = await pool.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
   const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0);
   const totalMinor = Number(order.rows[0].total_minor);
-  return { data: { orderId, currency: String(order.rows[0].currency).trim(), paymentStatus: order.rows[0].payment_status, totalMinor, paidAmountMinor, balanceMinor: Math.max(0, totalMinor - paidAmountMinor), payments: camelize(payments.rows) }, requestId: request.id };
+  return { data: { orderId, currency: String(order.rows[0].currency).trim(), paymentStatus: paidAmountMinor >= totalMinor ? 'paid' : paidAmountMinor > 0 ? 'partially_paid' : order.rows[0].payment_status, totalMinor, paidAmountMinor, balanceMinor: Math.max(0, totalMinor - paidAmountMinor), payments: camelize(payments.rows) }, requestId: request.id };
 });
 
 app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/payments', { preHandler: authenticate }, async (request, reply) => {
@@ -678,7 +678,7 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
         id: paymentId, orderId, provider: 'manual', status: parsed.data.status,
         amountMinor: parsed.data.amountMinor, currency: String(order.currency).trim(),
         providerPayload: payload, createdAt: now, updatedAt: now,
-        paymentStatus: nextPaymentStatus, paidAmountMinor: paidAfter, balanceMinor: Math.max(0, total - paidAfter)
+        paymentStatus: paidAfter >= total ? 'paid' : paidAfter > 0 ? 'partially_paid' : 'unpaid', paidAmountMinor: paidAfter, balanceMinor: Math.max(0, total - paidAfter)
       },
       requestId: request.id
     });
@@ -720,8 +720,9 @@ app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string
     await client.query('UPDATE payments SET status=$1,provider_payload=$2::jsonb,updated_at=$3 WHERE id=$4', [next, JSON.stringify(payload), now, paymentId]);
     const paid = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
     const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0);
-    const paymentStatus = paidAmountMinor >= Number(orderResult.rows[0].total_minor) ? 'paid' : 'unpaid';
-    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [paymentStatus, now, orderId, organizationId]);
+    const paymentStatus = paidAmountMinor >= Number(orderResult.rows[0].total_minor) ? 'paid' : paidAmountMinor > 0 ? 'partially_paid' : 'unpaid';
+    const persistedPaymentStatus = paymentStatus === 'partially_paid' ? 'unpaid' : paymentStatus;
+    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [persistedPaymentStatus, now, orderId, organizationId]);
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
       [randomUUID(), organizationId, request.identity!.uid, 'order.manual_payment_status_changed', 'payment', paymentId, request.id, JSON.stringify({ orderId, from: previous, to: next }), now]
