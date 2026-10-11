@@ -12,7 +12,8 @@
     "api:start": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
     "api:typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
     "ci": "pnpm build && pnpm api:typecheck",
-    "db:setup": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts"
+    "db:setup": "pnpm db:migrate",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts"
   },
   "engines": {
     "node": ">=22.22.3"
