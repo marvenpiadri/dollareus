@@ -174,7 +174,7 @@ app.get<{ Params: { organizationId: string; productId: string; mediaId: string }
     reply.header('Content-Type', String(result.rows[0].content_type)); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'private, max-age=300'); reply.header('X-Content-Type-Options', 'nosniff');
     return reply.send(bytes);
   }
-  const variantKey = originalKey.replace(/\\.webp$/i, '-w' + requestedWidth + '.webp');
+  const variantKey = originalKey.replace(/\.webp$/i, '-w' + requestedWidth + '.webp');
   let variant = await s3Request('GET', variantKey);
   let variantBytes: Buffer;
   if (variant.ok) {
