@@ -38,13 +38,10 @@
       <section class="welcome"><div><p class="eyebrow">— &nbsp; YOUR BUSINESS WORKSPACE</p><h1>{{ activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav() }}</h1><p class="subtitle">{{ activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription() }}</p></div><div class="actions"><button class="button secondary" type="button" (click)="notify('Store preview will be available after publishing is implemented.')">◉ &nbsp; Preview store</button><button class="button primary" type="button" (click)="addProduct()">＋ &nbsp; Add product</button></div></section>
           @if (activeNav() === 'Overview') {
             <dlr-overview-dashboard
+              [organizationId]="organizationId()"
               [orders]="orders()"
-              [products]="products()"
-              [activeCount]="activeCount()"
-              [lowStockCount]="lowStockCount()"
-              (selectNavRequested)="selectNav($event)"
+              (ordersChange)="orders.set($event)"
               (notifyRequested)="notify($event)"
-              (qrRequested)="openQrStudio()"
             />
           }
           @if (activeNav() === 'Overview' || activeNav() === 'Products') {
