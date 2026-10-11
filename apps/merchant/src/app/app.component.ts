@@ -116,6 +116,11 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
           }
           @if (activeNav() === 'QR Studio') {
             <section class="panel product-panel">
+              <div class="panel-heading"><div><h2>Storefront publishing</h2><p>Publish the store before its restaurant menus and saved QR entry points can be accessed publicly.</p></div><span class="status-pill">{{storePublished() ? 'Published' : 'Private'}}</span></div>
+              <div class="customer-form">
+                <label>Default public experience<select [value]="storeExperience()" (change)="storeExperience.set($any($event.target).value)"><option value="menu">Restaurant menu</option><option value="commerce">Commerce</option><option value="catalog">Catalog</option><option value="services">Services</option></select></label>
+                <button class="button primary" type="button" [disabled]="qrBusy()" (click)="toggleStorefrontPublishing()">{{qrBusy() ? 'Saving…' : (storePublished() ? 'Unpublish storefront' : 'Publish storefront')}}</button>
+              </div>
               <div class="panel-heading"><div><h2>Branded QR entry points</h2><p>Create permanent entry-point records for this store and save brand styling alongside each destination. Only published storefront paths will be publicly resolvable.</p></div><a href="/qr" target="_blank" rel="noopener noreferrer">Open standalone QR generator ↗</a></div>
               @if(qrError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{qrError()}}</p>}
               <form class="customer-form" (submit)="createQrEntryPoint($event)">
@@ -317,6 +322,9 @@ export class AppComponent {
       this.storeCurrency.set(String(store.defaultCurrency ?? 'MAD'));
       this.storeName.set(store.name);
       this.storeSlug.set(store.slug);
+      this.storePublished.set(Boolean(store.published));
+      this.storeExperience.set(store.defaultExperience === 'menu' || store.defaultExperience === 'catalog' || store.defaultExperience === 'services' ? store.defaultExperience : 'commerce');
+      this.storeEnabledExperiences.set(Array.isArray(store.enabledExperiences) && store.enabledExperiences.length ? store.enabledExperiences : ['commerce']);
       this.onboardingStage.set('ready');
       const rows = await this.apiRequest(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
       const products = Array.isArray(rows) ? rows : [];
@@ -442,6 +450,9 @@ export class AppComponent {
   protected readonly qrFrame = signal<'none' | 'bottom-label' | 'top-label'>('bottom-label');
   protected readonly qrLabel = signal('Scan to view menu');
   protected readonly qrTargetPath = signal<'/' | '/menu' | '/catalog' | '/services'>('/menu');
+  protected readonly storePublished = signal(false);
+  protected readonly storeExperience = signal<'commerce' | 'menu' | 'catalog' | 'services'>('commerce');
+  protected readonly storeEnabledExperiences = signal<string[]>(['commerce']);
   protected readonly inventory = signal<InventoryRow[]>([]);
   protected readonly posSessions = signal<any[]>([]);
   protected readonly posOrders = signal<any[]>([]);
@@ -820,6 +831,19 @@ export class AppComponent {
   }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'QR Studio' ? 'Create and manage branded QR entry points for menus and storefronts.' : this.activeNav() === 'Menus' ? 'Build restaurant menus, publish items, and control availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
   protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected async toggleStorefrontPublishing(): Promise<void> {
+    this.qrBusy.set(true); this.qrError.set('');
+    try {
+      const enabled = Array.from(new Set([...this.storeEnabledExperiences(), this.storeExperience()]));
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/storefront', {
+        method: 'PATCH',
+        body: JSON.stringify({ published: !this.storePublished(), defaultExperience: this.storeExperience(), enabledExperiences: enabled })
+      });
+      await this.loadWorkspace();
+      this.notify(this.storePublished() ? 'Storefront published. Public menu and active QR entry points can now resolve.' : 'Storefront unpublished; public access is disabled.');
+    } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not update storefront publishing.'); }
+    finally { this.qrBusy.set(false); }
+  }
   protected async createQrEntryPoint(event: Event): Promise<void> {
     event.preventDefault();
     this.qrBusy.set(true); this.qrError.set('');
