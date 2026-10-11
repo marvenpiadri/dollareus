@@ -33,16 +33,6 @@ export class WorkspaceComponent {
   protected readonly workspaceError = signal('');
   protected readonly onboardingError = signal('');
   protected readonly onboardingBusy = signal(false);
-  protected readonly productEditorOpen = signal(false);
-  protected readonly editingProduct = signal<ProductRow | null>(null);
-  protected readonly productSaveBusy = signal(false);
-  protected readonly productSaveError = signal('');
-  protected readonly imageUploadBusy = signal(false);
-  protected readonly imageUploadError = signal('');
-  protected readonly imageUploadNote = signal('');
-  protected readonly imageAltText = signal('');
-  protected readonly imageMaxWidth = signal(1200);
-  protected readonly imageMaxHeight = signal(1200);
   protected readonly storeCurrency = signal('MAD');
   protected readonly onboardingStage = signal<'organization' | 'store' | 'ready'>('organization');
   protected readonly organizationId = signal('');
@@ -204,7 +194,6 @@ export class WorkspaceComponent {
 
   protected readonly activeNav = signal<NavItem>('Overview');
   protected readonly search = signal('');
-  protected readonly productFilter = signal<'All' | ProductStatus>('All');
   protected readonly toast = signal('');
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
     {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Menus',symbol:'☷'},{label:'QR Studio',symbol:'▦'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
@@ -262,11 +251,6 @@ export class WorkspaceComponent {
   protected readonly shipmentEstimatedDate = signal('');
   protected readonly shipmentNotes = signal('');
 
-  protected readonly filteredProducts = computed(() => {
-    const query = this.search().trim().toLowerCase();
-    const filter = this.productFilter();
-    return this.products().filter(p => (!query || [p.name,p.sku,p.category].some(v => v.toLowerCase().includes(query))) && (filter === 'All' || p.status === filter));
-  });
   protected activeCount(): number { return this.products().filter(p => p.status === 'Active').length; }
   protected lowStockCount(): number { return this.inventory().filter((item) => item.quantityOnHand !== null && item.reorderPoint !== null && item.quantityOnHand <= item.reorderPoint).length; }
   protected money(minor: number, currency: string): string { return new Intl.NumberFormat('en', {style:'currency',currency,maximumFractionDigits:2}).format(minor / 100); }
@@ -695,91 +679,6 @@ export class WorkspaceComponent {
 
   protected availablePosMenuItems(): MenuItemRow[] { const activeMenus = new Set(this.menus().filter(menu => menu.status === 'active').map(menu => menu.id)); return this.menuItems().filter(item => item.status === 'active' && item.availability !== 'unavailable' && activeMenus.has(item.menuId)); }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
-  protected addProduct(): void { this.activeNav.set('Products'); this.editingProduct.set(null); this.productSaveError.set(''); this.productEditorOpen.set(true); }
-  protected editProduct(product: ProductRow): void { this.editingProduct.set(product); this.productSaveError.set(''); this.productEditorOpen.set(true); }
-  protected closeProductEditor(): void { if (!this.productSaveBusy()) { this.productEditorOpen.set(false); this.editingProduct.set(null); } }
-  protected async uploadProductImage(event: Event): Promise<void> {
-    const input = event.currentTarget as HTMLInputElement; const file = input.files?.[0]; const product = this.editingProduct();
-    if (!file || !product) return;
-    this.imageUploadError.set(''); this.imageUploadNote.set('');
-    const maxWidth = Math.floor(this.imageMaxWidth()); const maxHeight = Math.floor(this.imageMaxHeight());
-    if (!Number.isInteger(maxWidth) || !Number.isInteger(maxHeight) || maxWidth < 64 || maxHeight < 64 || maxWidth > 2400 || maxHeight > 2400) { this.imageUploadError.set('Choose maximum width and height between 64 and 2400 pixels.'); input.value = ''; return; }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { this.imageUploadError.set('Choose a JPEG, PNG or WebP image.'); input.value = ''; return; }
-    if (file.size > 25 * 1024 * 1024) { this.imageUploadError.set('The original image must be 25 MB or smaller.'); input.value = ''; return; }
-    this.imageUploadBusy.set(true);
-    try {
-      const bitmap = await createImageBitmap(file);
-      if (bitmap.width * bitmap.height > 40000000) { bitmap.close(); throw new Error('This image has too many pixels. Choose a smaller original.'); }
-      const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height); const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      const context = canvas.getContext('2d', { alpha: false }); if (!context) { bitmap.close(); throw new Error('Your browser could not prepare the image.'); }
-      context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
-      let optimized: Blob | null = null;
-      for (const quality of [0.82, 0.76, 0.70, 0.64, 0.58, 0.52, 0.46, 0.40]) { optimized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality)); if (optimized && optimized.size <= 1024 * 1024) break; }
-      if (!optimized) throw new Error('Your browser could not encode this image as WebP.');
-      if (optimized.size > 1024 * 1024) {
-        const scaledCanvas = document.createElement('canvas');
-        let scaleDown = 0.85;
-        while ((optimized?.size ?? Infinity) > 1024 * 1024 && scaleDown >= 0.35) {
-          scaledCanvas.width = Math.max(1, Math.floor(canvas.width * scaleDown));
-          scaledCanvas.height = Math.max(1, Math.floor(canvas.height * scaleDown));
-          const scaledContext = scaledCanvas.getContext('2d', { alpha: false });
-          if (!scaledContext) break;
-          scaledContext.fillStyle = '#ffffff'; scaledContext.fillRect(0, 0, scaledCanvas.width, scaledCanvas.height);
-          scaledContext.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-          for (const quality of [0.72, 0.62, 0.52, 0.42]) {
-            optimized = await new Promise<Blob | null>((resolve) => scaledCanvas.toBlob(resolve, 'image/webp', quality));
-            if (optimized && optimized.size <= 1024 * 1024) break;
-          }
-          if (optimized && optimized.size <= 1024 * 1024) break;
-          scaleDown *= 0.85;
-        }
-        if (optimized && optimized.size <= 1024 * 1024) { canvas.width = scaledCanvas.width; canvas.height = scaledCanvas.height; }
-      }
-      if (!optimized || optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
-      const response = await fetch(this.apiClient.url('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
-      const payload = await response.json().catch(() => ({})) as { data?: { contentUrl?: string }; error?: { message?: string } };
-      if (!response.ok) throw new Error(payload.error?.message ?? 'The image could not be uploaded.');
-      this.imageUploadNote.set('Uploaded ' + canvas.width + ' × ' + canvas.height + ' WebP · ' + (optimized.size / 1024).toFixed(0) + ' KB. Original: ' + (file.size / 1024).toFixed(0) + ' KB.');
-      await this.loadWorkspace();
-    } catch (error) { this.imageUploadError.set(error instanceof Error ? error.message : 'Could not prepare or upload the image.'); }
-    finally { this.imageUploadBusy.set(false); input.value = ''; }
-  }
-  protected async saveProduct(event: Event): Promise<void> {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const name = String(values.get('name') ?? '').trim();
-    const editing = this.editingProduct();
-    const slug = String(values.get('slug') ?? '').trim();
-    const description = String(values.get('description') ?? '').trim() || null;
-    const price = Number(values.get('price'));
-    if (!Number.isFinite(price) || price < 0) { this.productSaveError.set('Enter a valid non-negative price.'); return; }
-    const sku = String(values.get('sku') ?? '').trim() || null;
-    this.productSaveBusy.set(true); this.productSaveError.set('');
-    try {
-      if (editing) {
-        await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products/${encodeURIComponent(editing.id)}`, {
-          method: 'PATCH', body: JSON.stringify({
-            name, slug, description, status: String(values.get('status') ?? 'draft'),
-            categoryIds: values.getAll('categoryIds').map(String),
-            variant: { id: editing.variantId, sku, title: name, amountMinor: Math.round(price * 100), currency: editing.currency }
-          })
-        });
-      } else {
-        await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/products`, { method: 'POST', body: JSON.stringify({
-          storeId: this.storeId(), slug, name, description, status: 'draft', kind: 'physical',
-          availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: values.getAll('categoryIds').map(String),
-          variants: [{ id: crypto.randomUUID(), sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
-        }) });
-      }
-      this.productEditorOpen.set(false);
-      this.editingProduct.set(null);
-      await this.loadWorkspace();
-      this.notify(editing ? 'Product changes saved.' : 'Draft product saved to your catalog.');
-    } catch (error) {
-      this.productSaveError.set(error instanceof Error ? error.message : 'Could not save this product.');
-    } finally { this.productSaveBusy.set(false); }
-  }
   protected openQrStudio(): void { if (typeof window !== 'undefined') window.location.assign('/qr'); }
   protected notify(message: string): void { this.toast.set(message); globalThis.setTimeout(() => { if (this.toast() === message) this.toast.set(''); }, 3000); }
 }
