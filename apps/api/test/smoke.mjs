@@ -226,6 +226,29 @@ try {
     throw new Error('Optional modifier bounds and price deltas did not persist in dish metadata.');
   }
   checks.push('optional restaurant modifiers preserve selection bounds and option price deltas');
+  const updatedModifierDish = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ modifierGroups: [{ id: 'extras', name: 'Optional extras', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'extra-sauce', name: 'Extra sauce', priceDeltaMinor: 250 }, { id: 'extra-cheese', name: 'Extra cheese', priceDeltaMinor: 350 }] }] })
+  });
+  if (Number(updatedModifierDish.payload?.data?.metadata?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 250) {
+    throw new Error('Editing restaurant modifier options did not persist.');
+  }
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 400, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ modifierGroups: [
+      { id: 'duplicate', name: 'First', required: false, minSelections: 0, maxSelections: 1, options: [{ id: 'one', name: 'One', priceDeltaMinor: 0 }] },
+      { id: 'duplicate', name: 'Second', required: false, minSelections: 0, maxSelections: 1, options: [{ id: 'two', name: 'Two', priceDeltaMinor: 0 }] }
+    ] })
+  });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 400, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ modifierGroups: [{ id: 'duplicate-options', name: 'Duplicate options', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'same', name: 'First', priceDeltaMinor: 0 }, { id: 'same', name: 'Second', priceDeltaMinor: 100 }] }] })
+  });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 400, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ modifierGroups: [{ id: 'required-zero', name: 'Required', required: true, minSelections: 0, maxSelections: 1, options: [{ id: 'one', name: 'One', priceDeltaMinor: 0 }] }] })
+  });
+  checks.push('restaurant modifier edits persist and reject duplicate IDs or inconsistent selection rules');
   const reorderedItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 200, {
     method: 'PUT', headers: authHeaders,
     body: JSON.stringify({ itemIds: [secondDish.payload?.data?.id, menuItem.payload?.data?.id] })
