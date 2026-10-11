@@ -184,7 +184,12 @@ try {
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
   for (const check of checks) console.log(`  ✓ ${check}`);
 } finally {
-  if (organizationId) await pool.query('DELETE FROM organizations WHERE id=$1', [organizationId]).catch(() => undefined);
+  if (organizationId) {
+    await pool.query('DELETE FROM order_items WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM orders WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM customers WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM organizations WHERE id=$1', [organizationId]).catch(() => undefined);
+  }
   if (signupUserId) await pool.query('DELETE FROM users WHERE id=$1', [signupUserId]).catch(() => undefined);
   await pool.query('DELETE FROM users WHERE id=$1', [userId]).catch(() => undefined);
   await pool.end();
