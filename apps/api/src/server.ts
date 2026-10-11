@@ -361,7 +361,7 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
   const now = new Date();
   try {
     await client.query('BEGIN');
-    const existing = await client.query<{ slug: string; name: string; description: string | null; status: string }>(
+    const existing = await client.query<{ slug: string; name: string; description: string | null; status: string; store_id: string }>(
       'SELECT slug, name, description, status, store_id FROM products WHERE id=$1 AND organization_id=$2 FOR UPDATE',
       [productId, organizationId]
     );
