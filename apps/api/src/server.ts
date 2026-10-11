@@ -589,7 +589,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const id = randomUUID();
   const result = await pool.query(
     'INSERT INTO customers (id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$10) RETURNING id,organization_id,email,phone,first_name,last_name,display_name,notes,metadata,created_at,updated_at',
-    [id, organizationId, parsed.data.email?.toLowerCase() ?? null, parsed.data.phone ?? null, parsed.data.firstName ?? null, parsed.data.lastName ?? null, parsed.data.displayName ?? null, parsed.data.notes ?? null, JSON.stringify({ ...(parsed.data.metadata ?? {}), modifierGroups: parsed.data.modifierGroups ?? [] }), now]
+    [id, organizationId, parsed.data.email?.toLowerCase() ?? null, parsed.data.phone ?? null, parsed.data.firstName ?? null, parsed.data.lastName ?? null, parsed.data.displayName ?? null, parsed.data.notes ?? null, JSON.stringify(parsed.data.metadata ?? {}), now]
   );
   return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
 });
@@ -827,7 +827,7 @@ app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>(
   try {
     const result = await pool.query(
       'INSERT INTO restaurant_menu_items (id,organization_id,store_id,menu_id,slug,name,description,price_amount_minor,currency,status,category_id,allergens,dietary_labels,availability,position,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$17) RETURNING *',
-      [randomUUID(), organizationId, menu.rows[0].store_id, menuId, parsed.data.slug, parsed.data.name, parsed.data.description ?? null, parsed.data.priceAmountMinor, parsed.data.currency, parsed.data.status, parsed.data.categoryId ?? null, parsed.data.allergens, parsed.data.dietaryLabels, parsed.data.availability, parsed.data.position ?? 0, JSON.stringify(parsed.data.metadata ?? {}), now]
+      [randomUUID(), organizationId, menu.rows[0].store_id, menuId, parsed.data.slug, parsed.data.name, parsed.data.description ?? null, parsed.data.priceAmountMinor, parsed.data.currency, parsed.data.status, parsed.data.categoryId ?? null, parsed.data.allergens, parsed.data.dietaryLabels, parsed.data.availability, parsed.data.position ?? 0, JSON.stringify({ ...(parsed.data.metadata ?? {}), modifierGroups: parsed.data.modifierGroups ?? [] }), now]
     );
     return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
   } catch (error) {
