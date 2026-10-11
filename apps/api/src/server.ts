@@ -700,7 +700,7 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/men
 const CustomDomainInput = z.object({
   storeId: z.string().trim().min(1).max(100),
   hostname: z.string().trim().toLowerCase().min(3).max(253)
-    .regex(/^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/, 'Enter a valid fully qualified domain name.')
+    .regex(/^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, 'Enter a valid fully qualified domain name.')
 }).strict();
 
 app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/domains', { preHandler: authenticate }, async (request, reply) => {
@@ -720,7 +720,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   if (!await requireMembership(request, reply, organizationId)) return;
   const parsed = CustomDomainInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The custom domain payload is invalid.');
-  const hostname = parsed.data.hostname.replace(/\\.$/, '');
+  const hostname = parsed.data.hostname.replace(/\.$/, '');
   if (hostname === 'dollareus.com' || hostname.endsWith('.dollareus.com')) {
     return fail(reply, request, 400, 'PLATFORM_DOMAIN_RESERVED', 'Use a custom domain you control; Dollareus platform domains are managed separately.');
   }
