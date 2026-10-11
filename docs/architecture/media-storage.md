@@ -7,9 +7,9 @@ Dollareus uses Neon S3-compatible object storage for product image bytes. Config
 - `AWS_ENDPOINT_URL_S3`: Neon-provided S3 endpoint.
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`: bucket credentials.
 - `AWS_REGION`: region associated with the endpoint.
-- `AWS_S3_BUCKET`: exact bucket name.
+- `AWS_S3_BUCKET`: exact bucket name. Neon’s sample code uses `assets`; set `AWS_S3_BUCKET=assets` only if that bucket exists in this project’s Neon Storage configuration.
 
-The API signs S3 requests server-side with AWS Signature Version 4. Credentials never leave the server.
+The provided Neon S3 example uses `new S3Client({ forcePathStyle: true })`, bucket `assets`, and the S3 endpoint configured in `AWS_ENDPOINT_URL_S3`. Dollareus’s current API implements server-side request signing and path-style object URLs; keep credentials exclusively in the API server environment. The provided Neon Auth URL and JWKS URL are separate from object storage and are not needed for these S3 upload/read routes.
 
 ## Image limits and product optimization
 
@@ -33,4 +33,4 @@ Objects use keys such as `organizations/{organizationId}/products/{productId}/{a
 
 ## Operational follow-ups
 
-Set API server environment variables, verify the actual Neon bucket with a real upload/read/resize round-trip, and monitor object-storage and image-processing errors. Production verification remains pending until that real-bucket test succeeds.
+Set API server environment variables using a newly rotated storage credential, confirm the exact bucket name (the supplied Neon sample uses `assets`), then verify the actual bucket with a real upload/read/resize round-trip and monitor object-storage and image-processing errors. Do not put credentials in `.env.example`, source control, or frontend environment variables. Production verification remains pending until that real-bucket test succeeds.
