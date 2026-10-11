@@ -76,7 +76,8 @@ interface InventoryRow { locationId: string; locationName: string; storeId: stri
           <section class="panel product-panel"><div class="panel-heading product-heading"><div><h2>Products</h2><p>Keep your catalog organized and ready to sell.</p></div><div class="product-actions"><label class="product-search">⌕ <input aria-label="Filter products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"></label><button class="button primary small" type="button" (click)="addProduct()">＋ Add product</button></div></div><div class="filters">@for(filter of filters;track filter){<button type="button" [class.selected]="productFilter() === filter" (click)="productFilter.set(filter)">{{ filter }} <span>{{ filterCount(filter) }}</span></button>}</div><div class="table-wrap"><table class="products-table"><thead><tr><th>PRODUCT</th><th>STATUS</th><th>INVENTORY</th><th>CATEGORY</th><th>PRICE</th><th></th></tr></thead><tbody>@for(product of filteredProducts();track product.id){<tr><td><div class="product-cell"><span class="product-art" [class]="product.tone">{{ product.initials }}</span><span><b>{{ product.name }}</b><small>SKU: {{ product.sku }}</small></span></div></td><td><span class="status" [class]="product.status === 'Active' ? 'paid' : product.status === 'Draft' ? 'draft' : 'pending'">{{ product.status }}</span></td><td [class.low]="product.stock !== null && product.stock > 0 && product.stock < 10" [class.empty]="product.stock === 0">{{ product.stock === null ? 'Not tracked' : product.stock === 0 ? 'Out of stock' : product.stock + ' in stock' }}</td><td class="muted">{{ product.category }}</td><td class="total">{{ money(product.priceMinor,product.currency) }}</td><td><button class="more" type="button" [attr.aria-label]="'More options for ' + product.name" (click)="editProduct(product)">···</button></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No products match your search. <button type="button" (click)="search.set('');productFilter.set('All')">Clear filters</button></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ filteredProducts().length }} of {{ products().length }} database products <button type="button" (click)="selectNav('Products')">View product catalog →</button></div></section>
           }
           @if (activeNav() === 'Orders') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Order totals are calculated on the server. Status changes are validated and audited.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:11px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
+            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Track offline payments here. Dollareus does not process online payments.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:11px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th><th>PAYMENTS</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td><td><button class="button secondary small" type="button" (click)="openPaymentTracker(order)">{{selectedPaymentOrder()?.resourceId===order.resourceId?'Viewing':'Track payment'}}</button></td></tr>} @empty {<tr><td colspan="7" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
+            @if(selectedPaymentOrder(); as paymentOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Payment tracking · {{paymentOrder.id}}</h2><p>Record cash, cash on delivery, bank transfer, mobile money, card-terminal, or other offline payments. Confirm receipt manually.</p></div><button class="button secondary small" type="button" (click)="selectedPaymentOrder.set(null);paymentDetails.set(null)">Close</button></div>@if(paymentDetailsBusy()){<p style="padding:16px">Loading payment history…</p>} @else if(paymentDetails()){<div style="display:flex;gap:20px;flex-wrap:wrap;padding:12px 17px"><div><small>Total</small><strong style="display:block">{{money(paymentDetails().totalMinor,paymentDetails().currency)}}</strong></div><div><small>Recorded as received</small><strong style="display:block">{{money(paymentDetails().paidAmountMinor,paymentDetails().currency)}}</strong></div><div><small>Remaining balance</small><strong style="display:block">{{money(paymentDetails().balanceMinor,paymentDetails().currency)}}</strong></div></div><form class="customer-form" (submit)="recordManualPayment($event)"><label>Method<select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)"><option value="cash">Cash</option><option value="cash_on_delivery">Cash on delivery</option><option value="bank_transfer">Bank transfer</option><option value="mobile_money">Mobile money</option><option value="card_terminal">Card terminal</option><option value="other">Other</option></select></label><label>Amount ({{paymentDetails().currency}})<input type="number" min="0.01" step="0.01" required [value]="paymentAmount()" (input)="paymentAmount.set($any($event.target).value)" placeholder="0.00"></label><label>Reference (optional)<input maxlength="200" [value]="paymentReference()" (input)="paymentReference.set($any($event.target).value)" placeholder="Receipt or transfer reference"></label><label>Note (optional)<input maxlength="1000" [value]="paymentNote()" (input)="paymentNote.set($any($event.target).value)" placeholder="Who collected it, transfer details…"></label><label>Receipt status<select [value]="paymentRecordStatus()" (change)="paymentRecordStatus.set($any($event.target).value)"><option value="succeeded">Received / verified</option><option value="pending">Expected / not yet received</option></select></label><button class="button primary small" type="submit" [disabled]="paymentSaveBusy()"> {{paymentSaveBusy()?'Saving…':'Record offline payment'}} </button></form><div class="table-wrap"><table><thead><tr><th>DATE</th><th>METHOD</th><th>REFERENCE / NOTE</th><th>AMOUNT</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>@for(payment of paymentDetails().payments;track payment.id){<tr><td>{{payment.createdAt | date:'medium'}}</td><td>{{orderStatusLabel(payment.providerPayload?.method ?? 'other')}}</td><td>{{payment.providerPayload?.reference || payment.providerPayload?.note || '—'}}</td><td class="total">{{money(payment.amountMinor,payment.currency)}}</td><td>{{orderStatusLabel(payment.status)}}</td><td>@if(payment.status==='pending'){<button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'succeeded')">Confirm received</button><button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'cancelled')">Cancel</button>} @else {<span class="muted">Recorded</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No payment records yet. Record the first offline payment above.</td></tr>}</tbody></table></div></div>}</section>}
           }
           @if (activeNav() === 'Customers') {
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
@@ -302,6 +303,15 @@ export class AppComponent {
   protected readonly inventoryError = signal('');
   protected readonly orderActionBusyId = signal('');
   protected readonly orderActionError = signal('');
+  protected readonly selectedPaymentOrder = signal<OrderRow | null>(null);
+  protected readonly paymentDetails = signal<any | null>(null);
+  protected readonly paymentDetailsBusy = signal(false);
+  protected readonly paymentSaveBusy = signal(false);
+  protected readonly paymentMethod = signal('cash');
+  protected readonly paymentAmount = signal('');
+  protected readonly paymentReference = signal('');
+  protected readonly paymentNote = signal('');
+  protected readonly paymentRecordStatus = signal('succeeded');
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
     const filter = this.productFilter();
@@ -313,6 +323,82 @@ export class AppComponent {
   protected money(minor: number, currency: string): string { return new Intl.NumberFormat('en', {style:'currency',currency,maximumFractionDigits:2}).format(minor / 100); }
   protected statusClass(status: string): string { const value = status.toLowerCase(); return value === 'confirmed' || value === 'processing' ? 'processing' : value === 'completed' || value === 'paid' ? 'paid' : value === 'cancelled' || value === 'refunded' ? 'draft' : 'pending'; }
   protected orderStatusLabel(status: string): string { return status ? status.charAt(0).toUpperCase() + status.slice(1).replaceAll('_', ' ') : 'Unknown'; }
+
+  protected async openPaymentTracker(order: OrderRow): Promise<void> {
+    this.selectedPaymentOrder.set(order);
+    this.paymentDetails.set(null);
+    this.orderActionError.set('');
+    this.paymentDetailsBusy.set(true);
+    this.paymentAmount.set('');
+    this.paymentReference.set('');
+    this.paymentNote.set('');
+    try {
+      const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
+      this.paymentDetails.set(details);
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not load payment history.');
+    } finally {
+      this.paymentDetailsBusy.set(false);
+    }
+  }
+
+  protected async recordManualPayment(event: Event): Promise<void> {
+    event.preventDefault();
+    const order = this.selectedPaymentOrder();
+    const amount = Number(this.paymentAmount());
+    if (!order || !Number.isFinite(amount) || amount <= 0) {
+      this.orderActionError.set('Enter a valid payment amount.');
+      return;
+    }
+    this.paymentSaveBusy.set(true);
+    this.orderActionError.set('');
+    try {
+      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          method: this.paymentMethod(),
+          status: this.paymentRecordStatus(),
+          amountMinor: Math.round(amount * 100),
+          reference: this.paymentReference().trim() || null,
+          note: this.paymentNote().trim() || null
+        })
+      });
+      this.orders.update(rows => rows.map(row => row.resourceId === order.resourceId ? { ...row, paymentStatus: String(result.paymentStatus ?? row.paymentStatus) } : row));
+      this.paymentAmount.set('');
+      this.paymentReference.set('');
+      this.paymentNote.set('');
+      await this.refreshPaymentDetails(order);
+      this.notify(this.paymentRecordStatus() === 'pending' ? 'Expected payment recorded.' : 'Offline payment recorded and audited.');
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not record the payment.');
+    } finally {
+      this.paymentSaveBusy.set(false);
+    }
+  }
+
+  protected async finalizeManualPayment(paymentId: string, status: 'succeeded' | 'cancelled'): Promise<void> {
+    const order = this.selectedPaymentOrder();
+    if (!order) return;
+    this.paymentSaveBusy.set(true);
+    this.orderActionError.set('');
+    try {
+      const result = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments/' + encodeURIComponent(paymentId), {
+        method: 'PATCH', body: JSON.stringify({ status })
+      });
+      this.orders.update(rows => rows.map(row => row.resourceId === order.resourceId ? { ...row, paymentStatus: String(result.paymentStatus ?? row.paymentStatus) } : row));
+      await this.refreshPaymentDetails(order);
+      this.notify(status === 'succeeded' ? 'Payment manually confirmed as received.' : 'Pending payment record cancelled.');
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not update the payment record.');
+    } finally {
+      this.paymentSaveBusy.set(false);
+    }
+  }
+
+  private async refreshPaymentDetails(order: OrderRow): Promise<void> {
+    const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
+    this.paymentDetails.set(details);
+  }
 
   protected async updateOrderStatus(order: OrderRow, status: string): Promise<void> {
     if (status === order.status || !order.resourceId) return;
