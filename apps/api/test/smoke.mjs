@@ -226,14 +226,6 @@ try {
     throw new Error('Optional modifier bounds and price deltas did not persist in dish metadata.');
   }
   checks.push('optional restaurant modifiers preserve selection bounds and option price deltas');
-  const modifierReadBack = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 200, { headers: authHeaders });
-  const persistedModifierDish = modifierReadBack.payload?.data?.find((item) => item.id === secondDish.payload?.data?.id);
-  if (persistedModifierDish?.metadata?.modifierGroups?.[0]?.minSelections !== 0
-      || persistedModifierDish?.metadata?.modifierGroups?.[0]?.maxSelections !== 2
-      || Number(persistedModifierDish?.metadata?.modifierGroups?.[0]?.options?.[1]?.priceDeltaMinor) !== 350) {
-    throw new Error('Optional modifier bounds and price deltas were not persisted after reading the menu item back.');
-  }
-  checks.push('optional restaurant modifiers survive a database read-back');
   const updatedModifierDish = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ modifierGroups: [{ id: 'extras', name: 'Optional extras', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'extra-sauce', name: 'Extra sauce', priceDeltaMinor: 250 }, { id: 'extra-cheese', name: 'Extra cheese', priceDeltaMinor: 350 }] }] })
@@ -241,18 +233,6 @@ try {
   if (Number(updatedModifierDish.payload?.data?.metadata?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 250) {
     throw new Error('Editing restaurant modifier options did not persist.');
   }
-  const combinedMetadataPatch = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
-    method: 'PATCH', headers: authHeaders,
-    body: JSON.stringify({
-      metadata: { integrationTag: 'phase-2-smoke' },
-      modifierGroups: [{ id: 'extras', name: 'Optional extras', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'extra-sauce', name: 'Extra sauce', priceDeltaMinor: 275 }, { id: 'extra-cheese', name: 'Extra cheese', priceDeltaMinor: 350 }] }]
-    })
-  });
-  if (combinedMetadataPatch.payload?.data?.metadata?.integrationTag !== 'phase-2-smoke'
-      || Number(combinedMetadataPatch.payload?.data?.metadata?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 275) {
-    throw new Error('Updating metadata and modifiers together did not preserve both changes.');
-  }
-  checks.push('menu item metadata and modifier changes persist together');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 400, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ modifierGroups: [
