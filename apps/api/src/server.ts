@@ -135,9 +135,9 @@ app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }
   if (!await requireMembership(request, reply, organizationId)) return;
   const membership = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity!.uid, 'active']);
   if (!['owner', 'admin', 'manager', 'staff'].includes(String(membership.rows[0]?.role ?? ''))) return fail(reply, request, 403, 'MEDIA_WRITE_FORBIDDEN', 'Your organization role cannot upload product media.');
-  if (!Buffer.isBuffer(request.body) || request.body.length < 16 || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 5 MB.');
+  if (!Buffer.isBuffer(request.body) || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 5 MB.');
   const body = request.body;
-  if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MEDIA_TYPE_INVALID', 'Only WebP image uploads are accepted.');
+  if (body.length < 16 || body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MEDIA_TYPE_INVALID', 'Only WebP image uploads are accepted.');
   const dimensions = readWebpDimensions(body);
   if (!dimensions || dimensions.width > 2400 || dimensions.height > 2400) return fail(reply, request, 400, 'MEDIA_DIMENSIONS_INVALID', 'Images must be valid WebP files no larger than 2400 by 2400 pixels.');
   const altText = String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500);
