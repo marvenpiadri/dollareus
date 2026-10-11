@@ -31,7 +31,8 @@
     "zod": "^3.25.0",
     "zone.js": "~0.15.1",
     "pg": "^8.16.3",
-    "sharp": "^0.34.3"
+    "sharp": "^0.34.3",
+    "@angular/router": "^22.0.0"
   },
   "devDependencies": {
     "@angular/build": "^22.0.0",
