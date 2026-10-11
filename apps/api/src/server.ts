@@ -727,14 +727,31 @@ const MenuInput = z.object({
   description: z.string().max(5000).nullable().optional(), servicePeriods: z.array(z.string().trim().min(1).max(40)).max(20),
   status: z.enum(['draft', 'active', 'archived']), position: z.number().int().nonnegative().optional()
 }).strict();
+const MenuModifierOptionInput = z.object({
+  id: Slug, name: z.string().trim().min(1).max(100),
+  priceDeltaMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+}).strict();
+const MenuModifierGroupInput = z.object({
+  id: Slug, name: z.string().trim().min(1).max(100),
+  required: z.boolean().default(false),
+  minSelections: z.number().int().min(0).max(20).default(0),
+  maxSelections: z.number().int().min(1).max(20).default(1),
+  options: z.array(MenuModifierOptionInput).min(1).max(30)
+}).strict().refine((group) => group.minSelections <= group.maxSelections && (!group.required || group.minSelections >= 1), { message: 'Modifier selection limits are inconsistent.' });
+
 const MenuItemInput = z.object({
   slug: Slug, name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable().optional(),
   priceAmountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), currency: z.string().regex(/^[A-Z]{3}$/),
   status: z.enum(['draft', 'active', 'archived']), categoryId: z.string().min(1).max(100).nullable().optional(),
   allergens: z.array(z.string().trim().min(1).max(80)).max(50), dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50),
   availability: z.enum(['available', 'unavailable', 'limited']), position: z.number().int().nonnegative().optional(),
+  modifierGroups: z.array(MenuModifierGroupInput).max(20).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
-}).strict();
+}).strict().superRefine((item, context) => {
+  const groups = item.modifierGroups ?? [];
+  if (new Set(groups.map((group) => group.id)).size !== groups.length) context.addIssue({ code: 'custom', message: 'Modifier group IDs must be unique.', path: ['modifierGroups'] });
+  for (const group of groups) if (new Set(group.options.map((option) => option.id)).size !== group.options.length) context.addIssue({ code: 'custom', message: 'Modifier option IDs must be unique within a group.', path: ['modifierGroups'] });
+});
 const EntryPointBranding = z.object({
   brandName: z.string().trim().max(120).nullable().optional(),
   foregroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
@@ -827,6 +844,7 @@ const MenuItemAvailabilityInput = z.object({
   categoryId: z.string().min(1).max(100).nullable().optional(),
   allergens: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
   dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+  modifierGroups: z.array(MenuModifierGroupInput).max(20).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be provided.' });
 
