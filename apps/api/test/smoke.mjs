@@ -178,6 +178,38 @@ try {
       variants: [{ id: `order-variant-${suffix}`, sku: `ORDER-${suffix}`, title: 'Standard', options: {}, amountMinor: 1299, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }]
     })
   });
+  const posBase = `/api/v1/organizations/${organizationId}/stores/${storeId}/pos`;
+  const posSession = await request(`${posBase}/sessions`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ label: 'Main register', terminalType: 'retail', locationId: location.payload?.data?.id })
+  });
+  const posSessions = await request(`${posBase}/sessions`, 200, { headers: authHeaders });
+  if (!posSessions.payload?.data?.some((session) => session.id === posSession.payload?.data?.id && session.status === 'open')) {
+    throw new Error('POS session creation or listing did not persist.');
+  }
+  const posPayload = {
+    sessionId: posSession.payload?.data?.id,
+    channel: 'pos',
+    fulfillment: 'counter',
+    idempotencyKey: `smoke-pos-order-${suffix}`,
+    items: [{ sourceType: 'product', sourceItemId: activeProduct.payload?.data?.id, sourceVariantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 2 }]
+  };
+  const posOrder = await request(`${posBase}/orders`, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
+  if (Number(posOrder.payload?.data?.totalMinor) !== 2598 || posOrder.payload?.data?.status !== 'confirmed' || posOrder.payload?.data?.items?.length !== 1) {
+    throw new Error('POS order pricing, initial status, or line snapshots are incorrect.');
+  }
+  const posReplay = await request(`${posBase}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
+  if (posReplay.payload?.data?.id !== posOrder.payload?.data?.id) throw new Error('POS idempotency did not return the original order.');
+  await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
+  await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
+  const posCompleted = await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
+  if (posCompleted.payload?.data?.status !== 'completed' || posCompleted.payload?.data?.items?.length !== 1) throw new Error('POS status transition or order history projection failed.');
+  await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
+  const posClosed = await request(`${posBase}/sessions/${posSession.payload?.data?.id}/close`, 200, { method: 'PATCH', headers: authHeaders });
+  if (posClosed.payload?.data?.status !== 'closed') throw new Error('POS session did not close.');
+  await request(`${posBase}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...posPayload, idempotencyKey: `smoke-pos-closed-${suffix}` }) });
+  checks.push('POS sessions, server-priced product orders, idempotency, audited status transitions and close guards');
+
   const orderPayload = { storeId, customerId: customer.payload?.data?.id, notes: 'Smoke test order', idempotencyKey: `smoke-order-${suffix}`, items: [{ variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 2 }] };
   const order = await request(`/api/v1/organizations/${organizationId}/orders`, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
   if (Number(order.payload?.data?.totalMinor) !== 2598 || order.payload?.data?.status !== 'pending' || order.payload?.data?.items?.length !== 1) throw new Error('Order totals or immutable item snapshots are incorrect.');
@@ -291,6 +323,9 @@ try {
   for (const check of checks) console.log(`  ✓ ${check}`);
 } finally {
   if (organizationId) {
+    await pool.query('DELETE FROM pos_order_lines WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM pos_orders WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM pos_sessions WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM order_items WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM fulfillments WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM refunds WHERE organization_id=$1', [organizationId]).catch(() => undefined);
