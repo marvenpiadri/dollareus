@@ -44,7 +44,8 @@ The API currently has PostgreSQL-backed endpoints for:
 - order listing and transactional, server-priced order creation with immutable line snapshots, idempotency-key support and audited status transitions;
 - manual/offline payment recording and history per order, including cash, cash on delivery, bank transfer, mobile money, card-terminal, and other methods; pending records can be manually confirmed or cancelled, balances are calculated from confirmed receipts, and changes are audit-logged. No online payment gateway or card processing is implemented;
 - restaurant menu and menu-item create/list APIs plus a public published-menu projection;
-- managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup.
+- managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup;
+- order-scoped fulfillment create/list/update APIs with carrier, tracking number/URL, expected delivery, notes, validated delivery-stage transitions, and audit events.
 
 The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
 
