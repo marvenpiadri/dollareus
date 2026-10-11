@@ -14,9 +14,10 @@ export interface AuthIdentity {
   emailVerified: boolean;
   displayName: string | null;
 }
+export interface ApiCredentialIdentity { id: string; organizationId: string; scopes: string[]; }
 
 declare module 'fastify' {
-  interface FastifyRequest { identity: AuthIdentity | null; }
+  interface FastifyRequest { identity: AuthIdentity | null; apiCredential: ApiCredentialIdentity | null; }
 }
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -61,14 +62,38 @@ async function createSession(userId: string): Promise<{ token: string; expiresAt
 }
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const token = cookieValue(request, SESSION_COOKIE);
-  if (!token) {
-    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Sign in to continue.', requestId: request.id } });
+  request.apiCredential = null;
+  const sessionToken = cookieValue(request, SESSION_COOKIE);
+  const bearerToken = request.headers.authorization?.match(/^Bearer\\s+(dlr_live_[A-Za-z0-9_-]+)$/i)?.[1] ?? null;
+  if (!sessionToken && bearerToken) {
+    const now = new Date();
+    const credential = await pool.query(
+      'SELECT c.id AS credential_id,c.organization_id,c.scopes,u.id,u.email,u.email_verified_at,u.display_name FROM api_credentials c JOIN users u ON u.id=c.created_by JOIN organization_memberships m ON m.organization_id=c.organization_id AND m.user_id=u.id AND m.status=$3 WHERE c.token_hash=$1 AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>$2) AND u.status=$4 LIMIT 1',
+      [hash(bearerToken), now, 'active', 'active']
+    );
+    const row = credential.rows[0];
+    if (!row) {
+      await reply.code(401).send({ error: { code: 'INVALID_API_CREDENTIAL', message: 'The API credential is invalid, revoked, expired, or no longer authorized.', requestId: request.id } });
+      return;
+    }
+    const scopedPath = request.url.split('?')[0] ?? '';
+    const orgMatch = scopedPath.match(/^\\/api\\/v1\\/organizations\\/([^/]+)\\//);
+    if (!orgMatch || decodeURIComponent(orgMatch[1]!) !== row.organization_id) {
+      await reply.code(403).send({ error: { code: 'API_CREDENTIAL_ORGANIZATION_MISMATCH', message: 'This credential can only access routes under its own organization.', requestId: request.id } });
+      return;
+    }
+    request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
+    request.apiCredential = { id: row.credential_id, organizationId: row.organization_id, scopes: row.scopes };
+    await pool.query('UPDATE api_credentials SET last_used_at=$1,updated_at=$1 WHERE id=$2', [now, row.credential_id]);
+    return;
+  }
+  if (!sessionToken) {
+    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Sign in or provide a Dollareus API bearer credential.', requestId: request.id } });
     return;
   }
   const result = await pool.query(
     'SELECT u.id,u.email,u.email_verified_at,u.display_name,s.id AS session_id FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.status=$3 LIMIT 1',
-    [hash(token), new Date(), 'active']
+    [hash(sessionToken), new Date(), 'active']
   );
   const row = result.rows[0];
   if (!row) {
