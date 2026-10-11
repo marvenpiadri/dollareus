@@ -382,6 +382,28 @@ try {
   await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
   await request(`${posBase}/orders/${posOversellOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
   checks.push('POS refuses to complete tracked sales beyond available stock');
+  const posPaidCancelOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'counter',
+      idempotencyKey: `smoke-pos-paid-cancel-${suffix}`,
+      items: [{ sourceType: 'product', sourceItemId: activeProduct.payload?.data?.id, sourceVariantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 1 }]
+    })
+  });
+  await request(`${posBase}/orders/${posPaidCancelOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
+  await request(`${posBase}/orders/${posPaidCancelOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
+  const paidCancelPayment = await request(`/api/v1/organizations/${organizationId}/orders/${posPaidCancelOrder.payload?.data?.id}/payments`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ method: 'cash', amountMinor: 1299, status: 'succeeded', idempotencyKey: `smoke-pos-paid-cancel-payment-${suffix}` })
+  });
+  await request(`${posBase}/orders/${posPaidCancelOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${posPaidCancelOrder.payload?.data?.id}/refunds`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: paidCancelPayment.payload?.data?.id, amountMinor: 1299, reason: 'POS cancellation smoke test', idempotencyKey: `smoke-pos-paid-cancel-refund-${suffix}` })
+  });
+  await request(`${posBase}/orders/${posPaidCancelOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
+  checks.push('paid POS orders require full refund before cancellation');
+
 
 
   const canonicalOrders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
