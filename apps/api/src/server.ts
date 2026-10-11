@@ -890,7 +890,12 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
   );
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
   const row = result.rows[0];
-  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath: row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path, branding: row.branding ?? {} }, requestId: request.id };
+  const targetUrlPath = row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path;
+  const primaryDomain = await pool.query("SELECT hostname FROM store_domains WHERE store_id=(SELECT store_id FROM entry_points WHERE id=$1) AND status='active' AND is_primary=true LIMIT 1", [row.id]);
+  const configuredBase = (process.env.PUBLIC_STOREFRONT_BASE_URL ?? '').trim().replace(/\\/$/, '');
+  const subdomainBase = process.env.PUBLIC_STORE_DOMAIN ? 'https://' + row.store_slug + '.' + process.env.PUBLIC_STORE_DOMAIN : '';
+  const publicBase = primaryDomain.rows[0]?.hostname ? 'https://' + primaryDomain.rows[0].hostname : (configuredBase || subdomainBase);
+  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath, targetUrl: publicBase ? publicBase + targetUrlPath : null, branding: row.branding ?? {} }, requestId: request.id };
 });
 
 
