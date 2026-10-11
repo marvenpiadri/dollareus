@@ -86,6 +86,21 @@ try {
   organizationId = organization.payload?.data?.id;
   if (!organizationId) throw new Error('Organization creation did not return an id.');
   checks.push('organization creation');
+  const apiCredential = await request(`/api/v1/organizations/${organizationId}/api-credentials`, 201, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ name: 'CI read-only credential', scopes: ['read'] })
+  });
+  const rawApiToken = apiCredential.payload?.data?.token;
+  const apiCredentialId = apiCredential.payload?.data?.id;
+  if (!rawApiToken?.startsWith('dlr_live_') || !apiCredentialId) throw new Error('API credential creation did not return its one-time token and id.');
+  const apiHeaders = { Authorization: `Bearer ${rawApiToken}` };
+  await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: apiHeaders });
+  await request(`/api/v1/organizations/${organizationId}/products`, 403, { method: 'POST', headers: apiHeaders, body: '{}' });
+  await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
+  const usageEvents = await pool.query('SELECT count(*)::int AS count FROM api_usage_events WHERE credential_id=$1', [apiCredentialId]);
+  if (Number(usageEvents.rows[0]?.count ?? 0) < 3) throw new Error('API credential usage was not metered.');
+  await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders });
+  await request(`/api/v1/organizations/${organizationId}/products`, 401, { headers: apiHeaders });
+  checks.push('organization-scoped developer API credentials, read/write scopes, usage metering and revocation');
 
   viewerUserId = randomUUID();
   viewerToken = randomUUID() + randomUUID();
