@@ -602,6 +602,7 @@ try {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'catalog', enabledExperiences: ['catalog'] })
   });
   await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 404);
+  await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 404);
   await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 200);
   await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
