@@ -851,6 +851,18 @@ const MenuPatchInput = z.object({
   position: z.number().int().nonnegative().optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be supplied.' });
 const MenuStatusInput = z.object({ status: z.enum(['draft', 'active', 'archived']) }).strict();
+
+const MenuReorderInput = z.object({
+  menuIds: z.array(z.string().trim().min(1).max(100)).min(1).max(200)
+}).strict().refine((value) => new Set(value.menuIds).size === value.menuIds.length, {
+  message: 'Menu IDs must be unique.'
+});
+const MenuItemReorderInput = z.object({
+  itemIds: z.array(z.string().trim().min(1).max(100)).min(1).max(500)
+}).strict().refine((value) => new Set(value.itemIds).size === value.itemIds.length, {
+  message: 'Menu item IDs must be unique.'
+});
+
 const MenuItemAvailabilityInput = z.object({
   status: z.enum(['draft', 'active', 'archived']).optional(),
   availability: z.enum(['available', 'unavailable', 'limited']).optional(),
@@ -915,6 +927,74 @@ app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; 
   );
   if (!result.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The selected menu item does not exist in this menu and organization.');
   return { data: camelize(result.rows[0]), requestId: request.id };
+});
+
+
+// Reordering is an explicit full-list operation. Requiring every current ID prevents
+// a stale client from silently moving only part of a menu or resetting omitted items.
+app.put<{ Params: { organizationId: string; storeId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/menus/reorder', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = MenuReorderInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a unique ordered list of menu IDs.');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id FROM restaurant_menus WHERE organization_id=$1 AND store_id=$2 ORDER BY position,id FOR UPDATE', [organizationId, storeId]);
+    if (!current.rowCount) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 404, 'MENUS_NOT_FOUND', 'No menus exist for this store.');
+    }
+    const currentIds = current.rows.map((row: { id: string }) => String(row.id));
+    const requestedIds = parsed.data.menuIds;
+    if (currentIds.length !== requestedIds.length || currentIds.some((id: string) => !requestedIds.includes(id))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'MENU_ORDER_STALE', 'The ordered menu IDs must exactly match the current menus. Reload and try again.');
+    }
+    for (let position = 0; position < requestedIds.length; position++) {
+      await client.query('UPDATE restaurant_menus SET position=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4 AND store_id=$5', [position, new Date(), requestedIds[position], organizationId, storeId]);
+    }
+    await client.query('COMMIT');
+    const result = await pool.query('SELECT m.*, (SELECT count(*)::int FROM restaurant_menu_items i WHERE i.menu_id=m.id) AS item_count FROM restaurant_menus m WHERE m.organization_id=$1 AND m.store_id=$2 ORDER BY m.position,m.created_at DESC', [organizationId, storeId]);
+    return { data: camelize(result.rows), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
+app.put<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items/reorder', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = MenuItemReorderInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a unique ordered list of menu item IDs.');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const menu = await client.query('SELECT id FROM restaurant_menus WHERE id=$1 AND organization_id=$2 FOR UPDATE', [menuId, organizationId]);
+    if (!menu.rowCount) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+    }
+    const current = await client.query('SELECT id FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,id FOR UPDATE', [menuId, organizationId]);
+    const currentIds = current.rows.map((row: { id: string }) => String(row.id));
+    const requestedIds = parsed.data.itemIds;
+    if (currentIds.length !== requestedIds.length || currentIds.some((id: string) => !requestedIds.includes(id))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'MENU_ITEM_ORDER_STALE', 'The ordered item IDs must exactly match the current menu items. Reload and try again.');
+    }
+    for (let position = 0; position < requestedIds.length; position++) {
+      await client.query('UPDATE restaurant_menu_items SET position=$1,updated_at=$2 WHERE id=$3 AND menu_id=$4 AND organization_id=$5', [position, new Date(), requestedIds[position], menuId, organizationId]);
+    }
+    await client.query('COMMIT');
+    const result = await pool.query('SELECT * FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,name LIMIT 500', [menuId, organizationId]);
+    return { data: camelize(result.rows), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/menus', async (request, reply) => {
