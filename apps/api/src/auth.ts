@@ -76,9 +76,8 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       await reply.code(401).send({ error: { code: 'INVALID_API_CREDENTIAL', message: 'The API credential is invalid, revoked, expired, or no longer authorized.', requestId: request.id } });
       return;
     }
-    const scopedPath = request.url.split('?')[0] ?? '';
-    const orgMatch = scopedPath.match(/^\\/api\\/v1\\/organizations\\/([^/]+)\\//);
-    if (!orgMatch || decodeURIComponent(orgMatch[1]!) !== row.organization_id) {
+    const scopedSegments = (request.url.split('?')[0] ?? '').split('/');
+    if (scopedSegments[1] !== 'api' || scopedSegments[2] !== 'v1' || scopedSegments[3] !== 'organizations' || !scopedSegments[5] || decodeURIComponent(scopedSegments[4] ?? '') !== row.organization_id) {
       await reply.code(403).send({ error: { code: 'API_CREDENTIAL_ORGANIZATION_MISMATCH', message: 'This credential can only access routes under its own organization.', requestId: request.id } });
       return;
     }
