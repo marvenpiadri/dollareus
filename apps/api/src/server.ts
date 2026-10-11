@@ -82,6 +82,24 @@ async function requireManagerRole(request: FastifyRequest, reply: FastifyReply, 
   return true;
 }
 
+async function requireOperatorRole(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
+  if (request.apiCredential) {
+    if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
+    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
+    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+  }
+  if (!request.identity) {
+    await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
+    return false;
+  }
+  const result = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity.uid, 'active']);
+  if (!['owner', 'admin', 'manager', 'staff'].includes(String(result.rows[0]?.role ?? ''))) {
+    await reply.code(403).send({ error: { code: 'ORGANIZATION_OPERATOR_FORBIDDEN', message: 'Your organization role cannot perform this operational action.', requestId: request.id } });
+    return false;
+  }
+  return true;
+}
+
 function camelize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(camelize);
   if (value && typeof value === 'object' && !(value instanceof Date)) {
@@ -432,7 +450,7 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
 
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores', { preHandler: authenticate }, async (request, reply) => {
   const organizationId = request.params.organizationId;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = StoreInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The store payload is invalid.');
   const id = randomUUID();
@@ -563,7 +581,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; sea
 
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/customers', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = CustomerInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid customer name, email or phone.');
   const now = new Date();
@@ -587,7 +605,7 @@ app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organiza
 
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/inventory/locations', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = InventoryLocationInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid store and inventory location name.');
   const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
@@ -600,7 +618,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
 
 app.put<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/inventory/levels', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = InventoryAdjustmentInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The inventory adjustment payload is invalid.');
   const now = new Date();
@@ -634,7 +652,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
 
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = OrderInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The order payload is invalid.');
   const client = await pool.connect();
@@ -777,7 +795,7 @@ app.get<{ Params: { organizationId: string; menuId: string } }>('/api/v1/organiz
 
 app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = MenuItemInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu item payload is invalid.');
   const menu = await pool.query('SELECT m.id,m.store_id,s.default_currency FROM restaurant_menus m JOIN stores s ON s.id=m.store_id WHERE m.id=$1 AND m.organization_id=$2 AND s.organization_id=$2', [menuId, organizationId]);
@@ -1032,7 +1050,7 @@ app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organi
 
 app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/payments', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = ManualPaymentInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid offline payment method, amount, and status.');
   const client = await pool.connect();
@@ -1104,7 +1122,7 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
 
 app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/payments/:paymentId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId, paymentId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = z.object({ status: z.enum(['succeeded', 'failed', 'cancelled']) }).strict().safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Choose succeeded, failed, or cancelled for the offline payment record.');
   const client = await pool.connect();
@@ -1257,7 +1275,7 @@ app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organi
 
 app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/fulfillments', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = FulfillmentInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid shipping stage and optional carrier, tracking URL, expected date, and notes.');
   const client = await pool.connect();
@@ -1300,7 +1318,7 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
 
 app.patch<{ Params: { organizationId: string; orderId: string; fulfillmentId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/fulfillments/:fulfillmentId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId, fulfillmentId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = FulfillmentInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid shipping stage and optional carrier, tracking URL, expected date, and notes.');
   const client = await pool.connect();
@@ -1615,7 +1633,7 @@ app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organi
 
 app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/refunds', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const roleResult = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity!.uid, 'active']);
   if (!['owner', 'admin', 'manager'].includes(String(roleResult.rows[0]?.role ?? ''))) {
     return fail(reply, request, 403, 'REFUND_PERMISSION_DENIED', 'Only organization owners, admins, or managers can record refunds.');
