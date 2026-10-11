@@ -65,7 +65,7 @@ function readWebpDimensions(buffer: Buffer): { width: number; height: number } |
 }
 
 function sha256(value: string | Buffer): string { return createHash('sha256').update(value).digest('hex'); }
-function hmac(key: Buffer | string, value: string, encoding?: 'hex'): Buffer | string { return createHmac('sha256', key).update(value).digest(encoding); }
+function hmac(key: Buffer | string, value: string): Buffer { return createHmac('sha256', key).update(value).digest(); }
 function awsObjectUrl(storageKey: string): URL {
   const endpointValue = process.env.AWS_ENDPOINT_URL_S3; const bucket = process.env.AWS_S3_BUCKET;
   if (!endpointValue || !bucket) throw new Error('S3-compatible media storage is not configured.');
@@ -87,9 +87,9 @@ async function s3Request(method: 'GET' | 'PUT' | 'DELETE', storageKey: string, b
   const scope = dateStamp + '/' + region + '/s3/aws4_request';
   const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256(canonicalRequest)].join('\n');
   const dateKey = hmac('AWS4' + secretKey, dateStamp) as Buffer; const regionKey = hmac(dateKey, region) as Buffer; const serviceKey = hmac(regionKey, 's3') as Buffer; const signingKey = hmac(serviceKey, 'aws4_request') as Buffer;
-  const signature = hmac(signingKey, stringToSign, 'hex') as string;
+  const signature = hmac(signingKey, stringToSign).toString('hex');
   headers.authorization = 'AWS4-HMAC-SHA256 Credential=' + accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
-  return fetch(endpoint, { method, headers, body: method === 'PUT' ? body : undefined });
+  return fetch(endpoint, { method, headers, body: method === 'PUT' && body ? new Uint8Array(body) : undefined });
 }
 
 function fail(reply: FastifyReply, request: FastifyRequest, status: number, code: string, message: string) {
