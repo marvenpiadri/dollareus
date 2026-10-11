@@ -552,6 +552,37 @@ CREATE TABLE store_domain_events (
 );
 CREATE INDEX store_domain_events_domain_idx ON store_domain_events(domain_id, created_at DESC);
 
+CREATE TABLE refunds (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  order_id text NOT NULL REFERENCES orders(id) ON DELETE RESTRICT,
+  payment_id text NOT NULL REFERENCES payments(id) ON DELETE RESTRICT,
+  amount_minor bigint NOT NULL CHECK (amount_minor > 0),
+  currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}
+  id text PRIMARY KEY,
+  organization_id text REFERENCES organizations(id) ON DELETE SET NULL,
+  actor_user_id text,
+  action text NOT NULL,
+  resource_type text NOT NULL,
+  resource_id text,
+  request_id text,
+  details jsonb NOT NULL CHECK (jsonb_typeof(details) = 'object'),
+  created_at timestamptz NOT NULL
+);
+CREATE INDEX audit_events_org_created_idx ON audit_events(organization_id, created_at DESC);
+
+COMMIT;
+),
+  reason text,
+  idempotency_key text,
+  status text NOT NULL CHECK (status IN ('recorded', 'cancelled')),
+  recorded_by text NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_at timestamptz NOT NULL,
+  UNIQUE (organization_id, idempotency_key)
+);
+CREATE INDEX refunds_order_idx ON refunds(organization_id, order_id, created_at DESC);
+CREATE INDEX refunds_payment_idx ON refunds(payment_id, status);
+
 CREATE TABLE audit_events (
   id text PRIMARY KEY,
   organization_id text REFERENCES organizations(id) ON DELETE SET NULL,
