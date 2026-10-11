@@ -162,7 +162,7 @@ try {
   checks.push('viewer role cannot publish restaurant menus');
   const menuItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
     method: 'POST', headers: authHeaders,
-    body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, metadata: {} })
+    body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, modifierGroups: [{ id: 'size', name: 'Size', required: true, minSelections: 1, maxSelections: 1, options: [{ id: 'small', name: 'Small', priceDeltaMinor: 0 }, { id: 'large', name: 'Large', priceDeltaMinor: 500 }] }], metadata: {} })
   });
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 403, {
     method: 'POST', headers: viewerHeaders,
@@ -349,10 +349,10 @@ try {
     body: JSON.stringify({
       sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
       idempotencyKey: `smoke-pos-menu-order-${suffix}`,
-      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1 }]
+      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1, metadata: { modifiers: [{ groupId: 'size', optionIds: ['large'] }] } }]
     })
   });
-  if (Number(posMenuOrder.payload?.data?.totalMinor) !== 4500 || posMenuOrder.payload?.data?.items?.[0]?.sourceType !== 'menu_item') {
+  if (Number(posMenuOrder.payload?.data?.totalMinor) !== 5000 || posMenuOrder.payload?.data?.items?.[0]?.sourceType !== 'menu_item' || posMenuOrder.payload?.data?.items?.[0]?.metadata?.modifierSnapshot?.[0]?.options?.[0]?.name !== 'Large') {
     throw new Error('POS could not price and snapshot an active restaurant menu item.');
   }
   await request(`${posBase}/orders/${posMenuOrder.payload?.data?.id}/status`, 200, {
