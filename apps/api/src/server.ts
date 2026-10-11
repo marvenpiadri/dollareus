@@ -925,6 +925,112 @@ app.patch<{ Params: { organizationId: string; orderId: string; fulfillmentId: st
 });
 
 
+const RefundInput = z.object({
+  paymentId: z.string().trim().min(1).max(100),
+  amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  reason: z.string().trim().max(1000).nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(200).optional()
+}).strict();
+
+app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organizations/:organizationId/orders/:orderId/refunds', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const order = await pool.query('SELECT id FROM orders WHERE id=$1 AND organization_id=$2', [orderId, organizationId]);
+  if (!order.rowCount) return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.');
+  const refunds = await pool.query(
+    "SELECT id,order_id,payment_id,amount_minor,currency,reason,status,recorded_by,idempotency_key,created_at FROM refunds WHERE order_id=$1 AND organization_id=$2 ORDER BY created_at DESC",
+    [orderId, organizationId]
+  );
+  return { data: camelize(refunds.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/refunds', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = RefundInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a payment ID, positive refund amount in minor currency units, and optional reason/idempotency key.');
+  const client = await pool.connect();
+  const now = new Date();
+  const refundId = randomUUID();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query(
+      'SELECT id,total_minor,currency,status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE',
+      [orderId, organizationId]
+    );
+    if (!orderResult.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    const order = orderResult.rows[0];
+    if (String(order.status) === 'cancelled') {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_REFUNDABLE', 'Cancelled orders cannot be refunded through this endpoint.');
+    }
+    if (parsed.data.idempotencyKey) {
+      const existing = await client.query(
+        'SELECT id,order_id,payment_id,amount_minor,currency,reason,status,recorded_by,idempotency_key,created_at FROM refunds WHERE organization_id=$1 AND idempotency_key=$2',
+        [organizationId, parsed.data.idempotencyKey]
+      );
+      if (existing.rowCount) {
+        if (String(existing.rows[0].order_id) !== orderId || String(existing.rows[0].payment_id) !== parsed.data.paymentId || Number(existing.rows[0].amount_minor) !== parsed.data.amountMinor) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'REFUND_CONFLICT', 'This idempotency key was already used for a different refund.');
+        }
+        await client.query('COMMIT');
+        return { data: camelize(existing.rows[0]), requestId: request.id };
+      }
+    }
+    const paymentResult = await client.query(
+      "SELECT id,amount_minor,currency,status FROM payments WHERE id=$1 AND order_id=$2 AND organization_id=$3 FOR UPDATE",
+      [parsed.data.paymentId, orderId, organizationId]
+    );
+    if (!paymentResult.rowCount) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 404, 'PAYMENT_NOT_FOUND', 'The payment does not exist for this order.');
+    }
+    const payment = paymentResult.rows[0];
+    if (String(payment.status) !== 'succeeded') {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'PAYMENT_NOT_REFUNDABLE', 'Only successfully recorded payments can be refunded.');
+    }
+    const refundedResult = await client.query(
+      "SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM refunds WHERE payment_id=$1 AND organization_id=$2 AND status='recorded'",
+      [parsed.data.paymentId, organizationId]
+    );
+    const alreadyRefunded = Number(refundedResult.rows[0]?.amount ?? 0);
+    const captured = Number(payment.amount_minor);
+    if (!Number.isSafeInteger(captured) || parsed.data.amountMinor > captured - alreadyRefunded) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'REFUND_EXCEEDS_REMAINING_AMOUNT', 'The refund amount exceeds the payment amount that remains refundable.');
+    }
+    const currency = String(payment.currency).trim();
+    const inserted = await client.query(
+      'INSERT INTO refunds (id,organization_id,order_id,payment_id,amount_minor,currency,reason,idempotency_key,status,recorded_by,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,order_id,payment_id,amount_minor,currency,reason,status,recorded_by,idempotency_key,created_at',
+      [refundId, organizationId, orderId, parsed.data.paymentId, parsed.data.amountMinor, currency, parsed.data.reason ?? null, parsed.data.idempotencyKey ?? null, 'recorded', request.identity!.uid, now]
+    );
+    const allTotals = await client.query(
+      "SELECT COALESCE((SELECT SUM(amount_minor) FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'),0)::text AS captured, COALESCE((SELECT SUM(amount_minor) FROM refunds WHERE order_id=$1 AND organization_id=$2 AND status='recorded'),0)::text AS refunded",
+      [orderId, organizationId]
+    );
+    const totalCaptured = Number(allTotals.rows[0]?.captured ?? 0);
+    const totalRefunded = Number(allTotals.rows[0]?.refunded ?? 0);
+    const paymentStatus = totalCaptured > 0 && totalRefunded >= totalCaptured ? 'refunded' : totalRefunded > 0 ? 'partially_refunded' : 'paid';
+    await client.query(
+      "UPDATE orders SET payment_status=$1,status=CASE WHEN $1='refunded' THEN 'refunded' ELSE status END,updated_at=$2 WHERE id=$3 AND organization_id=$4",
+      [paymentStatus, now, orderId, organizationId]
+    );
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.refund_recorded', 'refund', refundId, request.id, JSON.stringify({ orderId, paymentId: parsed.data.paymentId, amountMinor: parsed.data.amountMinor, currency, reason: parsed.data.reason ?? null, paymentStatus }), now]
+    );
+    await client.query('COMMIT');
+    return reply.code(201).send({ data: { ...camelize(inserted.rows[0]) as Record<string, unknown>, paymentStatus, totalCapturedMinor: totalCaptured, totalRefundedMinor: totalRefunded, remainingCapturedMinor: Math.max(0, totalCaptured - totalRefunded), processing: 'manual_record_only' }, requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'REFUND_CONFLICT', 'This refund or idempotency key has already been recorded.');
+    throw error;
+  } finally { client.release(); }
+});
+
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
