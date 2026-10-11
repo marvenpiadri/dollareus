@@ -11,7 +11,7 @@ interface OrderRow { id: string; resourceId: string; customer: string; channel: 
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
 interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; }
-interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
+interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
 type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
 interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null; estimatedDeliveryDate: string | null; notes: string | null; createdAt: string; updatedAt: string; }
@@ -135,7 +135,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 <button class="button primary" type="submit" [disabled]="qrBusy()">{{qrBusy()?'Saving…':'＋ Save branded QR entry point'}}</button>
               </form>
               <div class="table-wrap"><table><thead><tr><th>ENTRY POINT</th><th>DESTINATION</th><th>BRANDING</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
-                @for(point of entryPoints();track point.id){<tr><td><b>{{point.branding?.brandName || storeName()}}</b><div class="muted">{{point.type}} · {{point.id.slice(0,8)}}</div></td><td>{{point.targetPath}}</td><td><span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.foregroundColor || '#123456'"></span> <span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.backgroundColor || '#ffffff'"></span> {{point.branding?.frame || 'none'}}</td><td><span class="status-pill">{{point.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="editQrEntryPoint(point)">Edit branding</button><button class="button small" type="button" [disabled]="qrBusy()" (click)="toggleQrEntryPoint(point)">{{point.status === 'active' ? 'Disable' : 'Enable'}}</button></div></td></tr>}
+                @for(point of entryPoints();track point.id){<tr><td><b>{{point.branding?.brandName || storeName()}}</b><div class="muted">{{point.type}} · {{point.id.slice(0,8)}}</div></td><td>{{point.targetPath}}</td><td><span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.foregroundColor || '#123456'"></span> <span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.backgroundColor || '#ffffff'"></span> {{point.branding?.frame || 'none'}}</td><td><span class="status-pill">{{point.status}}</span></td><td><div class="product-actions"><a class="button small" [class.disabled]="!point.targetUrl" [attr.href]="point.targetUrl ? qrGeneratorUrl(point) : null" target="_blank" rel="noopener noreferrer">Generate QR</a><button class="button small" type="button" (click)="editQrEntryPoint(point)">Edit branding</button><button class="button small" type="button" [disabled]="qrBusy()" (click)="toggleQrEntryPoint(point)">{{point.status === 'active' ? 'Disable' : 'Enable'}}</button></div></td></tr>}
                 @if(entryPoints().length === 0){<tr><td colspan="5" class="empty-state">No saved QR entry points yet. Create one above to store a restaurant or store destination with its branding.</td></tr>}
               </tbody></table></div>
               @if(selectedQrId()){
@@ -361,7 +361,13 @@ export class AppComponent {
       const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
       this.menus.set(loadedMenus);
       const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
-      this.entryPoints.set(Array.isArray(entryPointRows) ? entryPointRows as EntryPointRow[] : []);
+      const savedEntryPoints = Array.isArray(entryPointRows) ? entryPointRows as EntryPointRow[] : [];
+      this.entryPoints.set(await Promise.all(savedEntryPoints.map(async (point) => {
+        try {
+          const publicPoint = await this.apiRequest('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
+          return { ...point, targetUrl: typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : null, targetUrlPath: String(publicPoint?.targetUrlPath ?? '') };
+        } catch { return { ...point, targetUrl: null, targetUrlPath: '/' + this.storeSlug() + point.targetPath }; }
+      })));
       if (!this.entryPoints().some(point => point.id === this.selectedQrId())) this.selectedQrId.set('');
       this.menuItems.set(itemGroups.flatMap((group, index) => (Array.isArray(group) ? group : []).map((item: any): MenuItemRow => ({
         id: String(item.id), menuId: String(item.menuId ?? loadedMenus[index].id), slug: String(item.slug ?? ''), name: String(item.name ?? ''),
@@ -864,6 +870,18 @@ export class AppComponent {
       this.notify('Branded QR entry point saved.');
     } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not save this QR entry point.'); }
     finally { this.qrBusy.set(false); }
+  }
+  protected qrGeneratorUrl(point: EntryPointRow): string {
+    const params = new URLSearchParams({
+      content: point.targetUrl ?? '',
+      dark: point.branding?.foregroundColor ?? '#123456',
+      light: point.branding?.backgroundColor ?? '#ffffff',
+      accent: point.branding?.accentColor ?? '#238636',
+      brand: point.branding?.brandName ?? this.storeName(),
+      frame: point.branding?.frame ?? 'bottom-label',
+      label: point.branding?.label ?? 'Scan to view menu'
+    });
+    return '/qr?' + params.toString();
   }
   protected editQrEntryPoint(point: EntryPointRow): void {
     this.selectedQrId.set(point.id);
