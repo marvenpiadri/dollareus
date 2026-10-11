@@ -785,8 +785,8 @@ const FulfillmentInput = z.object({
   stage: z.enum(['preparing', 'shipped', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).default('preparing'),
   carrier: z.string().trim().max(120).nullable().optional(),
   trackingNumber: z.string().trim().max(160).nullable().optional(),
-  trackingUrl: z.string().trim().max(1000).url().refine((value) => /^https?:\\/\\//i.test(value), 'Tracking URL must use HTTP or HTTPS.').nullable().optional(),
-  estimatedDeliveryDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional(),
+  trackingUrl: z.string().trim().max(1000).url().refine((value) => /^https?:\/\//i.test(value), 'Tracking URL must use HTTP or HTTPS.').nullable().optional(),
+  estimatedDeliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   notes: z.string().trim().max(1000).nullable().optional()
 }).strict();
 
