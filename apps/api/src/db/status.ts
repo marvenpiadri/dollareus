@@ -14,7 +14,7 @@ try {
     .filter((name) => name.endsWith('.sql'))
     .sort((left, right) => left.localeCompare(right));
 
-  const invalidNames = files.filter((name) => !/^\\d{4}_[a-z0-9_]+\\.sql$/.test(name));
+      .filter((name) => !/^\d{4}_[a-z0-9_]+\.sql$/.test(name));
   if (invalidNames.length) {
     throw new Error(`Invalid migration filename(s): ${invalidNames.join(', ')}`);
   }
