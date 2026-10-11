@@ -98,7 +98,7 @@ try {
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
   const usageEvents = await pool.query('SELECT count(*)::int AS count FROM api_usage_events WHERE credential_id=$1', [apiCredentialId]);
   if (Number(usageEvents.rows[0]?.count ?? 0) < 3) throw new Error('API credential usage was not metered.');
-  await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders });
+  await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({}) });
   await request(`/api/v1/organizations/${organizationId}/products`, 401, { headers: apiHeaders });
   checks.push('organization-scoped developer API credentials, read/write scopes, usage metering and revocation');
 
