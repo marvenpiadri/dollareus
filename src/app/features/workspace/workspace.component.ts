@@ -16,7 +16,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
 
 
 @Component({
@@ -123,9 +123,8 @@ export class WorkspaceComponent {
           tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
         };
       }));
-      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, categoryRows] = await Promise.all([
+      const [orderRows, inventoryRows, sessionRows, posOrderRows, menuRows, categoryRows] = await Promise.all([
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
@@ -138,10 +137,6 @@ export class WorkspaceComponent {
         status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.effectivePaymentStatus ?? order.paymentStatus ?? 'unpaid')
       })));
       this.categories.set(Array.isArray(categoryRows) ? categoryRows as CategoryRow[] : []);
-      this.customers.set((Array.isArray(customerRows) ? customerRows : []).map((customer: any): CustomerRow => ({
-        id: String(customer.id), displayName: String(customer.displayName ?? [customer.firstName, customer.lastName].filter(Boolean).join(' ')),
-        email: typeof customer.email === 'string' ? customer.email : null, phone: typeof customer.phone === 'string' ? customer.phone : null
-      })));
       this.inventory.set(Array.isArray(inventoryRows) ? inventoryRows as InventoryRow[] : []);
       const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
       this.menus.set(loadedMenus);
@@ -218,7 +213,6 @@ export class WorkspaceComponent {
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly orders = signal<OrderRow[]>([]);
-  protected readonly customers = signal<CustomerRow[]>([]);
   protected readonly categories = signal<CategoryRow[]>([]);
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
@@ -239,11 +233,6 @@ export class WorkspaceComponent {
   protected readonly posSaveBusy = signal(false);
   protected readonly posError = signal('');
   protected readonly posCartError = signal('');
-  protected readonly customerFormOpen = signal(false);
-  protected readonly customerSaveBusy = signal(false);
-  protected readonly customerSaveError = signal('');
-  protected readonly inventoryBusy = signal(false);
-  protected readonly inventoryError = signal('');
   protected readonly orderActionBusyId = signal('');
   protected readonly orderActionError = signal('');
   protected readonly selectedPaymentOrder = signal<OrderRow | null>(null);
@@ -791,88 +780,6 @@ export class WorkspaceComponent {
       this.productSaveError.set(error instanceof Error ? error.message : 'Could not save this product.');
     } finally { this.productSaveBusy.set(false); }
   }
-  protected async createCustomer(event: Event): Promise<void> {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const displayName = String(values.get('displayName') ?? '').trim() || null;
-    const email = String(values.get('email') ?? '').trim() || null;
-    const phone = String(values.get('phone') ?? '').trim() || null;
-    if (!displayName && !email && !phone) { this.customerSaveError.set('Enter a name, email or phone number.'); return; }
-    this.customerSaveBusy.set(true); this.customerSaveError.set('');
-    try {
-      const customer = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/customers', {
-        method: 'POST', body: JSON.stringify({ displayName, email, phone, metadata: {} })
-      });
-      this.customers.update((rows) => [{ id: String(customer.id), displayName: String(customer.displayName ?? ''), email: customer.email ?? null, phone: customer.phone ?? null }, ...rows]);
-      this.customerFormOpen.set(false); this.notify('Customer saved to your database.');
-    } catch (error) { this.customerSaveError.set(error instanceof Error ? error.message : 'Could not save this customer.'); }
-    finally { this.customerSaveBusy.set(false); }
-  }
-
-  protected toggleCustomerForm(): void { this.customerFormOpen.update((value) => !value); }
-
-  protected locationOptions(): { id: string; name: string }[] {
-    const unique = new Map<string, string>();
-    for (const item of this.inventory()) unique.set(item.locationId, item.locationName);
-    return Array.from(unique, ([id, name]) => ({ id, name }));
-  }
-
-  protected async createInventoryLevel(event: Event): Promise<void> {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const locationId = String(values.get('locationId') ?? '');
-    const variantId = String(values.get('variantId') ?? '');
-    const quantityOnHand = Number(values.get('quantityOnHand'));
-    const rawReorderPoint = String(values.get('reorderPoint') ?? '').trim();
-    const reorderPoint = rawReorderPoint ? Number(rawReorderPoint) : null;
-    if (!locationId || !variantId || !Number.isInteger(quantityOnHand) || quantityOnHand < 0 || (reorderPoint !== null && (!Number.isInteger(reorderPoint) || reorderPoint < 0))) {
-      this.inventoryError.set('Choose a location and product, then enter valid non-negative whole-number quantities.'); return;
-    }
-    this.inventoryBusy.set(true); this.inventoryError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
-        method: 'PUT', body: JSON.stringify({ locationId, variantId, quantityOnHand, reorderPoint })
-      });
-      await this.loadWorkspace(); this.notify('Stock level saved.');
-    } catch (error) { this.inventoryError.set(error instanceof Error ? error.message : 'Could not set stock level.'); }
-    finally { this.inventoryBusy.set(false); }
-  }
-
-  protected async createInventoryLocation(event: Event): Promise<void> {
-    event.preventDefault();
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const name = String(values.get('name') ?? '').trim();
-    if (!name) return;
-    this.inventoryBusy.set(true); this.inventoryError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/locations', {
-        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name })
-      });
-      await this.loadWorkspace(); this.notify('Inventory location created.');
-    } catch (error) { this.inventoryError.set(error instanceof Error ? error.message : 'Could not create the inventory location.'); }
-    finally { this.inventoryBusy.set(false); }
-  }
-
-  protected async adjustInventory(event: Event, item: InventoryRow): Promise<void> {
-    event.preventDefault();
-    if (!item.variantId) return;
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const quantityOnHand = Number(values.get('quantityOnHand'));
-    const rawReorderPoint = String(values.get('reorderPoint') ?? '').trim();
-    const reorderPoint = rawReorderPoint ? Number(rawReorderPoint) : null;
-    if (!Number.isInteger(quantityOnHand) || quantityOnHand < 0 || (reorderPoint !== null && (!Number.isInteger(reorderPoint) || reorderPoint < 0))) {
-      this.inventoryError.set('Stock quantities and reorder points must be non-negative whole numbers.'); return;
-    }
-    this.inventoryBusy.set(true); this.inventoryError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
-        method: 'PUT', body: JSON.stringify({ locationId: item.locationId, variantId: item.variantId, quantityOnHand, reorderPoint })
-      });
-      await this.loadWorkspace(); this.notify('Stock level updated.');
-    } catch (error) { this.inventoryError.set(error instanceof Error ? error.message : 'Could not update stock.'); }
-    finally { this.inventoryBusy.set(false); }
-  }
-
   protected openQrStudio(): void { if (typeof window !== 'undefined') window.location.assign('/qr'); }
   protected notify(message: string): void { this.toast.set(message); globalThis.setTimeout(() => { if (this.toast() === message) this.toast.set(''); }, 3000); }
 }

@@ -1,4 +1,5 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
+import { ApiClientService } from '../../core/api/api-client.service';
 import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 
 @Component({
@@ -10,10 +11,88 @@ import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 export class InventoryManagementComponent {
   readonly inventory = input.required<InventoryRow[]>();
   readonly products = input.required<ProductRow[]>();
-  readonly locationOptions = input.required<{ id: string; name: string }[]>();
-  readonly inventoryError = input('');
-  readonly inventoryBusy = input(false);
-  readonly createLocationRequested = output<Event>();
-  readonly createLevelRequested = output<Event>();
-  readonly adjustRequested = output<{ event: Event; item: InventoryRow }>();
+  readonly organizationId = input.required<string>();
+  readonly storeId = input.required<string>();
+  readonly notifyRequested = output<string>();
+  readonly dataChanged = output<void>();
+  protected readonly inventoryError = signal('');
+  protected readonly inventoryBusy = signal(false);
+
+  constructor(private readonly apiClient: ApiClientService) {}
+
+  protected locationOptions(): { id: string; name: string }[] {
+    const unique = new Map<string, string>();
+    for (const item of this.inventory()) unique.set(item.locationId, item.locationName);
+    return Array.from(unique, ([id, name]) => ({ id, name }));
+  }
+
+  protected async createInventoryLevel(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const locationId = String(values.get('locationId') ?? '');
+    const variantId = String(values.get('variantId') ?? '');
+    const quantityOnHand = Number(values.get('quantityOnHand'));
+    const rawReorderPoint = String(values.get('reorderPoint') ?? '').trim();
+    const reorderPoint = rawReorderPoint ? Number(rawReorderPoint) : null;
+    if (!locationId || !variantId || !Number.isInteger(quantityOnHand) || quantityOnHand < 0 || (reorderPoint !== null && (!Number.isInteger(reorderPoint) || reorderPoint < 0))) {
+      this.inventoryError.set('Choose a location and product, then enter valid non-negative whole-number quantities.');
+      return;
+    }
+    this.inventoryBusy.set(true); this.inventoryError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
+        method: 'PUT', body: JSON.stringify({ locationId, variantId, quantityOnHand, reorderPoint })
+      });
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Stock level saved.');
+    } catch (error) {
+      this.inventoryError.set(error instanceof Error ? error.message : 'Could not set stock level.');
+    } finally {
+      this.inventoryBusy.set(false);
+    }
+  }
+
+  protected async createInventoryLocation(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const name = String(values.get('name') ?? '').trim();
+    if (!name) return;
+    this.inventoryBusy.set(true); this.inventoryError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/locations', {
+        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name })
+      });
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Inventory location created.');
+    } catch (error) {
+      this.inventoryError.set(error instanceof Error ? error.message : 'Could not create the inventory location.');
+    } finally {
+      this.inventoryBusy.set(false);
+    }
+  }
+
+  protected async adjustInventory(event: Event, item: InventoryRow): Promise<void> {
+    event.preventDefault();
+    if (!item.variantId) return;
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const quantityOnHand = Number(values.get('quantityOnHand'));
+    const rawReorderPoint = String(values.get('reorderPoint') ?? '').trim();
+    const reorderPoint = rawReorderPoint ? Number(rawReorderPoint) : null;
+    if (!Number.isInteger(quantityOnHand) || quantityOnHand < 0 || (reorderPoint !== null && (!Number.isInteger(reorderPoint) || reorderPoint < 0))) {
+      this.inventoryError.set('Stock quantities and reorder points must be non-negative whole numbers.');
+      return;
+    }
+    this.inventoryBusy.set(true); this.inventoryError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/inventory/levels', {
+        method: 'PUT', body: JSON.stringify({ locationId: item.locationId, variantId: item.variantId, quantityOnHand, reorderPoint })
+      });
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Stock level updated.');
+    } catch (error) {
+      this.inventoryError.set(error instanceof Error ? error.message : 'Could not update stock.');
+    } finally {
+      this.inventoryBusy.set(false);
+    }
+  }
 }
