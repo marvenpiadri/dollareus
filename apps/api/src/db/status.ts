@@ -18,9 +18,9 @@ try {
   if (invalidNames.length) {
     throw new Error(`Invalid migration filename(s): ${invalidNames.join(', ')}`);
   }
-  if (files.at(-1) !== REQUIRED_SCHEMA_VERSION) {
+  const versionMismatch = files.at(-1) !== REQUIRED_SCHEMA_VERSION;
+  if (versionMismatch) {
     console.error(`[db:status] Runtime schema version is ${REQUIRED_SCHEMA_VERSION}, but the latest migration file is ${files.at(-1) ?? 'missing'}. Update apps/api/src/db/schema-version.ts.`);
-    exitCode = 1;
   }
 
   const ledger = await pool.query<{ exists: boolean }>(
@@ -74,7 +74,7 @@ try {
     }
 
     console.log(`[db:status] ${files.length - pending} applied, ${pending} pending, ${drift} checksum mismatch(es), ${unknown.length} unknown migration(s).`);
-    if (pending || drift || unknown.length) exitCode = drift || unknown.length ? 1 : 0;
+    if (pending || drift || unknown.length || versionMismatch) exitCode = drift || unknown.length || versionMismatch ? 1 : 0;
   }
 } catch (error) {
   console.error('[db:status] Unable to inspect the database:', error instanceof Error ? error.message : error);
