@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { resolveTxt } from 'node:dns/promises';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { pool } from './db/pool.js';
@@ -694,6 +695,97 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/men
     [store.rows[0].id, store.rows[0].organization_id]
   );
   return { data: camelize(result.rows), requestId: request.id };
+});
+
+const CustomDomainInput = z.object({
+  storeId: z.string().trim().min(1).max(100),
+  hostname: z.string().trim().toLowerCase().min(3).max(253)
+    .regex(/^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$/, 'Enter a valid fully qualified domain name.')
+}).strict();
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/domains', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const result = await pool.query(
+    'SELECT id,organization_id,store_id,hostname,kind,status,verified_at,activated_at,is_primary,last_checked_at,created_at,updated_at FROM store_domains WHERE organization_id=$1 AND store_id=$2 ORDER BY created_at DESC LIMIT 100',
+    [organizationId, storeId]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/domains', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = CustomDomainInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The custom domain payload is invalid.');
+  const hostname = parsed.data.hostname.replace(/\\.$/, '');
+  if (hostname === 'dollareus.com' || hostname.endsWith('.dollareus.com')) {
+    return fail(reply, request, 400, 'PLATFORM_DOMAIN_RESERVED', 'Use a custom domain you control; Dollareus platform domains are managed separately.');
+  }
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [parsed.data.storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  const now = new Date();
+  const id = randomUUID();
+  const verificationToken = 'dollareus-verify=' + randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+  try {
+    const result = await pool.query(
+      "INSERT INTO store_domains (id,organization_id,store_id,hostname,kind,status,verification_token,verified_at,activated_at,is_primary,last_checked_at,created_at,updated_at) VALUES ($1,$2,$3,$4,'custom','verification_required',$5,NULL,NULL,false,NULL,$6,$6) RETURNING id,organization_id,store_id,hostname,kind,status,is_primary,created_at,updated_at",
+      [id, organizationId, parsed.data.storeId, hostname, verificationToken, now]
+    );
+    return reply.code(201).send({
+      data: { ...camelize(result.rows[0]) as object, verification: { recordType: 'TXT', recordName: '_dollareus-verify.' + hostname, recordValue: verificationToken } },
+      requestId: request.id
+    });
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'DOMAIN_ALREADY_REGISTERED', 'This hostname is already registered.');
+    throw error;
+  }
+});
+
+app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/organizations/:organizationId/domains/:domainId/verify', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, domainId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const domain = await pool.query(
+    "SELECT id,hostname,verification_token,status FROM store_domains WHERE id=$1 AND organization_id=$2 AND kind='custom'",
+    [domainId, organizationId]
+  );
+  if (!domain.rowCount) return fail(reply, request, 404, 'DOMAIN_NOT_FOUND', 'The custom domain does not exist in this organization.');
+  if (domain.rows[0].status === 'disabled') return fail(reply, request, 409, 'DOMAIN_DISABLED', 'Re-enable the domain by registering it again before verification.');
+  const hostname = String(domain.rows[0].hostname);
+  const verificationName = '_dollareus-verify.' + hostname;
+  let records: string[] = [];
+  try {
+    records = (await resolveTxt(verificationName)).map((parts) => parts.join(''));
+  } catch {
+    const updated = await pool.query(
+      'UPDATE store_domains SET status=$3,last_checked_at=$4,updated_at=$4 WHERE id=$1 AND organization_id=$2 RETURNING id,hostname,status,last_checked_at,updated_at',
+      [domainId, organizationId, 'verification_required', new Date()]
+    );
+    return fail(reply, request, 422, 'DOMAIN_VERIFICATION_PENDING', 'The expected DNS TXT record was not found. Add the exact record and try again.');
+  }
+  if (!records.includes(String(domain.rows[0].verification_token))) {
+    await pool.query('UPDATE store_domains SET status=$3,last_checked_at=$4,updated_at=$4 WHERE id=$1 AND organization_id=$2', [domainId, organizationId, 'verification_required', new Date()]);
+    return fail(reply, request, 422, 'DOMAIN_VERIFICATION_PENDING', 'The DNS TXT record does not match the verification token.');
+  }
+  const now = new Date();
+  const updated = await pool.query(
+    "UPDATE store_domains SET status='verified',verified_at=$3,last_checked_at=$3,updated_at=$3 WHERE id=$1 AND organization_id=$2 RETURNING id,hostname,kind,status,verified_at,last_checked_at,updated_at",
+    [domainId, organizationId, now]
+  );
+  return { data: camelize(updated.rows[0]), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; domainId: string } }>('/api/v1/organizations/:organizationId/domains/:domainId/disable', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, domainId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const result = await pool.query(
+    "UPDATE store_domains SET status='disabled',is_primary=false,updated_at=$3 WHERE id=$1 AND organization_id=$2 RETURNING id,hostname,status,is_primary,updated_at",
+    [domainId, organizationId, new Date()]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'DOMAIN_NOT_FOUND', 'The domain does not exist in this organization.');
+  return { data: camelize(result.rows[0]), requestId: request.id };
 });
 
 app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/entry-points', { preHandler: authenticate }, async (request, reply) => {
