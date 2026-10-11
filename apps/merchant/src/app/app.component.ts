@@ -221,7 +221,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               <form class="customer-form" (submit)="createMenu($event)">
                 <label>Menu name<input name="name" required maxlength="180" placeholder="e.g. Lunch menu"></label>
                 <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lunch-menu"></label>
-                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label>
+                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label><label>Service periods<input name="servicePeriods" maxlength="800" placeholder="all-day or lunch, dinner" value="all-day"></label>
                 <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
               </form>
               <div class="panel-heading"><div><h2>Menu categories</h2><p>Use store categories to group restaurant dishes.</p></div></div>
@@ -233,9 +233,19 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SLUG</th><th>STATUS</th></tr></thead><tbody>@for(category of categories();track category.id){<tr><td>{{category.name}}</td><td>{{category.slug}}</td><td>{{category.status}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No categories yet. Add one to group dishes.</td></tr>}</tbody></table></div>
               @if(menuError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{menuError()}}</p>}
               <div class="table-wrap"><table><thead><tr><th>MENU</th><th>ITEMS</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
-                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
+                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" (click)="editingMenu.set(menu)">Edit menu</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
                 @if(menus().length === 0){<tr><td colspan="4" class="empty-state">Create your first menu to start adding restaurant items.</td></tr>}
               </tbody></table></div>
+              @if(editingMenu(); as menuToEdit){
+                <form class="customer-form" (submit)="saveMenu($event, menuToEdit)">
+                  <div class="panel-heading"><div><h2>Edit menu</h2><p>Update the menu details shown to customers.</p></div><button class="button small" type="button" (click)="editingMenu.set(null)">Cancel</button></div>
+                  <label>Menu name<input name="name" required maxlength="180" [value]="menuToEdit.name"></label>
+                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="menuToEdit.slug"></label>
+                  <label>Description<input name="description" maxlength="5000" [value]="menuToEdit.description || ''"></label>
+                  <label>Service periods<input name="servicePeriods" required maxlength="800" [value]="menuToEdit.servicePeriods.join(', ')" placeholder="lunch, dinner"></label>
+                  <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save menu changes'}}</button>
+                </form>
+              }
               @if(selectedMenuId()){
                 <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{selectedMenuName()}}</p></div></div>
                 <form class="customer-form" (submit)="createMenuItem($event)">
@@ -589,6 +599,7 @@ export class AppComponent {
   protected readonly menuItems = signal<MenuItemRow[]>([]);
   protected readonly selectedMenuId = signal('');
   protected readonly editingMenuItem = signal<MenuItemRow | null>(null);
+  protected readonly editingMenu = signal<MenuRow | null>(null);
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
   protected readonly entryPoints = signal<EntryPointRow[]>([]);
@@ -1258,16 +1269,40 @@ export class AppComponent {
     const name = String(values.get('name') ?? '').trim();
     const slug = String(values.get('slug') ?? '').trim();
     const description = String(values.get('description') ?? '').trim();
-    if (!name || !slug) return;
+    const servicePeriods = String(values.get('servicePeriods') ?? 'all-day').split(',').map(value => value.trim()).filter(Boolean);
+    if (!name || !slug || servicePeriods.length === 0) return;
     this.menuBusy.set(true); this.menuError.set('');
     try {
       const created = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
-        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods: ['all-day'], status: 'draft' })
+        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods, status: 'draft' })
       });
       await this.loadWorkspace();
       if (created?.id) this.selectedMenuId.set(String(created.id));
       form.reset(); this.notify('Menu created as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async saveMenu(event: Event, menu: MenuRow): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const values = new FormData(form);
+    const name = String(values.get('name') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim();
+    const description = String(values.get('description') ?? '').trim();
+    const servicePeriods = String(values.get('servicePeriods') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    if (!name || !slug || servicePeriods.length === 0) {
+      this.menuError.set('Provide a name, slug, and at least one service period.');
+      return;
+    }
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id), {
+        method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, servicePeriods })
+      });
+      await this.loadWorkspace();
+      this.editingMenu.set(null);
+      this.notify('Menu details updated.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu.'); }
     finally { this.menuBusy.set(false); }
   }
   protected async createMenuItem(event: Event): Promise<void> {
