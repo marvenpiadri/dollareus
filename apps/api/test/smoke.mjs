@@ -163,6 +163,15 @@ try {
   const entryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
   if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id)) throw new Error('QR entry point did not persist.');
   checks.push('restaurant menu publishing, item availability controls, and managed QR entry points');
+  const domainResponse = await request('/api/v1/organizations/' + organizationId + '/domains', 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, hostname: 'shop-' + suffix + '.example.org' })
+  });
+  if (domainResponse.payload?.data?.status !== 'verification_required' || domainResponse.payload?.data?.verification?.recordType !== 'TXT') throw new Error('Custom domain verification instructions were not returned.');
+  const listedDomains = await request('/api/v1/organizations/' + organizationId + '/stores/' + storeId + '/domains', 200, { headers: authHeaders });
+  if (!listedDomains.payload?.data?.some((domain) => domain.id === domainResponse.payload?.data?.id)) throw new Error('Custom domain was not listed.');
+  await request('/api/v1/organizations/' + organizationId + '/domains/' + domainResponse.payload?.data?.id + '/disable', 200, { method: 'POST', headers: authHeaders });
+  checks.push('custom domain registration, listing, and disabling');
 
   const productId = `product-${suffix}`;
   const product = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
