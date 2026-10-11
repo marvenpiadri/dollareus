@@ -4,7 +4,7 @@ import { AuthPanelComponent } from './auth-panel.component';
 import { PublicHomeComponent } from './public-home.component';
 import { QrStudioComponent } from './qr-studio.component';
 
-type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
+type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
 interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; }
 interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
@@ -102,6 +102,14 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 <div class="table-wrap"><table><thead><tr><th>DATE</th><th>AMOUNT</th><th>REASON</th><th>STATUS</th></tr></thead><tbody>@for(refund of refundData.refunds;track refund.id){<tr><td>{{refund.createdAt | date:'medium'}}</td><td class="total">{{money(refund.amountMinor,refund.currency)}}</td><td>{{refund.reason || '—'}}</td><td>{{orderStatusLabel(refund.status)}}</td></tr>} @empty {<tr><td colspan="4" class="empty-state">No refunds recorded for this order.</td></tr>}</tbody></table></div>
               } @else {<p style="padding:18px">Refund details are unavailable. Close this panel and try again.</p>}
             </section>}
+          }
+          @if (activeNav() === 'POS') {
+            <section class="panel product-panel"><div class="panel-heading"><div><h2>Point of sale</h2><p>Create an in-person sale using active product prices from your store. Payment collection and stock deduction are not automated.</p></div><span class="status" [class]="posSessions().some(session => session.status === 'open') ? 'paid' : 'pending'">{{posSessions().some(session => session.status === 'open') ? 'Register open' : 'Register closed'}}</span></div>
+              @if(posError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{posError()}}</p>}
+              <form class="customer-form" (submit)="createPosSession($event)"><label>Register name<input name="label" required maxlength="120" [value]="posSessionLabel()" (input)="posSessionLabel.set($any($event.target).value)"></label><label>Terminal type<select [value]="posTerminalType()" (change)="posTerminalType.set($any($event.target).value)"><option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="service">Services</option><option value="general">General</option></select></label><button class="button primary small" type="submit" [disabled]="posBusy()">{{posBusy()?'Opening…':'Open register'}}</button></form>
+              <div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;padding:14px 17px;border-bottom:1px solid #eef0eb"><label style="display:grid;gap:6px;flex:1;min-width:220px;color:#6f786a;font-size:13px;font-weight:700">Active register<select [value]="selectedPosSessionId()" (change)="selectedPosSessionId.set($any($event.target).value)" style="height:42px;padding:0 10px;border:1px solid #cbd5e1;border-radius:7px;background:white"><option value="">Choose an open register</option>@for(session of posSessions();track session.id){@if(session.status==='open'){<option [value]="session.id">{{session.label}} · {{orderStatusLabel(session.terminalType)}}</option>}}</select></label><button class="button secondary small" type="button" [disabled]="posBusy() || !selectedPosSessionId()" (click)="closePosSession()">Close register</button></div>
+              <form class="customer-form" (submit)="createPosOrder($event)"><label>Product<select required [value]="posVariantId()" (change)="posVariantId.set($any($event.target).value)"><option value="">Choose an active product</option>@for(product of products();track product.id){@if(product.status==='Active' && product.variantId){<option [value]="product.variantId">{{product.name}} · {{money(product.priceMinor,product.currency)}}</option>}}</select></label><label>Quantity<input type="number" min="1" max="10000" step="1" required [value]="posQuantity()" (input)="posQuantity.set($any($event.target).value)"></label><label>Fulfillment<select [value]="posFulfillment()" (change)="posFulfillment.set($any($event.target).value)"><option value="counter">Counter sale</option><option value="takeaway">Takeaway</option><option value="dine_in">Dine in</option><option value="delivery">Delivery</option><option value="service">Service</option></select></label><label>Note (optional)<input maxlength="1000" [value]="posCustomerNote()" (input)="posCustomerNote.set($any($event.target).value)" placeholder="Customer or receipt note"></label><button class="button primary small" type="submit" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posVariantId()">{{posSaveBusy()?'Saving…':'Create POS order'}}</button></form>
+              <div class="table-wrap"><table><thead><tr><th>ORDER</th><th>ITEMS</th><th>FULFILLMENT</th><th>TOTAL</th><th>STATUS</th><th>UPDATE</th></tr></thead><tbody>@for(order of posOrders();track order.id){<tr><td class="order-id">#{{order.orderNumber}}</td><td>@for(item of order.items || [];track item.id){<div>{{item.quantity}} × {{item.name}}</div>}</td><td>{{orderStatusLabel(order.fulfillment)}}</td><td class="total">{{money(Number(order.totalMinor),order.currency)}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>@if(order.status==='confirmed'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="preparing">Preparing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='preparing'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='ready'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="ready">Ready</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No POS orders yet. Open a register and create your first in-person sale.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{posOrders().length}} POS orders · totals are server-priced; record receipts separately under Orders</div></section>
           }
           @if (activeNav() === 'Customers') {
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
@@ -248,10 +256,12 @@ export class AppComponent {
           tone: 'sage'
         };
       }));
-      const [orderRows, customerRows, inventoryRows] = await Promise.all([
+      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows] = await Promise.all([
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory')
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders')
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
@@ -263,6 +273,14 @@ export class AppComponent {
         email: typeof customer.email === 'string' ? customer.email : null, phone: typeof customer.phone === 'string' ? customer.phone : null
       })));
       this.inventory.set(Array.isArray(inventoryRows) ? inventoryRows as InventoryRow[] : []);
+      const sessions = Array.isArray(sessionRows) ? sessionRows : [];
+      this.posSessions.set(sessions);
+      this.posOrders.set(Array.isArray(posOrderRows) ? posOrderRows : []);
+      const openSession = sessions.find((session: any) => session.status === 'open');
+      this.selectedPosSessionId.set(openSession ? String(openSession.id) : '');
+      if (!this.posVariantId() || !this.products().some((product) => product.variantId === this.posVariantId() && product.status === 'Active')) {
+        this.posVariantId.set(this.products().find((product) => product.status === 'Active' && product.variantId)?.variantId ?? '');
+      }
       this.products.update((rows) => rows.map((product) => {
         const levels = this.inventory().filter((item) => item.variantId === product.variantId && item.quantityOnHand !== null);
         return { ...product, stock: levels.length ? levels.reduce((sum, item) => sum + Number(item.quantityOnHand ?? 0), 0) : null };
@@ -312,7 +330,7 @@ export class AppComponent {
   protected readonly productFilter = signal<'All' | ProductStatus>('All');
   protected readonly toast = signal('');
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
-    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'Products',symbol:'◇'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
+    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
   ];
   protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
@@ -320,6 +338,18 @@ export class AppComponent {
   protected readonly orders = signal<OrderRow[]>([]);
   protected readonly customers = signal<CustomerRow[]>([]);
   protected readonly inventory = signal<InventoryRow[]>([]);
+  protected readonly posSessions = signal<any[]>([]);
+  protected readonly posOrders = signal<any[]>([]);
+  protected readonly selectedPosSessionId = signal('');
+  protected readonly posSessionLabel = signal('Main register');
+  protected readonly posTerminalType = signal('retail');
+  protected readonly posVariantId = signal('');
+  protected readonly posQuantity = signal('1');
+  protected readonly posFulfillment = signal('counter');
+  protected readonly posCustomerNote = signal('');
+  protected readonly posBusy = signal(false);
+  protected readonly posSaveBusy = signal(false);
+  protected readonly posError = signal('');
   protected readonly customerFormOpen = signal(false);
   protected readonly customerSaveBusy = signal(false);
   protected readonly customerSaveError = signal('');
@@ -441,6 +471,84 @@ export class AppComponent {
     this.paymentDetails.set(details);
   }
 
+
+  protected async createPosSession(event: Event): Promise<void> {
+    event.preventDefault();
+    const label = this.posSessionLabel().trim();
+    if (!label) { this.posError.set('Enter a register name.'); return; }
+    this.posBusy.set(true); this.posError.set('');
+    try {
+      const session = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions', {
+        method: 'POST', body: JSON.stringify({ label, terminalType: this.posTerminalType() })
+      });
+      this.posSessions.update(rows => [session, ...rows.filter(row => row.id !== session.id)]);
+      this.selectedPosSessionId.set(String(session.id));
+      this.notify('POS register opened.');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not open this register.');
+    } finally { this.posBusy.set(false); }
+  }
+
+  protected async closePosSession(): Promise<void> {
+    const sessionId = this.selectedPosSessionId();
+    if (!sessionId) return;
+    this.posBusy.set(true); this.posError.set('');
+    try {
+      const closed = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions/' + encodeURIComponent(sessionId) + '/close', {
+        method: 'PATCH', body: JSON.stringify({})
+      });
+      this.posSessions.update(rows => rows.map(row => row.id === sessionId ? closed : row));
+      this.selectedPosSessionId.set('');
+      this.notify('POS register closed.');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not close this register.');
+    } finally { this.posBusy.set(false); }
+  }
+
+  protected async createPosOrder(event: Event): Promise<void> {
+    event.preventDefault();
+    const sessionId = this.selectedPosSessionId();
+    const variantId = this.posVariantId();
+    const quantity = Number(this.posQuantity());
+    const product = this.products().find(row => row.variantId === variantId && row.status === 'Active');
+    if (!sessionId || !product || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+      this.posError.set('Choose an open register, an active product, and a valid whole-number quantity.');
+      return;
+    }
+    this.posSaveBusy.set(true); this.posError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
+          customerNote: this.posCustomerNote().trim() || null,
+          idempotencyKey: 'merchant-pos-' + crypto.randomUUID(),
+          items: [{ sourceType: 'product', sourceItemId: product.id, sourceVariantId: variantId, quantity }]
+        })
+      });
+      const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
+      this.posOrders.set(Array.isArray(rows) ? rows : []);
+      this.posQuantity.set('1'); this.posCustomerNote.set('');
+      this.notify('POS order created with server-calculated pricing.');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not create this POS order.');
+    } finally { this.posSaveBusy.set(false); }
+  }
+
+  protected async updatePosOrderStatus(order: any, status: string): Promise<void> {
+    if (!order?.id || status === order.status) return;
+    this.posSaveBusy.set(true); this.posError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders/' + encodeURIComponent(order.id) + '/status', {
+        method: 'PATCH', body: JSON.stringify({ status })
+      });
+      const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
+      this.posOrders.set(Array.isArray(rows) ? rows : []);
+      this.notify('POS order status updated and audited.');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not update this POS order.');
+    } finally { this.posSaveBusy.set(false); }
+  }
 
   protected async openRefundTracker(order: OrderRow): Promise<void> {
     this.selectedRefundOrder.set(order);
@@ -603,8 +711,8 @@ export class AppComponent {
     } catch (error) { this.orderActionError.set(error instanceof Error ? error.message : 'Could not update order status.'); }
     finally { this.orderActionBusyId.set(''); }
   }
-  protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
-  protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Orders','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
+  protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
   protected addProduct(): void { this.activeNav.set('Products'); this.editingProduct.set(null); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected editProduct(product: ProductRow): void { this.editingProduct.set(product); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected closeProductEditor(): void { if (!this.productSaveBusy()) { this.productEditorOpen.set(false); this.editingProduct.set(null); } }
