@@ -206,9 +206,51 @@ export class RestaurantMenuManagerComponent {
     try {
       const parsedModifiers: unknown = JSON.parse(String(values.get('modifierGroupsJson') ?? '[]'));
       if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
-      modifierGroups = parsedModifiers as MenuModifierGroup[];
-    } catch {
-      this.menuError.set('Modifier groups must be valid JSON containing an array.'); return;
+      const groups = parsedModifiers as unknown[];
+      const groupIds = new Set<string>();
+      modifierGroups = groups.map((rawGroup, groupIndex) => {
+        if (!rawGroup || typeof rawGroup !== 'object' || Array.isArray(rawGroup)) {
+          throw new Error(`Modifier group ${groupIndex + 1} must be an object.`);
+        }
+        const group = rawGroup as Record<string, unknown>;
+        const id = typeof group.id === 'string' ? group.id.trim() : '';
+        const groupName = typeof group.name === 'string' ? group.name.trim() : '';
+        const minSelections = group.minSelections;
+        const maxSelections = group.maxSelections;
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || groupIds.has(id)) {
+          throw new Error(`Modifier group ${groupIndex + 1} needs a unique lowercase ID.`);
+        }
+        if (!groupName || groupName.length > 120 || typeof group.required !== 'boolean' ||
+            !Number.isSafeInteger(minSelections) || !Number.isSafeInteger(maxSelections) ||
+            (minSelections as number) < 0 || (maxSelections as number) < (minSelections as number) ||
+            (group.required && (minSelections as number) < 1) || !Array.isArray(group.options) ||
+            (maxSelections as number) > group.options.length) {
+          throw new Error(`Modifier group "${groupName || id}" has invalid names, selection limits, or options.`);
+        }
+        groupIds.add(id);
+        const optionIds = new Set<string>();
+        const options = (group.options as unknown[]).map((rawOption, optionIndex) => {
+          if (!rawOption || typeof rawOption !== 'object' || Array.isArray(rawOption)) {
+            throw new Error(`Option ${optionIndex + 1} in "${groupName}" must be an object.`);
+          }
+          const option = rawOption as Record<string, unknown>;
+          const optionId = typeof option.id === 'string' ? option.id.trim() : '';
+          const optionName = typeof option.name === 'string' ? option.name.trim() : '';
+          if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(optionId) || optionIds.has(optionId) ||
+              !optionName || optionName.length > 120 || !Number.isSafeInteger(option.priceDeltaMinor)) {
+            throw new Error(`Option ${optionIndex + 1} in "${groupName}" needs a unique lowercase ID, name, and integer price delta.`);
+          }
+          optionIds.add(optionId);
+          return { id: optionId, name: optionName, priceDeltaMinor: option.priceDeltaMinor as number };
+        });
+        return {
+          id, name: groupName, required: group.required,
+          minSelections: minSelections as number, maxSelections: maxSelections as number, options
+        };
+      });
+    } catch (error) {
+      this.menuError.set(error instanceof Error ? error.message : 'Modifier groups must be valid JSON containing valid groups and options.');
+      return;
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
