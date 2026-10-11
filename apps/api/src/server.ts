@@ -1591,8 +1591,45 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
     const next = parsed.data.status;
     const allowed: Record<string, string[]> = { confirmed: ['preparing', 'cancelled'], preparing: ['ready', 'cancelled'], ready: ['completed', 'cancelled'], completed: [], cancelled: [] };
     if (!allowed[current]?.includes(next)) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'INVALID_POS_STATUS_TRANSITION', 'The requested POS order status transition is not allowed.'); }
+    const inventoryDeductions: Array<{ variantId: string; locationId: string; quantity: number }> = [];
+    if (next === 'completed') {
+      const lines = await client.query(
+        "SELECT DISTINCT l.source_variant_id AS variant_id,l.quantity,p.kind FROM pos_order_lines l JOIN product_variants v ON v.id=l.source_variant_id AND v.organization_id=l.organization_id JOIN products p ON p.id=v.product_id AND p.organization_id=v.organization_id WHERE l.order_id=$1 AND l.organization_id=$2 AND l.source_type='product' AND p.kind IN ('physical','food')",
+        [orderId, organizationId]
+      );
+      const session = await client.query('SELECT location_id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3', [result.rows[0].session_id, organizationId, storeId]);
+      const locationId = session.rows[0]?.location_id ? String(session.rows[0].location_id) : null;
+      for (const line of lines.rows) {
+        const variantId = String(line.variant_id);
+        const quantity = Number(line.quantity);
+        const levels = await client.query(
+          'SELECT location_id,quantity_on_hand,quantity_reserved FROM inventory_levels WHERE organization_id=$1 AND variant_id=$2 ORDER BY location_id FOR UPDATE',
+          [organizationId, variantId]
+        );
+        if (!levels.rowCount) continue;
+        if (!locationId) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'POS_INVENTORY_LOCATION_REQUIRED', 'Choose a stock location for this register before completing tracked inventory sales.');
+        }
+        const level = levels.rows.find((row) => String(row.location_id) === locationId);
+        if (!level) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'POS_STOCK_NOT_AT_REGISTER_LOCATION', 'This item is tracked at another location. Transfer or assign stock to the register location before completing the sale.');
+        }
+        const available = Number(level.quantity_on_hand) - Number(level.quantity_reserved);
+        if (!Number.isSafeInteger(quantity) || available < quantity) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'POS_INSUFFICIENT_STOCK', 'There is not enough available stock at this register location to complete the sale.');
+        }
+        await client.query(
+          'UPDATE inventory_levels SET quantity_on_hand=quantity_on_hand-$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5',
+          [quantity, now, organizationId, locationId, variantId]
+        );
+        inventoryDeductions.push({ variantId, locationId, quantity });
+      }
+    }
     const history = Array.isArray(result.rows[0].status_history) ? result.rows[0].status_history : [];
-    history.push({ status: next, actorUserId: request.identity!.uid, at: now.toISOString() });
+    history.push({ status: next, actorUserId: request.identity!.uid, at: now.toISOString(), ...(inventoryDeductions.length ? { inventoryDeductions } : {}) });
     const updated = await client.query('UPDATE pos_orders SET status=$1,status_history=$2::jsonb,updated_at=$3 WHERE id=$4 AND organization_id=$5 AND store_id=$6 RETURNING id', [next, JSON.stringify(history), now, orderId, organizationId, storeId]);
     const canonicalStatus = next === 'preparing' || next === 'ready' ? 'processing' : next;
     await client.query(
@@ -1601,7 +1638,7 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
     );
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
-      [randomUUID(), organizationId, request.identity!.uid, 'pos.order_status_changed', 'pos_order', orderId, request.id, JSON.stringify({ from: current, to: next }), now]
+      [randomUUID(), organizationId, request.identity!.uid, 'pos.order_status_changed', 'pos_order', orderId, request.id, JSON.stringify({ from: current, to: next, inventoryDeductions }), now]
     );
     await client.query('COMMIT');
     const order = await pool.query(posOrderProjection + ' WHERE o.id=$1 AND o.organization_id=$2 AND o.store_id=$3', [updated.rows[0].id, organizationId, storeId]);
