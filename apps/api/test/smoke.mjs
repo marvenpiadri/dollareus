@@ -164,6 +164,10 @@ try {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, metadata: {} })
   });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ slug: `viewer-dish-${suffix}`, name: 'Viewer Dish', description: null, priceAmountMinor: 100, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 0, metadata: {} })
+  });
   const menuItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 200, { headers: authHeaders });
   if (!menuItems.payload?.data?.some((item) => item.id === menuItem.payload?.data?.id)) throw new Error('Restaurant menu item did not persist.');
   const publishedMenu = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
@@ -283,6 +287,10 @@ try {
     method: 'PUT', headers: authHeaders,
     body: JSON.stringify({ locationId: location.payload?.data?.id, variantId, quantityOnHand: 12, reorderPoint: 3 })
   });
+  await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 403, {
+    method: 'PUT', headers: viewerHeaders,
+    body: JSON.stringify({ locationId: location.payload?.data?.id, variantId: product.payload?.data?.variants?.[0]?.id, quantityOnHand: 99, reorderPoint: 3 })
+  });
   const inventory = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
   if (!inventory.payload?.data?.some((item) => item.variantId === variantId && Number(item.quantityOnHand) === 12)) throw new Error('Inventory adjustment did not persist.');
   checks.push('inventory locations and guarded stock levels');
@@ -358,11 +366,19 @@ try {
   if (!canonicalPosOrder || canonicalPosOrder.channel !== 'POS' || Number(canonicalPosOrder.totalMinor) !== 2598 || canonicalPosOrder.items?.length !== 1) {
     throw new Error('POS order was not mirrored to the canonical order/payment workflow.');
   }
+  await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', idempotencyKey: `viewer-payment-${suffix}` })
+  });
   const posPayment = await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` })
   });
   if (posPayment.payload?.data?.paymentStatus !== 'paid') throw new Error('POS order did not use the canonical manual payment workflow.');
+  await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 100, reason: 'Viewer must not refund', idempotencyKey: `viewer-refund-${suffix}` })
+  });
   const posRefund = await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 500, reason: 'POS smoke test partial refund', idempotencyKey: `smoke-pos-refund-${suffix}` })
