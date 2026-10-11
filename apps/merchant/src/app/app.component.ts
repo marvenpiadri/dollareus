@@ -133,7 +133,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 @if(menus().length === 0){<tr><td colspan="4" class="empty-state">Create your first menu to start adding restaurant items.</td></tr>}
               </tbody></table></div>
               @if(selectedMenuId()){
-                <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{menus().find(m => m.id === selectedMenuId())?.name || 'Menu'}}</p></div></div>
+                <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{selectedMenuName()}}</p></div></div>
                 <form class="customer-form" (submit)="createMenuItem($event)">
                   <label>Item name<input name="name" required maxlength="180" placeholder="e.g. Chicken sandwich"></label>
                   <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
@@ -142,8 +142,8 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
                 </form>
                 <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
-                  @for(item of menuItems().filter(i => i.menuId === selectedMenuId());track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></td></tr>}
-                  @if(menuItems().filter(i => i.menuId === selectedMenuId()).length === 0){<tr><td colspan="4" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
+                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></td></tr>}
+                  @if(selectedMenuItems().length === 0){<tr><td colspan="4" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
                 </tbody></table></div>
               }
             </section>
@@ -768,6 +768,8 @@ export class AppComponent {
   }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
   protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Menus','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected selectedMenuName(): string { return this.menus().find(menu => menu.id === this.selectedMenuId())?.name ?? 'Menu'; }
+  protected selectedMenuItems(): MenuItemRow[] { return this.menuItems().filter(item => item.menuId === this.selectedMenuId()); }
   protected async createMenu(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
