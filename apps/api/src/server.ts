@@ -780,6 +780,151 @@ app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }
   } finally { client.release(); }
 });
 
+
+const FulfillmentInput = z.object({
+  stage: z.enum(['preparing', 'shipped', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled']).default('preparing'),
+  carrier: z.string().trim().max(120).nullable().optional(),
+  trackingNumber: z.string().trim().max(160).nullable().optional(),
+  trackingUrl: z.string().trim().max(1000).url().refine((value) => /^https?:\\/\\//i.test(value), 'Tracking URL must use HTTP or HTTPS.').nullable().optional(),
+  estimatedDeliveryDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).nullable().optional(),
+  notes: z.string().trim().max(1000).nullable().optional()
+}).strict();
+
+type FulfillmentStage = z.infer<typeof FulfillmentInput>['stage'];
+
+function fulfillmentRecord(row: any) {
+  const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {};
+  return {
+    id: String(row.id),
+    orderId: String(row.order_id),
+    status: String(row.status),
+    stage: String(metadata.stage ?? (row.status === 'processing' || row.status === 'pending' ? 'preparing' : row.status)),
+    carrier: row.carrier ?? null,
+    trackingNumber: row.tracking_number ?? null,
+    trackingUrl: row.tracking_url ?? null,
+    shippedAt: row.shipped_at ?? null,
+    deliveredAt: row.delivered_at ?? null,
+    estimatedDeliveryDate: metadata.estimatedDeliveryDate ?? null,
+    notes: metadata.notes ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function fulfillmentDbStatus(stage: FulfillmentStage): string {
+  if (stage === 'preparing') return 'processing';
+  if (stage === 'out_for_delivery' || stage === 'delivery_failed') return 'shipped';
+  return stage;
+}
+
+function fulfillmentOrderStatus(stage: FulfillmentStage): string {
+  if (stage === 'delivered') return 'fulfilled';
+  if (stage === 'returned') return 'returned';
+  return 'unfulfilled';
+}
+
+const FulfillmentTransitions: Record<FulfillmentStage, FulfillmentStage[]> = {
+  preparing: ['preparing', 'shipped', 'cancelled'],
+  shipped: ['shipped', 'out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'],
+  out_for_delivery: ['out_for_delivery', 'delivered', 'delivery_failed', 'returned', 'cancelled'],
+  delivery_failed: ['delivery_failed', 'out_for_delivery', 'delivered', 'returned', 'cancelled'],
+  delivered: ['delivered', 'returned'],
+  returned: ['returned'],
+  cancelled: ['cancelled']
+};
+
+app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organizations/:organizationId/orders/:orderId/fulfillments', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const order = await pool.query('SELECT id FROM orders WHERE id=$1 AND organization_id=$2', [orderId, organizationId]);
+  if (!order.rowCount) return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.');
+  const rows = await pool.query('SELECT id,order_id,status,carrier,tracking_number,tracking_url,shipped_at,delivered_at,metadata,created_at,updated_at FROM fulfillments WHERE order_id=$1 AND organization_id=$2 ORDER BY created_at DESC', [orderId, organizationId]);
+  return { data: { orderId, fulfillments: rows.rows.map(fulfillmentRecord) }, requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/fulfillments', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = FulfillmentInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid shipping stage and optional carrier, tracking URL, expected date, and notes.');
+  const client = await pool.connect();
+  const now = new Date();
+  const fulfillmentId = randomUUID();
+  try {
+    await client.query('BEGIN');
+    const order = await client.query('SELECT id,status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE', [orderId, organizationId]);
+    if (!order.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    if (['cancelled', 'refunded'].includes(String(order.rows[0].status))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_FULFILLABLE', 'A cancelled or refunded order cannot be shipped.');
+    }
+    const active = await client.query("SELECT id FROM fulfillments WHERE order_id=$1 AND organization_id=$2 AND status NOT IN ('cancelled','returned','delivered') FOR UPDATE", [orderId, organizationId]);
+    if (active.rowCount) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ACTIVE_FULFILLMENT_EXISTS', 'Update the existing shipment instead of creating a duplicate.');
+    }
+    const input = parsed.data;
+    const metadata = { stage: input.stage, estimatedDeliveryDate: input.estimatedDeliveryDate ?? null, notes: input.notes ?? null, updatedBy: request.identity!.uid, stageUpdatedAt: now.toISOString() };
+    const status = fulfillmentDbStatus(input.stage);
+    const shippedAt = ['shipped','out_for_delivery','delivery_failed','delivered'].includes(input.stage) ? now : null;
+    const deliveredAt = input.stage === 'delivered' ? now : null;
+    const inserted = await client.query(
+      'INSERT INTO fulfillments (id,organization_id,order_id,status,carrier,tracking_number,tracking_url,shipped_at,delivered_at,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$11) RETURNING id,order_id,status,carrier,tracking_number,tracking_url,shipped_at,delivered_at,metadata,created_at,updated_at',
+      [fulfillmentId, organizationId, orderId, status, input.carrier || null, input.trackingNumber || null, input.trackingUrl || null, shippedAt, deliveredAt, JSON.stringify(metadata), now]
+    );
+    await client.query('UPDATE orders SET fulfillment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [fulfillmentOrderStatus(input.stage), now, orderId, organizationId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.fulfillment_created', 'fulfillment', fulfillmentId, request.id, JSON.stringify({ orderId, stage: input.stage, carrier: input.carrier ?? null, trackingNumber: input.trackingNumber ?? null }), now]
+    );
+    await client.query('COMMIT');
+    return reply.code(201).send({ data: fulfillmentRecord(inserted.rows[0]), requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
+app.patch<{ Params: { organizationId: string; orderId: string; fulfillmentId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/fulfillments/:fulfillmentId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId, fulfillmentId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = FulfillmentInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid shipping stage and optional carrier, tracking URL, expected date, and notes.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,order_id,status,carrier,tracking_number,tracking_url,shipped_at,delivered_at,metadata FROM fulfillments WHERE id=$1 AND order_id=$2 AND organization_id=$3 FOR UPDATE', [fulfillmentId, orderId, organizationId]);
+    if (!current.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'FULFILLMENT_NOT_FOUND', 'The shipment does not exist for this order.'); }
+    const previous = fulfillmentRecord({ ...current.rows[0], created_at: now, updated_at: now }).stage as FulfillmentStage;
+    const input = parsed.data;
+    if (!FulfillmentTransitions[previous]?.includes(input.stage)) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'INVALID_FULFILLMENT_TRANSITION', 'This shipment cannot move from ' + previous.replaceAll('_', ' ') + ' to ' + input.stage.replaceAll('_', ' ') + '.');
+    }
+    const metadata = { stage: input.stage, estimatedDeliveryDate: input.estimatedDeliveryDate ?? null, notes: input.notes ?? null, updatedBy: request.identity!.uid, stageUpdatedAt: now.toISOString() };
+    const status = fulfillmentDbStatus(input.stage);
+    const oldShippedAt = current.rows[0].shipped_at;
+    const shippedAt = ['shipped','out_for_delivery','delivery_failed','delivered'].includes(input.stage) ? oldShippedAt ?? now : oldShippedAt;
+    const deliveredAt = input.stage === 'delivered' ? current.rows[0].delivered_at ?? now : current.rows[0].delivered_at;
+    const updated = await client.query(
+      'UPDATE fulfillments SET status=$1,carrier=$2,tracking_number=$3,tracking_url=$4,shipped_at=$5,delivered_at=$6,metadata=$7::jsonb,updated_at=$8 WHERE id=$9 AND organization_id=$10 RETURNING id,order_id,status,carrier,tracking_number,tracking_url,shipped_at,delivered_at,metadata,created_at,updated_at',
+      [status, input.carrier || null, input.trackingNumber || null, input.trackingUrl || null, shippedAt, deliveredAt, JSON.stringify(metadata), now, fulfillmentId, organizationId]
+    );
+    await client.query('UPDATE orders SET fulfillment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [fulfillmentOrderStatus(input.stage), now, orderId, organizationId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.fulfillment_updated', 'fulfillment', fulfillmentId, request.id, JSON.stringify({ orderId, from: previous, to: input.stage, carrier: input.carrier ?? null, trackingNumber: input.trackingNumber ?? null }), now]
+    );
+    await client.query('COMMIT');
+    return { data: fulfillmentRecord(updated.rows[0]), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
+
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const host = process.env.HOST ?? '0.0.0.0';
 await app.listen({ port, host });
