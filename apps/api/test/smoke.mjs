@@ -189,6 +189,39 @@ try {
   if (completed.payload?.data?.status !== 'completed') throw new Error('Valid order status transitions did not persist.');
   await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'pending' }) });
 
+  const orderIdForRefund = order.payload?.data?.id;
+  const recordedPayment = await request(`/api/v1/organizations/${organizationId}/orders/${orderIdForRefund}/payments`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `CASH-${suffix}`, idempotencyKey: `smoke-payment-${suffix}` })
+  });
+  const refundPath = `/api/v1/organizations/${organizationId}/orders/${orderIdForRefund}/refunds`;
+  const firstRefund = await request(refundPath, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1000, reason: 'Smoke test partial refund', idempotencyKey: `smoke-refund-1-${suffix}` })
+  });
+  if (Number(firstRefund.payload?.data?.totalRefundedMinor) !== 1000 || firstRefund.payload?.data?.paymentStatus !== 'partially_refunded') {
+    throw new Error('Partial refund totals or payment status are incorrect.');
+  }
+  await request(refundPath, 409, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 2000, reason: 'Exceeds remaining refundable amount' })
+  });
+  const secondRefund = await request(refundPath, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Smoke test final refund', idempotencyKey: `smoke-refund-2-${suffix}` })
+  });
+  if (Number(secondRefund.payload?.data?.totalRefundedMinor) !== 2598 || secondRefund.payload?.data?.paymentStatus !== 'refunded') {
+    throw new Error('Full refund totals or payment status are incorrect.');
+  }
+  const refundReplay = await request(refundPath, 200, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Smoke test final refund', idempotencyKey: `smoke-refund-2-${suffix}` })
+  });
+  if (refundReplay.payload?.data?.id !== secondRefund.payload?.data?.id) throw new Error('Refund idempotency did not return the existing refund.');
+  const refundHistory = await request(refundPath, 200, { headers: authHeaders });
+  if (!Array.isArray(refundHistory.payload?.data) || refundHistory.payload.data.length !== 2) throw new Error('Refund history did not return both refund records.');
+  checks.push('audited partial/full manual refunds, over-refund guard, idempotency and history');
+
   const expectedDeliveryDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const fulfillmentPath = `/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}/fulfillments`;
   const shipment = await request(fulfillmentPath, 201, {
@@ -248,6 +281,7 @@ try {
   if (organizationId) {
     await pool.query('DELETE FROM order_items WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM fulfillments WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM refunds WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM payments WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM orders WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM customers WHERE organization_id=$1', [organizationId]).catch(() => undefined);
