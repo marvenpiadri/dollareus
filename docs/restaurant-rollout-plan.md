@@ -129,3 +129,14 @@ Enable online orders and external systems only after the in-restaurant workflow 
 - Remaining Phase 2 exit checks: manually walk through create → edit → publish → change availability → unpublish; test required/optional modifier boundaries and invalid definitions; verify tenant isolation and persistence after reload. These browser/manual checks can be performed by the owner later, so Phase 2 remains open until recorded.
 
 No real online payments should be accepted before the relevant payment-provider and reconciliation work is complete.
+
+### Phase 3 implementation update — in progress
+
+Per the owner's instruction, Phase 3 implementation may proceed while the remaining Phase 2 browser acceptance is deferred for the owner to perform later. This does **not** mark Phase 2 accepted or complete; its exit gate remains open.
+
+- POS sessions and ticket APIs support role checks, server-authoritative product/menu pricing, modifier validation, idempotent order creation, order status transitions, audit history, and stock deduction on completion.
+- API smoke coverage exercises multi-line tickets, distinct modifier selections, idempotent replay, status completion, stock deduction/insufficient stock, cancellation/refund safeguards, canonical order/payment linkage, and rejection of viewer-role writes.
+- The POS UI now preserves its order idempotency key until ticket creation succeeds and uses a stable payment-attempt key derived from order, outstanding balance, and payment method. This protects retries after a lost response from silently creating duplicate tickets or manual payment records.
+- The retry hardening was merged in [PR #27](https://github.com/marvenpiadri/dollareus/pull/27). Live browser walkthrough and manual payment workflow acceptance remain open.
+
+Next Phase 3 work should focus on operator-facing failure recovery and ticket workflow usability, then verify concurrent status transitions and retry cases in CI. Do not claim certification for fiscal registers or real card processing.
