@@ -421,6 +421,21 @@ try {
   if (Number(posOrder.payload?.data?.totalMinor) !== 2598 || posOrder.payload?.data?.status !== 'confirmed' || posOrder.payload?.data?.items?.length !== 1) {
     throw new Error('POS order pricing, initial status, or line snapshots are incorrect.');
   }
+  const cancelledProductOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'counter',
+      idempotencyKey: `smoke-pos-cancelled-product-${suffix}`,
+      items: [{ sourceType: 'product', sourceItemId: activeProduct.payload?.data?.id, sourceVariantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 1 }]
+    })
+  });
+  await request(`${posBase}/orders/${cancelledProductOrder.payload?.data?.id}/status`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' })
+  });
+  const inventoryAfterCancellation = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const stockAfterCancellation = inventoryAfterCancellation.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
+  if (Number(stockAfterCancellation?.quantityOnHand) !== 5) throw new Error('Cancelling an uncompleted POS order must not deduct tracked inventory.');
+  checks.push('cancelling an uncompleted POS order leaves tracked inventory unchanged');
   await request(`${posBase}/orders`, 400, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({
@@ -475,7 +490,7 @@ try {
     body: JSON.stringify({
       sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
       idempotencyKey: `smoke-pos-race-${suffix}`,
-      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1, metadata: { modifiers: [{ groupId: 'size', optionIds: ['large'] }] } }]
+      items: [{ sourceType: 'product', sourceItemId: activeProduct.payload?.data?.id, sourceVariantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 1 }]
     })
   });
   const racePath = `${posBase}/orders/${posRaceOrder.payload?.data?.id}/status`;
@@ -502,7 +517,14 @@ try {
   if (raceOrderSnapshot?.status !== winningTransition || !Array.isArray(raceOrderSnapshot?.statusHistory) || raceOrderSnapshot.statusHistory.length !== 4) {
     throw new Error('Concurrent POS terminal status changes did not preserve one winning transition and a single appended history entry.');
   }
+  const inventoryAfterRace = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const stockAfterRace = inventoryAfterRace.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
+  const expectedStockAfterRace = winningTransition === 'completed' ? 2 : 3;
+  if (Number(stockAfterRace?.quantityOnHand) !== expectedStockAfterRace) {
+    throw new Error(`Concurrent completion/cancellation must apply stock deduction only when completion wins; expected ${expectedStockAfterRace}, received ${stockAfterRace?.quantityOnHand}.`);
+  }
   checks.push('concurrent POS terminal status changes serialize and reject stale transitions');
+  checks.push('concurrent POS completion/cancellation applies stock deduction only for the winning completion');
 
   const posOversellOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
