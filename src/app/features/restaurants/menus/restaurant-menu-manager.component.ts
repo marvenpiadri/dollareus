@@ -123,11 +123,22 @@ export class RestaurantMenuManagerComponent {
   protected updateModifierGroup(index: number, field: 'id' | 'name' | 'required' | 'minSelections' | 'maxSelections', value: string | boolean | number): void {
     this.modifierDraft.update(groups => groups.map((group, groupIndex) => {
       if (groupIndex !== index) return group;
-      const next = { ...group, [field]: value };
-      if (field === 'required' && value === true && next.minSelections < 1) next.minSelections = 1;
-      if (field === 'required' && value === false) next.minSelections = 0;
-      if (field === 'maxSelections' && typeof value === 'number' && next.minSelections > value) next.minSelections = value;
-      if (field === 'minSelections' && typeof value === 'number' && value > next.maxSelections) next.maxSelections = value;
+      const next: MenuModifierGroup = { ...group };
+      if (field === 'id' && typeof value === 'string') next.id = value;
+      if (field === 'name' && typeof value === 'string') next.name = value;
+      if (field === 'required' && typeof value === 'boolean') {
+        next.required = value;
+        if (value && next.minSelections < 1) next.minSelections = 1;
+        if (!value) next.minSelections = 0;
+      }
+      if (field === 'maxSelections' && typeof value === 'number') {
+        next.maxSelections = value;
+        if (next.minSelections > value) next.minSelections = value;
+      }
+      if (field === 'minSelections' && typeof value === 'number') {
+        next.minSelections = value;
+        if (value > next.maxSelections) next.maxSelections = value;
+      }
       return next;
     }));
   }
