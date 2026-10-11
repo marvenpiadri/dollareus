@@ -775,7 +775,11 @@ const MenuStatusInput = z.object({ status: z.enum(['draft', 'active', 'archived'
 const MenuItemAvailabilityInput = z.object({
   status: z.enum(['draft', 'active', 'archived']).optional(),
   availability: z.enum(['available', 'unavailable', 'limited']).optional(),
-  position: z.number().int().nonnegative().optional()
+  position: z.number().int().nonnegative().optional(),
+  categoryId: z.string().min(1).max(100).nullable().optional(),
+  allergens: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+  dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be provided.' });
 
 app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/status', { preHandler: authenticate }, async (request, reply) => {
@@ -798,9 +802,15 @@ app.patch<{ Params: { organizationId: string; menuId: string; itemId: string }; 
   if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = MenuItemAvailabilityInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The menu item update payload is invalid.');
+  const menu = await pool.query('SELECT store_id FROM restaurant_menus WHERE id=$1 AND organization_id=$2', [menuId, organizationId]);
+  if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
+  if (parsed.data.categoryId) {
+    const category = await pool.query('SELECT id FROM categories WHERE id=$1 AND organization_id=$2 AND store_id=$3', [parsed.data.categoryId, organizationId, menu.rows[0].store_id]);
+    if (!category.rowCount) return fail(reply, request, 404, 'CATEGORY_NOT_FOUND', 'The selected category does not exist in this menu’s store.');
+  }
   const result = await pool.query(
-    'UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING id,menu_id,slug,name,status,availability,position,updated_at',
-    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date()]
+    'UPDATE restaurant_menu_items SET status=COALESCE($4,status),availability=COALESCE($5,availability),position=COALESCE($6,position),category_id=CASE WHEN $8 THEN $9 ELSE category_id END,allergens=COALESCE($10,allergens),dietary_labels=COALESCE($11,dietary_labels),metadata=COALESCE($12::jsonb,metadata),updated_at=$7 WHERE id=$1 AND menu_id=$2 AND organization_id=$3 RETURNING *',
+    [itemId, menuId, organizationId, parsed.data.status ?? null, parsed.data.availability ?? null, parsed.data.position ?? null, new Date(), parsed.data.categoryId !== undefined, parsed.data.categoryId ?? null, parsed.data.allergens ?? null, parsed.data.dietaryLabels ?? null, parsed.data.metadata === undefined ? null : JSON.stringify(parsed.data.metadata)]
   );
   if (!result.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The selected menu item does not exist in this menu and organization.');
   return { data: camelize(result.rows[0]), requestId: request.id };
