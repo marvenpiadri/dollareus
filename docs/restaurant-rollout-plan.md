@@ -124,8 +124,8 @@ Enable online orders and external systems only after the in-restaurant workflow 
 
 **Phase 2 — in progress:** authenticated create/edit/publish/unpublish and dish availability APIs are in place; the merchant workspace now exposes up/down controls for menu and dish ordering, backed by transactional full-list reorder endpoints. Request examples and error contracts are documented in [Restaurant Phase 2 API](restaurant-phase-2-api.md).
 
-- Regression smoke tests cover successful reordering, stale/incomplete ordering requests, and rejection of viewer-role writes.
-- Latest PR CI passed the Angular production build, API typecheck, and HTTP integration smoke suite in [run 38172802625](https://github.com/marvenpiadri/dollareus/actions/runs/38172802625).
+- Regression smoke tests cover successful reordering, stale/incomplete ordering requests, rejection of viewer-role writes, required/optional modifier selection bounds, duplicate modifier/option IDs, and persisted option price deltas.
+- Direct-to-main CI passed the Angular production build, SSR rendering check, API typecheck, and PostgreSQL-backed HTTP integration smoke suite in [run 38178595233](https://github.com/marvenpiadri/dollareus/actions/runs/38178595233).
 - Remaining Phase 2 exit checks: manually walk through create → edit → publish → change availability → unpublish; test required/optional modifier boundaries and invalid definitions; verify tenant isolation and persistence after reload. These browser/manual checks can be performed by the owner later, so Phase 2 remains open until recorded.
 
 No real online payments should be accepted before the relevant payment-provider and reconciliation work is complete.
