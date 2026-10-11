@@ -102,7 +102,7 @@ export class RestaurantMenuManagerComponent {
         method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
       });
       form.reset();
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       this.notifyRequested.emit('Menu category created.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create category.'); }
     finally { this.categoryBusy.set(false); }
@@ -121,7 +121,7 @@ export class RestaurantMenuManagerComponent {
       const created = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
         method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods, status: 'draft' })
       });
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       if (created?.id) this.selectedMenuId.set(String(created.id));
       form.reset(); this.notifyRequested.emit('Menu created as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu.'); }
@@ -144,7 +144,7 @@ export class RestaurantMenuManagerComponent {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id), {
         method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, servicePeriods })
       });
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       this.editingMenu.set(null);
       this.notifyRequested.emit('Menu details updated.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu.'); }
@@ -170,7 +170,7 @@ export class RestaurantMenuManagerComponent {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
         method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.currency(), status: 'draft', categoryId, allergens, dietaryLabels, availability: 'available', metadata: {} })
       });
-      await this.load(); form.reset(); this.notifyRequested.emit('Menu item saved as a draft.');
+      await this.load(); this.dataChanged.emit(); form.reset(); this.notifyRequested.emit('Menu item saved as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
     finally { this.menuBusy.set(false); }
   }
@@ -201,7 +201,7 @@ export class RestaurantMenuManagerComponent {
         method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, priceAmountMinor: Math.round(price * 100), categoryId, allergens, dietaryLabels, modifierGroups })
       });
       this.editingMenuItem.set(null);
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       this.notifyRequested.emit('Menu item details updated.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu item details.'); }
     finally { this.menuBusy.set(false); }
@@ -217,7 +217,7 @@ export class RestaurantMenuManagerComponent {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/menus/reorder', {
         method: 'PUT', body: JSON.stringify({ menuIds: ordered.map(row => row.id) })
       });
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       this.notifyRequested.emit('Menu order saved.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder menus. Reload and try again.'); }
     finally { this.menuBusy.set(false); }
@@ -233,7 +233,7 @@ export class RestaurantMenuManagerComponent {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/reorder', {
         method: 'PUT', body: JSON.stringify({ itemIds: ordered.map(row => row.id) })
       });
-      await this.load();
+      await this.load(); this.dataChanged.emit();
       this.notifyRequested.emit('Dish order saved.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder dishes. Reload and try again.'); }
     finally { this.menuBusy.set(false); }
@@ -242,7 +242,7 @@ export class RestaurantMenuManagerComponent {
     this.menuBusy.set(true); this.menuError.set('');
     try {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id) + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
-      await this.load(); this.notifyRequested.emit(status === 'active' ? 'Menu published.' : 'Menu unpublished.');
+      await this.load(); this.dataChanged.emit(); this.notifyRequested.emit(status === 'active' ? 'Menu published.' : 'Menu unpublished.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu status.'); }
     finally { this.menuBusy.set(false); }
   }
@@ -253,7 +253,7 @@ export class RestaurantMenuManagerComponent {
       this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, availability } : row));
       this.dataChanged.emit();
       this.notifyRequested.emit('Item availability updated.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item availability.'); await this.load(); }
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item availability.'); await this.load(); this.dataChanged.emit(); }
     finally { this.menuBusy.set(false); }
   }
   protected async setMenuItemStatus(item: MenuItemRow, status: 'draft' | 'active'): Promise<void> {
