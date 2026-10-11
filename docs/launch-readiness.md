@@ -9,7 +9,7 @@ Last reviewed: 2026-10-11
 ## P0 — required before any public account signup
 
 ### Runtime and database
-- [ ] Run `pnpm ci` successfully on the latest `main` commit.
+- [x] Latest GitHub Actions build, API TypeScript check, and PostgreSQL-backed HTTP smoke suite passed on `ba55d57cb1b15fcde82a98f99443b712851ec464`.
 - [ ] Create/use the intended empty Neon PostgreSQL database and run `pnpm db:setup`; verify all tables and indexes directly in Neon.
 - [ ] Confirm the API deployment can connect to Neon using a server-side `DATABASE_URL`; do not expose the URL to the browser.
 - [ ] Configure the merchant app's API base URL or a same-origin reverse proxy; configure `CORS_ORIGINS` to the exact production origin.
@@ -31,8 +31,8 @@ Last reviewed: 2026-10-11
 - [x] Replace hard-coded sample products and demo store identity with API-backed workspace/catalog state; show unavailable indicators instead of fabricated sales and inventory metrics.
 - [x] Implement first-run organization/store creation and draft product creation through the API, with loading/error states.
 - [ ] Finish onboarding and storefront configuration; implement product publishing, category management, additional variant management, images, and inventory changes. Basic product detail editing and archiving are now available.
-- [ ] Finish merchant-facing customer records, carts, order operations, payment states, fulfillment, cancellation/refund controls, and transactional emails. API-level manual refund recording is implemented but requires fresh CI and database verification.
-- [ ] Implement and test restaurant menus/menu items, POS sessions/orders, QR/entry points, custom domains, and inventory endpoints if those modules are included in the first launch.
+- [ ] Finish merchant-facing carts, cancellation/refund edge cases, and transactional emails. Manual refund history/recording UI and the refund API are implemented and covered by CI; refunds only record an offline action and do not transfer money.
+- [ ] Complete restaurant POS menu-item workflows, POS payment recording, and inventory reservation/deduction. The initial retail POS session/order workflow is implemented and covered by the latest CI run. QR/entry-point APIs exist; domain management and media upload remain incomplete.
 - [ ] Implement object-storage uploads with server-side authorization, file type/size limits, and safe public/private access rules.
 - [ ] Complete organization membership roles and server-side authorization for every private route.
 - [ ] Ensure public storefront APIs only expose published data and never leak drafts or private merchant/customer information.
