@@ -874,7 +874,20 @@ const MenuItemAvailabilityInput = z.object({
   dietaryLabels: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
   modifierGroups: z.array(MenuModifierGroupInput).max(20).optional(),
   metadata: z.record(z.string(), z.unknown()).optional()
-}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field must be provided.' });
+}).strict().superRefine((value, context) => {
+  if (Object.keys(value).length === 0) {
+    context.addIssue({ code: 'custom', message: 'At least one field must be provided.' });
+  }
+  const groups = value.modifierGroups ?? [];
+  if (new Set(groups.map((group) => group.id)).size !== groups.length) {
+    context.addIssue({ code: 'custom', message: 'Modifier group IDs must be unique.', path: ['modifierGroups'] });
+  }
+  for (const group of groups) {
+    if (new Set(group.options.map((option) => option.id)).size !== group.options.length) {
+      context.addIssue({ code: 'custom', message: 'Modifier option IDs must be unique within a group.', path: ['modifierGroups'] });
+    }
+  }
+});
 
 app.patch<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, menuId } = request.params;
