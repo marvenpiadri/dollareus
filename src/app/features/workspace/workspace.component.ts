@@ -201,6 +201,7 @@ export class WorkspaceComponent {
   protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
+  protected readonly openProductEditorRequest = signal(0);
   protected readonly orders = signal<OrderRow[]>([]);
   protected readonly categories = signal<CategoryRow[]>([]);
   protected readonly menus = signal<MenuRow[]>([]);
@@ -679,6 +680,8 @@ export class WorkspaceComponent {
 
   protected availablePosMenuItems(): MenuItemRow[] { const activeMenus = new Set(this.menus().filter(menu => menu.status === 'active').map(menu => menu.id)); return this.menuItems().filter(item => item.status === 'active' && item.availability !== 'unavailable' && activeMenus.has(item.menuId)); }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
+  protected addProduct(): void { this.selectNav('Products'); this.openProductEditorRequest.update(value => value + 1); }
+
   protected openQrStudio(): void { if (typeof window !== 'undefined') window.location.assign('/qr'); }
   protected notify(message: string): void { this.toast.set(message); globalThis.setTimeout(() => { if (this.toast() === message) this.toast.set(''); }, 3000); }
 }
