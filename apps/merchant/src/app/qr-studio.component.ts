@@ -30,13 +30,14 @@ export class QrStudioComponent {
     const value = this.content().trim();
     if (!value) { this.error.set('Enter a link or text first.'); return; }
     if (value.length > 2500) { this.error.set('Keep QR content under 2,500 characters.'); return; }
-    if (!globalThis.QRCode) { this.error.set('The QR encoder could not load. Check your connection and refresh this page.'); return; }
+    const encoder = globalThis.QRCode;
+    if (!encoder) { this.error.set('The QR encoder could not load. Check your connection and refresh this page.'); return; }
     this.busy.set(true); this.error.set('');
     try {
       const options = { width: Number(this.size()), margin: 3, errorCorrectionLevel: this.level(), color: { dark: this.dark(), light: this.light() } };
       const [png, svg] = await Promise.all([
-        globalThis.QRCode.toDataURL(value, options),
-        globalThis.QRCode.toString(value, { ...options, type: 'svg' })
+        encoder.toDataURL(value, options),
+        encoder.toString(value, { ...options, type: 'svg' })
       ]);
       this.qrDataUrl.set(png);
       this.svgDataUrl.set('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
