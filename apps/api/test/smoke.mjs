@@ -8,6 +8,7 @@ const token = randomUUID() + randomUUID();
 const userId = randomUUID();
 const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
 let organizationId = null;
+let signupUserId = null;
 
 async function request(path, expectedStatus, init = {}) {
   const response = await fetch(new URL(path, baseUrl), init);
@@ -29,6 +30,28 @@ try {
   await request('/api/v1/auth/session', 401);
   await request('/api/v1/organizations', 401);
   checks.push('unauthenticated access is rejected');
+
+  const signupEmail = `signup-${suffix}@example.test`;
+  const signupPassword = 'Dollareus-Smoke-2026!';
+  const signup = await request('/api/v1/auth/register', 201, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: signupEmail, password: signupPassword, displayName: 'Signup Smoke Test' })
+  });
+  signupUserId = signup.payload?.data?.id;
+  if (!signupUserId || signup.payload?.data?.email !== signupEmail || !signup.response.headers.get('set-cookie')?.includes('dollareus_session=')) {
+    throw new Error('Signup did not create an account and issue a session cookie without email-provider configuration.');
+  }
+  const signupCookie = signup.response.headers.get('set-cookie')?.match(/dollareus_session=([^;]+)/)?.[1];
+  if (!signupCookie) throw new Error('Signup session cookie was not present.');
+  const signupSession = await request('/api/v1/auth/session', 200, { headers: { cookie: `dollareus_session=${signupCookie}` } });
+  if (signupSession.payload?.data?.id !== signupUserId) throw new Error('The session created during signup is not valid.');
+  await request('/api/v1/auth/logout', 200, { method: 'POST', headers: { cookie: `dollareus_session=${signupCookie}` } });
+  const login = await request('/api/v1/auth/login', 200, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: signupEmail, password: signupPassword })
+  });
+  if (!login.response.headers.get('set-cookie')?.includes('dollareus_session=')) throw new Error('Login did not issue a session cookie.');
+  checks.push('signup, session cookie, logout, and login without email-provider configuration');
 
   const now = new Date();
   await pool.query(
@@ -90,13 +113,61 @@ try {
   }
   checks.push('product listing');
 
+  const category = await request(`/api/v1/organizations/${organizationId}/categories`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, name: 'Accessories', slug: `accessories-${suffix}`, description: null, position: 0, status: 'active' })
+  });
+  const categories = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/categories`, 200, { headers: authHeaders });
+  if (!categories.payload?.data?.some((item) => item.id === category.payload?.data?.id)) throw new Error('Category did not persist.');
+  checks.push('category create and listing');
+
+  const customer = await request(`/api/v1/organizations/${organizationId}/customers`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ displayName: 'Smoke Customer', email: `customer-${suffix}@example.test`, phone: null, firstName: 'Smoke', lastName: 'Customer', notes: null, metadata: {} })
+  });
+  const customers = await request(`/api/v1/organizations/${organizationId}/customers`, 200, { headers: authHeaders });
+  if (!customers.payload?.data?.some((item) => item.id === customer.payload?.data?.id)) throw new Error('Customer did not persist.');
+  checks.push('customer create and listing');
+
+  const location = await request(`/api/v1/organizations/${organizationId}/inventory/locations`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, name: 'Main stockroom' })
+  });
   const variantId = product.payload?.data?.variants?.[0]?.id;
   if (!variantId) throw new Error('Product creation did not return its variant id.');
+  await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 200, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ locationId: location.payload?.data?.id, variantId, quantityOnHand: 12, reorderPoint: 3 })
+  });
+  const inventory = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  if (!inventory.payload?.data?.some((item) => item.variantId === variantId && Number(item.quantityOnHand) === 12)) throw new Error('Inventory adjustment did not persist.');
+  checks.push('inventory locations and guarded stock levels');
+
+  const activeProduct = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      storeId, slug: `order-product-${suffix}`, name: 'Orderable Smoke Product',
+      description: null, status: 'active', kind: 'physical', availabilityStatus: 'available',
+      availabilityNote: null, attributes: {}, categoryIds: [],
+      variants: [{ id: `order-variant-${suffix}`, sku: `ORDER-${suffix}`, title: 'Standard', options: {}, amountMinor: 1299, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }]
+    })
+  });
+  const orderPayload = { storeId, customerId: customer.payload?.data?.id, notes: 'Smoke test order', idempotencyKey: `smoke-order-${suffix}`, items: [{ variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 2 }] };
+  const order = await request(`/api/v1/organizations/${organizationId}/orders`, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
+  if (Number(order.payload?.data?.totalMinor) !== 2598 || order.payload?.data?.status !== 'pending' || order.payload?.data?.items?.length !== 1) throw new Error('Order totals or immutable item snapshots are incorrect.');
+  const replay = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
+  if (replay.payload?.data?.id !== order.payload?.data?.id) throw new Error('Order idempotency key did not return the existing order.');
+  const orders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
+  if (!orders.payload?.data?.some((item) => item.id === order.payload?.data?.id)) throw new Error('Created order did not appear in order listing.');
+  checks.push('server-priced order creation, snapshots, idempotency and listing');
+
+  const variantIdForPatch = product.payload?.data?.variants?.[0]?.id;
+  if (!variantIdForPatch) throw new Error('Product creation did not return its variant id.');
   const updated = await request(`/api/v1/organizations/${organizationId}/products/${createdProductId}`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({
       name: 'Updated CI Smoke Product', status: 'archived',
-      variant: { id: variantId, sku: `SMOKE-UPDATED-${suffix}`, title: 'Updated CI Smoke Product', amountMinor: 2499, currency: 'MAD' }
+      variant: { id: variantIdForPatch, sku: `SMOKE-UPDATED-${suffix}`, title: 'Updated CI Smoke Product', amountMinor: 2499, currency: 'MAD' }
     })
   });
   const updatedVariant = updated.payload?.data?.variants?.[0];
@@ -114,6 +185,7 @@ try {
   for (const check of checks) console.log(`  ✓ ${check}`);
 } finally {
   if (organizationId) await pool.query('DELETE FROM organizations WHERE id=$1', [organizationId]).catch(() => undefined);
+  if (signupUserId) await pool.query('DELETE FROM users WHERE id=$1', [signupUserId]).catch(() => undefined);
   await pool.query('DELETE FROM users WHERE id=$1', [userId]).catch(() => undefined);
   await pool.end();
 }
