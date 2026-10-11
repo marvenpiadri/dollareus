@@ -28,7 +28,7 @@ Dollareus is an API-first business operating system for retailers, restaurants, 
 
 ## Repository structure
 
-- `apps/merchant`: Angular merchant dashboard.
+- `src/`: the complete Angular 22 frontend, organized into `app/core`, `app/features`, and `app/shared`, including browser/server bootstrap and SSR entry files.
 - `apps/api`: Fastify API backed by PostgreSQL, with first-party authentication.
 - `packages/contracts`: shared TypeScript transport contracts.
 - `schemas`: JSON Schemas for API/domain records.
@@ -42,14 +42,16 @@ Dollareus is an API-first business operating system for retailers, restaurants, 
 
 ## Local development
 
-Requirements: Node.js 20.19+ and pnpm 10.
+Requirements: Node.js 22.22.3+ and pnpm 10.
 
 ```bash
 pnpm install
-pnpm start       # Angular dashboard: http://localhost:4200
+pnpm start       # Angular 22 app with SSR dev integration: http://localhost:4200
+pnpm build       # Browser + server production build
+pnpm serve:ssr   # Run the production SSR server after building
 pnpm api:dev     # API: http://localhost:3000
 pnpm build
-pnpm api:typecheck
+pnpm api:typecheck # API static type checks
 pnpm ci
 ```
 

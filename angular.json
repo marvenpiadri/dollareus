@@ -3,39 +3,70 @@
   "version": 1,
   "newProjectRoot": "apps",
   "projects": {
-    "merchant": {
+    "dollareus": {
       "projectType": "application",
-      "root": "apps/merchant",
-      "sourceRoot": "apps/merchant/src",
+      "root": "",
+      "sourceRoot": "src",
       "prefix": "dlr",
       "architect": {
         "build": {
           "builder": "@angular/build:application",
           "options": {
-            "outputPath": "dist/merchant",
-            "index": "apps/merchant/src/index.html",
-            "browser": "apps/merchant/src/main.ts",
-            "polyfills": ["zone.js"],
-            "tsConfig": "apps/merchant/tsconfig.app.json",
-            "styles": ["apps/merchant/src/styles.css"]
+            "outputPath": "dist/dollareus",
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "server": "src/main.server.ts",
+            "ssr": {
+              "entry": "src/server.ts"
+            },
+            "outputMode": "server",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "tsconfig.app.json",
+            "styles": [
+              "src/styles.css"
+            ],
+            "security": {
+              "allowedHosts": [
+                "localhost",
+                "127.0.0.1"
+              ]
+            }
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "650kB", "maximumError": "1MB" },
-                { "type": "anyComponentStyle", "maximumWarning": "16kB", "maximumError": "20kB" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "650kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "16kB",
+                  "maximumError": "20kB"
+                }
               ],
               "outputHashing": "all"
             },
-            "development": { "optimization": false, "extractLicenses": false, "sourceMap": true }
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "merchant:build:production" },
-            "development": { "buildTarget": "merchant:build:development" }
+            "production": {
+              "buildTarget": "dollareus:build:production"
+            },
+            "development": {
+              "buildTarget": "dollareus:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }
