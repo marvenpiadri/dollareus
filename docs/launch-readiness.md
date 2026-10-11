@@ -36,7 +36,7 @@ Last reviewed: 2026-10-11
 - [x] Implement private product-image upload/retrieval using Neon S3-compatible storage, server-side authorization, file-signature/dimension/size checks, browser-side WebP compression, and cached responsive variants.
 - [ ] Configure `AWS_S3_BUCKET` and the S3 credentials in the API deployment environment, then verify a real upload/read round-trip against the intended Neon bucket.
 - [ ] Complete organization membership roles and server-side authorization for every private route.
-- [x] Add organization-scoped developer API credentials with hashed token storage, read/write scope checks, expiry, manager-only issue/list/revoke endpoints, usage events, and audit records; [ ] add quota enforcement, webhook delivery, external API documentation, and merchant UI management.
+- [x] Add organization-scoped developer API credentials with hashed token storage, read/write scope checks, expiry, manager-only issue/list/revoke endpoints, usage events, and audit records; [ ] add quota enforcement, webhook delivery, and billing integration.
 - [ ] Ensure public storefront APIs only expose published data and never leak drafts or private merchant/customer information.
 
 ### Payments, tax, and business correctness
