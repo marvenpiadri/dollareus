@@ -53,6 +53,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                       @if(item.categoryName){<p style="margin:0 0 5px;color:#63705b;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">{{item.categoryName}}</p>}
                       <h3 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h3>
                       @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
+                      @if(item.availability === 'limited'){<p style="display:inline-block;margin:8px 0 0;padding:4px 8px;border-radius:999px;background:#fff0d6;color:#81510c;font-size:11px;font-weight:800">Limited availability</p>}
                       @if(item.dietaryLabels?.length){<p style="margin:8px 0 0;color:#456a3e;font-size:12px;font-weight:700">{{item.dietaryLabels.join(' · ')}}</p>}
                       @if(item.allergens?.length){<p style="margin:5px 0 0;color:#8b5b2c;font-size:12px">Contains: {{item.allergens.join(', ')}}</p>}
                       @for(group of item.modifierGroups || [];track group.id){<p style="margin:7px 0 0;color:#667260;font-size:12px"><b>{{group.name}}:</b> @for(option of group.options;track option.id){<span>{{option.name}}@if(option.priceDeltaMinor>0){ ( +{{money(option.priceDeltaMinor,item.currency)}})}@if(!$last){ · }</span>}</p>}
