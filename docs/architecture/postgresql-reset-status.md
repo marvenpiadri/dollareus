@@ -24,13 +24,13 @@ Status: in progress.
 - [x] Add merchant sign-in/register, social login, email verification, and password recovery screens.
 - [x] Bind OAuth state to a short-lived HttpOnly cookie to mitigate login CSRF.
 - [ ] Execute the fresh schema against the intended empty Neon database.
-- [ ] Run `pnpm ci` after the authentication changes; GitHub could not be cloned in this environment, so compile/test status is not confirmed.
+- [x] GitHub Actions production build, API typecheck, and PostgreSQL-backed HTTP smoke suite pass on code commit `36957f7dd9dcdc58ec6ae17976eede22ced4244e`. [Run 38168016807](https://github.com/marvenpiadri/dollareus/actions/runs/38168016807).
 - [ ] Configure and test Google/Facebook OAuth, email delivery, production API URL, and secure cookie behavior.
 - [ ] Verify the created tables directly in Neon.
 
 ## Phase 2 — PostgreSQL API
 
-Status: core commerce API expansion implemented; live database integration and CI verification still pending.
+Status: core commerce API expansion implemented and CI-verified; live Neon integration and production configuration remain pending.
 
 The API currently has PostgreSQL-backed endpoints for:
 - health checks;
@@ -43,7 +43,7 @@ The API currently has PostgreSQL-backed endpoints for:
 - inventory location creation, stock-level reads and guarded stock adjustments;
 - order listing and transactional, server-priced order creation with immutable line snapshots, idempotency-key support and audited status transitions;
 - manual/offline payment recording and history per order, including cash, cash on delivery, bank transfer, mobile money, card-terminal, and other methods; pending records can be manually confirmed or cancelled, balances are calculated from confirmed receipts, and changes are audit-logged. No online payment gateway or card processing is implemented;
-- restaurant menu and menu-item create/list APIs plus a public published-menu projection;
+- restaurant menu and menu-item APIs, validated modifier groups/options with server-side POS price calculation, and public published-menu projection;
 - managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup;
 - order-scoped fulfillment create/list/update APIs with carrier, tracking number/URL, expected delivery, notes, validated delivery-stage transitions, and audit events;
 - order-scoped refund history and refund-recording APIs for successful offline/manual payments, with transaction locks, per-payment refundable-balance checks, idempotency keys, audit events, and derived partial/full refund status. This records a refund operationally; it does not initiate a bank, card, or payment-provider transfer.
@@ -52,20 +52,20 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 
 ## Phase 3 — complete the application
 
-In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
-- [x] reimplement PostgreSQL-backed POS session/order APIs and add the initial retail POS workspace for opening/closing registers, creating server-priced product orders, and audited status transitions; restaurant menu-item UI and inventory deduction remain pending. POS orders are mirrored into canonical orders/order_items, so the existing manual payment/refund APIs are available from the Orders workspace; the POS screen does not yet include inline payment controls.
+In progress. The public homepage, browser-side QR Studio, and a minimal published restaurant-menu renderer (`/{storeSlug}/menu`, or `/menu` on a configured store subdomain) are available without a merchant session; merchant workspace routes remain session-gated. The menu page is for browsing only; online customer carts and checkout are not implemented. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
+- [x] reimplement PostgreSQL-backed POS session/order APIs and build the merchant POS workspace for opening/closing registers, multi-line tickets, retail products, restaurant menu items, priced modifier selections, and audited status transitions. POS orders are mirrored into canonical orders/order_items. The POS screen can record the remaining offline payment. Tracked physical/food stock is deducted transactionally when an order completes, insufficient stock is rejected, and paid orders require a full recorded refund before cancellation. Stock reservation before completion, restaurant ingredient/BOM inventory, dedicated stock-movement history, cancellation/refund stock restoration, and browser-level POS tests remain pending.
 - [x] add authenticated product media upload/retrieval routes backed by Neon S3-compatible object storage; browser-side WebP resizing/compression, 2400×2400 server dimension ceiling, 4 MiB optimized-upload limit, and metadata persistence are implemented. Configure `AWS_S3_BUCKET` on the API host and complete real-bucket round-trip verification.
 - [x] add the first developer API access layer: bearer credentials are organization-scoped, their token is only returned once, stored as a SHA-256 hash, scope-checked, revocable, and usage-metered. The merchant workspace can create, list, revoke, and inspect usage totals for credentials. This is an API foundation, not yet a complete developer portal.
 - reimplement domain routes against PostgreSQL;
-- [x] expand restaurant menu management with store categories, category assignment, and editable allergen/dietary metadata; finish modifier workflows and browser-level menu UX checks;
+- [x] expand restaurant menu management with store categories, category assignment, editable allergen/dietary metadata, and validated modifier groups/options; modifier prices are calculated server-side and published menu pages expose active categories, dietary/allergen details, and modifier choices. Browser-level menu UX checks remain pending;
 - [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
-- [ ] verify the shipping UI/API in CI and against the intended Neon schema; COD collection is recorded through the existing manual/offline payment workflow.
+- [x] verify the fulfillment API in CI; [ ] verify production carrier/tracking URLs and real operational usage against the intended deployment. COD collection is recorded through the manual/offline payment workflow.
 - [x] add refund records and API controls for manually recorded refunds against successful payments; online payment gateway processing remains intentionally deferred.
-- [ ] add merchant UI for refund history and refund recording; verify refund flows in CI and against the intended Neon schema.
-- improve merchant workspace readability and align its palette with X-Facture's midnight/navy and money-green design tokens (implemented; build verification pending);
+- [x] add merchant UI for refund history and refund recording; CI covers partial/full refund rules and POS integration. [ ] verify the live Neon schema and deployed refund workflow before real commerce.
+- [x] improve merchant workspace readability and align its palette with X-Facture's midnight/navy and money-green design tokens; production build verified in CI;
 - finish the remaining merchant workspace screens and operational actions;
 - extend tenant-isolation, transaction, validation, and API integration tests;
-- run and resolve CI on the new implementation before live database/provider testing;
+- [x] run and resolve CI on the current implementation; [ ] complete live database/provider testing;
 - continue Angular merchant-dashboard integration and verify the new offline-payment UI in a real build;
 - [x] add organization-bound developer API credentials with hashed-at-rest tokens, read/write scopes, expiry, manager-only issue/list/revoke endpoints, usage events, and audit records; billing/quotas and webhooks remain pending; developer credential management UI and initial documentation are now available;
 - add shared Dollareus/Mageus identity using a proper cross-domain OAuth/OIDC flow and stable user IDs; do not duplicate password stores or assume cookies work across unrelated domains;
