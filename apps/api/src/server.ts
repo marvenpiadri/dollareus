@@ -250,7 +250,7 @@ app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organiza
   const { organizationId } = request.params;
   if (request.apiCredential) return fail(reply, request, 403, 'SESSION_REQUIRED', 'Manage API credentials using a signed-in merchant session.');
   if (!await requireManagerRole(request, reply, organizationId)) return;
-  const result = await pool.query('SELECT id,organization_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at FROM api_credentials WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 100', [organizationId]);
+  const result = await pool.query('SELECT c.id,c.organization_id,c.name,c.token_prefix,c.scopes,c.expires_at,c.last_used_at,c.revoked_at,c.created_at,(SELECT count(*)::int FROM api_usage_events u WHERE u.credential_id=c.id) AS request_count FROM api_credentials c WHERE c.organization_id=$1 ORDER BY c.created_at DESC LIMIT 100', [organizationId]);
   return reply.send({ data: camelize(result.rows), requestId: request.id });
 });
 
