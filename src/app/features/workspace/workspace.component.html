@@ -102,6 +102,9 @@
               [organizationId]="organizationId()"
               [storeId]="storeId()"
               [currency]="storeCurrency()"
+              [initialMenus]="menus()"
+              [initialMenuItems]="menuItems()"
+              [initialCategories]="categories()"
               (notifyRequested)="notify($event)"
               (dataChanged)="refreshWorkspace()"
             />
