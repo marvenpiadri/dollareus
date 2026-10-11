@@ -45,6 +45,8 @@ export class PosWorkspaceComponent {
       if (organizationId && storeId) void this.loadPosData();
     });
     effect(() => {
+      const sourceType = this.posSourceType();
+      if (sourceType !== 'product') return;
       const products = this.products();
       const selected = this.posVariantId();
       if (!selected || !products.some(product => product.variantId === selected && product.status === 'Active')) {
