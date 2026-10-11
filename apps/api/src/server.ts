@@ -364,9 +364,9 @@ app.put<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiza
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The inventory adjustment payload is invalid.');
   const now = new Date();
   try {
-    const location = await pool.query('SELECT id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3', [parsed.data.locationId, organizationId, 'active']);
+    const location = await pool.query('SELECT id,store_id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3', [parsed.data.locationId, organizationId, 'active']);
     if (!location.rowCount) return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The inventory location does not exist or is inactive.');
-    const variant = await pool.query('SELECT id FROM product_variants WHERE id=$1 AND organization_id=$2', [parsed.data.variantId, organizationId]);
+    const variant = await pool.query('SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.organization_id=$2 AND p.organization_id=$2 AND ($3::text IS NULL OR p.store_id=$3)', [parsed.data.variantId, organizationId, location.rows[0].store_id]);
     if (!variant.rowCount) return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The product variant does not exist in this organization.');
     const result = await pool.query(
       'INSERT INTO inventory_levels (organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at) VALUES ($1,$2,$3,$4,0,$5,$6) ON CONFLICT (location_id,variant_id) DO UPDATE SET quantity_on_hand=EXCLUDED.quantity_on_hand,reorder_point=EXCLUDED.reorder_point,updated_at=EXCLUDED.updated_at RETURNING organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at',
