@@ -7,6 +7,7 @@ import { resolveTxt } from 'node:dns/promises';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { pool } from './db/pool.js';
+import { REQUIRED_SCHEMA_VERSION } from './db/schema-version.js';
 import { authenticate, registerAuthRoutes } from './auth.js';
 
 const app = Fastify({ logger: true, trustProxy: process.env.NODE_ENV === 'production', bodyLimit: 1_048_576, genReqId: () => randomUUID() });
@@ -320,15 +321,14 @@ app.get('/api/v1/health', async (request, reply) => {
       });
     }
 
-    const initialMigration = await pool.query<{ applied: boolean }>(
-      "SELECT EXISTS (SELECT 1 FROM public.schema_migrations WHERE name = $1) AS applied",
-      ['0001_initial_schema.sql']
+    const currentMigration = await pool.query<{ name: string | null }>(
+      'SELECT name FROM public.schema_migrations ORDER BY name DESC LIMIT 1'
     );
-    if (!initialMigration.rows[0]?.applied) {
+    if (currentMigration.rows[0]?.name !== REQUIRED_SCHEMA_VERSION) {
       return reply.code(503).send({
         error: {
-          code: 'DATABASE_SCHEMA_INCOMPLETE',
-          message: 'The database migration ledger exists but the initial Dollareus schema migration is missing.',
+          code: 'DATABASE_SCHEMA_OUTDATED',
+          message: `The database schema is not at the version required by this API. Run pnpm db:status, review the target database, then apply pending migrations with pnpm db:migrate. Required version: ${REQUIRED_SCHEMA_VERSION}.`,
           requestId: request.id
         },
         requestId: request.id
@@ -340,7 +340,8 @@ app.get('/api/v1/health', async (request, reply) => {
         status: 'ok',
         service: 'dollareus-api',
         version: '0.2.0',
-        checks: { database: 'ok', schema: 'ok', migrations: 'initialized' }
+        checks: { database: 'ok', schema: 'ok', migrations: 'current' },
+        schemaVersion: REQUIRED_SCHEMA_VERSION
       },
       requestId: request.id
     };
