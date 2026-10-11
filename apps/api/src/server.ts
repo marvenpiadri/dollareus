@@ -947,6 +947,10 @@ app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organi
 app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/refunds', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  const roleResult = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity!.uid, 'active']);
+  if (!['owner', 'admin', 'manager'].includes(String(roleResult.rows[0]?.role ?? ''))) {
+    return fail(reply, request, 403, 'REFUND_PERMISSION_DENIED', 'Only organization owners, admins, or managers can record refunds.');
+  }
   const parsed = RefundInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a payment ID, positive refund amount in minor currency units, and optional reason/idempotency key.');
   const client = await pool.connect();
