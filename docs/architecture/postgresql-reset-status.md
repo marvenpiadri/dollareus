@@ -30,21 +30,21 @@ Status: in progress.
 
 ## Phase 2 — PostgreSQL API
 
-Status: core cutover started; endpoint parity is incomplete.
+Status: core commerce API expansion implemented; live database integration and CI verification still pending.
 
 The API currently has PostgreSQL-backed endpoints for:
 - health checks;
 - creating and listing organizations, including the first owner membership;
 - creating and listing stores and storefront settings;
 - listing and creating products with variants;
-- reading published store and catalog projections.
+- reading published store and catalog projections;\n- store-scoped category listing and creation;\n- organization-scoped customer listing and creation;\n- inventory location creation, stock-level reads and guarded stock adjustments;\n- order listing and transactional, server-priced order creation with immutable line snapshots and idempotency-key support.
 
 The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
 
 ## Phase 3 — complete the application
 
-Not started / in progress after Phase 2:
-- reimplement the remaining category, menu, POS, entry-point, domain, media, inventory, customer and order routes against PostgreSQL;
+In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
+- reimplement the remaining menu, POS, entry-point, domain and media routes against PostgreSQL;\n- connect the merchant orders, customers and inventory screens to the new endpoints;
 - restore product editing and complete the merchant workflows;
 - add tenant-isolation, transaction, validation, and API integration tests;
 - connect the Angular merchant dashboard to the API;
