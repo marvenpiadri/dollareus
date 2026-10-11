@@ -64,7 +64,7 @@ async function createSession(userId: string): Promise<{ token: string; expiresAt
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   request.apiCredential = null;
   const sessionToken = cookieValue(request, SESSION_COOKIE);
-  const bearerToken = request.headers.authorization?.match(/^Bearer\\s+(dlr_live_[A-Za-z0-9_-]+)$/i)?.[1] ?? null;
+  const bearerToken = request.headers.authorization?.match(/^Bearer\s+(dlr_live_[A-Za-z0-9_-]+)$/i)?.[1] ?? null;
   if (!sessionToken && bearerToken) {
     const now = new Date();
     const credential = await pool.query(
