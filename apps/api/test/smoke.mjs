@@ -25,7 +25,11 @@ const checks = [];
 try {
   const health = await request('/api/v1/health', 200);
   if (health.payload?.data?.status !== 'ok') throw new Error('Health endpoint did not return status=ok.');
-  checks.push('health');
+  const authProviders = await request('/api/v1/auth/providers', 200);
+  if (typeof authProviders.payload?.data?.emailFlows !== 'boolean' || typeof authProviders.payload?.data?.google !== 'boolean' || typeof authProviders.payload?.data?.facebook !== 'boolean') {
+    throw new Error('Auth provider discovery did not return explicit configuration flags.');
+  }
+  checks.push('health and auth-provider discovery');
 
   await request('/api/v1/auth/session', 401);
   await request('/api/v1/organizations', 401);
@@ -51,6 +55,10 @@ try {
     body: JSON.stringify({ email: signupEmail, password: signupPassword })
   });
   if (!login.response.headers.get('set-cookie')?.includes('dollareus_session=')) throw new Error('Login did not issue a session cookie.');
+  const loginCookie = login.response.headers.get('set-cookie')?.match(/dollareus_session=([^;]+)/)?.[1];
+  if (!loginCookie) throw new Error('Login session cookie was not present.');
+  const loginSession = await request('/api/v1/auth/session', 200, { headers: { cookie: `dollareus_session=${loginCookie}` } });
+  if (loginSession.payload?.data?.id !== signupUserId) throw new Error('Login did not create a valid session for the account.');
   checks.push('signup, session cookie, logout, and login without email-provider configuration');
 
   const now = new Date();
