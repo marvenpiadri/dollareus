@@ -163,11 +163,20 @@ try {
   });
   const entryPoint = await request(`/api/v1/organizations/${organizationId}/entry-points`, 201, {
     method: 'POST', headers: authHeaders,
-    body: JSON.stringify({ storeId, type: 'qr', targetPath: '/menu' })
+    body: JSON.stringify({ storeId, type: 'qr', targetPath: '/menu', branding: { brandName: 'Smoke Restaurant', foregroundColor: '#123456', backgroundColor: '#ffffff', accentColor: '#2b7a55', frame: 'bottom-label', label: 'Scan to view menu' } })
   });
+  if (entryPoint.payload?.data?.branding?.brandName !== 'Smoke Restaurant') throw new Error('QR branding was not returned after creation.');
   const entryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
-  if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id)) throw new Error('QR entry point did not persist.');
-  checks.push('restaurant menu publishing, item availability controls, and managed QR entry points');
+  if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id && item.branding?.foregroundColor === '#123456')) throw new Error('QR entry point branding did not persist.');
+  await request(`/api/v1/organizations/${organizationId}/entry-points/${entryPoint.payload?.data?.id}`, 403, {
+    method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ branding: { brandName: 'Unauthorized edit' } })
+  });
+  await request(`/api/v1/organizations/${organizationId}/entry-points/${entryPoint.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ branding: { brandName: 'Updated Restaurant', foregroundColor: '#654321' } })
+  });
+  const updatedEntryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
+  if (!updatedEntryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id && item.branding?.brandName === 'Updated Restaurant')) throw new Error('QR branding update did not persist.');
+  checks.push('restaurant menu publishing, item availability, branded QR entry points, and role-restricted branding updates');
   await request('/api/v1/organizations/' + organizationId + '/domains', 403, {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ storeId, hostname: 'viewer-' + suffix + '.example.org' })
