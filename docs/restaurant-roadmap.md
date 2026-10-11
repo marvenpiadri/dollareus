@@ -20,11 +20,11 @@ Included:
 Acceptance gate:
 - [x] Merchant and API implementation exists.
 - [x] API smoke checks cover publish gating, disabled experience, unavailable/limited dishes, modifier data, and QR destination privacy.
-- [ ] Public menu smoke check also verifies category name, allergens, and dietary labels. (Added to CI on 2026-10-11; awaiting the new run.)
+- [x] Public menu smoke check verifies category name, allergens, and dietary labels. Passed in [CI run 38171550934](https://github.com/marvenpiadri/dollareus/actions/runs/38171550934).
 - [ ] Browser/manual test on desktop and a real phone-sized viewport: direct URL, QR destination, loading/error/empty states, long dish names, and narrow-screen layout.
 - [ ] Verify the live deployed URL, HTTPS, and QR destination against the actual configured domain.
 
-Do not move this phase to “complete” until the new CI run passes and the browser/live checks are recorded.
+Do not move this phase to “complete” until browser/manual and live-environment checks are recorded.
 
 ## Phase 2 — Restaurant menu management
 
@@ -96,4 +96,4 @@ Acceptance gate:
 
 ## Current execution position
 
-Phase 1 is the active phase. The public menu UI and API behavior are implemented, and the prior CI run passed. An additional regression assertion for category name, allergen, and dietary-label visibility has just been committed and must pass its new CI run. No phase is considered complete based on code presence alone; browser and live-environment checks are tracked separately.
+Phase 1 remains the active phase. The public menu UI and API behavior are implemented, and the latest CI checks passed: category grouping in [run 38171271714](https://github.com/marvenpiadri/dollareus/actions/runs/38171271714), public category/allergen/dietary assertions in [run 38171550934](https://github.com/marvenpiadri/dollareus/actions/runs/38171550934), and the latest branch run [38171576417](https://github.com/marvenpiadri/dollareus/actions/runs/38171576417). Phase 1 is not yet closed because browser/manual and live deployment checks are environment-dependent and have not been recorded.
