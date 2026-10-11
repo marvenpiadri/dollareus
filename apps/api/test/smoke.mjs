@@ -320,6 +320,10 @@ try {
   const categorizedProduct = categorizedProducts.payload?.data?.find((item) => item.id === activeProduct.payload?.data?.id);
   if (!categorizedProduct?.categoryIds?.includes(category.payload?.data?.id)) throw new Error('Product category assignment did not persist.');
   checks.push('product category assignment and tenant/store validation');
+  await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 200, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ locationId: location.payload?.data?.id, variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantityOnHand: 5, reorderPoint: 1 })
+  });
   const posBase = `/api/v1/organizations/${organizationId}/stores/${storeId}/pos`;
   const posSession = await request(`${posBase}/sessions`, 201, {
     method: 'POST', headers: authHeaders,
@@ -361,6 +365,11 @@ try {
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
   const posCompleted = await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
   if (posCompleted.payload?.data?.status !== 'completed' || posCompleted.payload?.data?.items?.length !== 1) throw new Error('POS status transition or order history projection failed.');
+  const inventoryAfterPosSale = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const soldVariantStock = inventoryAfterPosSale.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
+  if (Number(soldVariantStock?.quantityOnHand) !== 3) throw new Error('Completing a POS sale did not deduct tracked stock exactly once.');
+  checks.push('POS completion deducts tracked inventory at the register location');
+
   const canonicalOrders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
   const canonicalPosOrder = canonicalOrders.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
   if (!canonicalPosOrder || canonicalPosOrder.channel !== 'POS' || Number(canonicalPosOrder.totalMinor) !== 2598 || canonicalPosOrder.items?.length !== 1) {
