@@ -9,8 +9,9 @@ type ProductStatus = 'Active' | 'Draft' | 'Archived';
 interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
 interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
+interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
 interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; allergens?: string[]; dietaryLabels?: string[]; }
+interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; }
 interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
 type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
@@ -169,6 +170,13 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label>
                 <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
               </form>
+              <div class="panel-heading"><div><h2>Menu categories</h2><p>Use store categories to group restaurant dishes.</p></div></div>
+              <form class="customer-form" (submit)="createCategory($event)">
+                <label>Category name<input name="name" required maxlength="120" placeholder="e.g. Starters"></label>
+                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="starters"></label>
+                <button class="button secondary" type="submit" [disabled]="categoryBusy()">{{categoryBusy()?'Saving…':'＋ Add category'}}</button>
+              </form>
+              <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SLUG</th><th>STATUS</th></tr></thead><tbody>@for(category of categories();track category.id){<tr><td>{{category.name}}</td><td>{{category.slug}}</td><td>{{category.status}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No categories yet. Add one to group dishes.</td></tr>}</tbody></table></div>
               @if(menuError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{menuError()}}</p>}
               <div class="table-wrap"><table><thead><tr><th>MENU</th><th>ITEMS</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
                 @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
@@ -181,6 +189,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
                   <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required placeholder="45.00"></label>
                   <label>Description<input name="description" maxlength="5000" placeholder="Optional description"></label>
+                  <label>Category<select name="categoryId"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
                   <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" placeholder="e.g. milk, sesame, nuts"></label>
                   <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" placeholder="e.g. vegetarian, vegan, gluten-free"></label>
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
@@ -367,20 +376,22 @@ export class AppComponent {
           tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiBase() + String(p.media[0].contentUrl) + '?width=300' : null
         };
       }));
-      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, entryPointRows] = await Promise.all([
+      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, entryPointRows, categoryRows] = await Promise.all([
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/entry-points')
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/entry-points'),
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
         channel: String(order.channel ?? 'Mageus'), totalMinor: Number(order.totalMinor ?? 0), currency: String(order.currency ?? store.defaultCurrency ?? 'MAD'),
         status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.effectivePaymentStatus ?? order.paymentStatus ?? 'unpaid')
       })));
+      this.categories.set(Array.isArray(categoryRows) ? categoryRows as CategoryRow[] : []);
       this.customers.set((Array.isArray(customerRows) ? customerRows : []).map((customer: any): CustomerRow => ({
         id: String(customer.id), displayName: String(customer.displayName ?? [customer.firstName, customer.lastName].filter(Boolean).join(' ')),
         email: typeof customer.email === 'string' ? customer.email : null, phone: typeof customer.phone === 'string' ? customer.phone : null
@@ -467,6 +478,8 @@ export class AppComponent {
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly orders = signal<OrderRow[]>([]);
   protected readonly customers = signal<CustomerRow[]>([]);
+  protected readonly categories = signal<CategoryRow[]>([]);
+  protected readonly categoryBusy = signal(false);
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
   protected readonly selectedMenuId = signal('');
@@ -1007,6 +1020,24 @@ export class AppComponent {
   }
   protected selectedMenuName(): string { return this.menus().find(menu => menu.id === this.selectedMenuId())?.name ?? 'Menu'; }
   protected selectedMenuItems(): MenuItemRow[] { return this.menuItems().filter(item => item.menuId === this.selectedMenuId()); }
+  protected async createCategory(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const values = new FormData(form);
+    const name = String(values.get('name') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim();
+    if (!name || !slug || !this.storeId()) { this.menuError.set('Enter a category name and URL slug.'); return; }
+    this.categoryBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
+        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
+      });
+      form.reset();
+      await this.loadWorkspace();
+      this.notify('Menu category created.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create category.'); }
+    finally { this.categoryBusy.set(false); }
+  }
   protected async createMenu(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
@@ -1036,6 +1067,7 @@ export class AppComponent {
     const description = String(values.get('description') ?? '').trim();
     const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const categoryId = String(values.get('categoryId') ?? '').trim() || null;
     const menuId = this.selectedMenuId();
     if (!menuId || !name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
       this.menuError.set('Choose a menu and enter a valid item name, slug, and non-negative price.'); return;
@@ -1043,7 +1075,7 @@ export class AppComponent {
     this.menuBusy.set(true); this.menuError.set('');
     try {
       await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
-        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', allergens, dietaryLabels, availability: 'available', metadata: {} })
+        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', categoryId, allergens, dietaryLabels, availability: 'available', metadata: {} })
       });
       await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
