@@ -1,6 +1,7 @@
--- Dollareus PostgreSQL schema
--- Fresh-install schema for a new application. No data migration and no column defaults.
--- IDs and timestamps are supplied explicitly by the API. Run only against an empty database.
+-- Dollareus PostgreSQL schema snapshot.
+-- Ordered migrations in db/migrations/ are the source of truth for database upgrades.
+-- Never edit an applied migration; add a new numbered migration instead.
+-- IDs and timestamps are supplied explicitly by the API.
 
 BEGIN;
 
