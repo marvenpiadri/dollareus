@@ -879,7 +879,8 @@ export class AppComponent {
       accent: point.branding?.accentColor ?? '#238636',
       brand: point.branding?.brandName ?? this.storeName(),
       frame: point.branding?.frame ?? 'bottom-label',
-      label: point.branding?.label ?? 'Scan to view menu'
+      label: point.branding?.label ?? 'Scan to view menu',
+      logo: point.branding?.logoUrl ?? ''
     });
     return '/qr?' + params.toString();
   }
