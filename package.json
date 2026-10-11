@@ -13,7 +13,8 @@
     "api:typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
     "ci": "pnpm build && pnpm api:typecheck",
     "db:setup": "pnpm db:migrate",
-    "db:migrate": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts"
+    "db:migrate": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts",
+    "db:status": "node --env-file-if-exists=.env --import tsx apps/api/src/db/status.ts"
   },
   "engines": {
     "node": ">=22.22.3"
