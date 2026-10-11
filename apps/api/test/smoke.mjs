@@ -161,6 +161,10 @@ try {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ status: 'published' })
   });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ availability: 'available' })
+  });
   const entryPoint = await request(`/api/v1/organizations/${organizationId}/entry-points`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, type: 'qr', targetPath: '/menu', branding: { brandName: 'Smoke Restaurant', foregroundColor: '#123456', backgroundColor: '#ffffff', accentColor: '#2b7a55', frame: 'bottom-label', label: 'Scan to view menu' } })
