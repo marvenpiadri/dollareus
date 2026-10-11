@@ -589,7 +589,7 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
 });
 
 
-const OrderStatusUpdateInput = z.object({ status: z.enum(['confirmed', 'processing', 'completed', 'cancelled']) }).strict();
+const OrderStatusUpdateInput = z.object({ status: z.enum(['pending', 'confirmed', 'processing', 'completed', 'cancelled']) }).strict();
 
 app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
