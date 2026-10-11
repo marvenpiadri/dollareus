@@ -34,6 +34,12 @@ Dollareus is an API-first business operating system for retailers, restaurants, 
 - `schemas`: JSON Schemas for API/domain records.
 - `docs/architecture`: architecture, API and media-storage decisions.
 
+## Deployment and readiness
+
+- [Production deployment checklist](docs/deployment/production-checklist.md)
+- [Launch readiness and outstanding blockers](docs/launch-readiness.md)
+- [Developer API credential guide](docs/api/developer-credentials.md)
+
 ## Local development
 
 Requirements: Node.js 20.19+ and pnpm 10.
