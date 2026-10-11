@@ -207,6 +207,7 @@ export class RestaurantMenuManagerComponent {
       const parsedModifiers: unknown = JSON.parse(String(values.get('modifierGroupsJson') ?? '[]'));
       if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
       const groups = parsedModifiers as unknown[];
+      if (groups.length > 20) throw new Error('An item can have at most 20 modifier groups.');
       const groupIds = new Set<string>();
       modifierGroups = groups.map((rawGroup, groupIndex) => {
         if (!rawGroup || typeof rawGroup !== 'object' || Array.isArray(rawGroup)) {
@@ -220,11 +221,13 @@ export class RestaurantMenuManagerComponent {
         if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || groupIds.has(id)) {
           throw new Error(`Modifier group ${groupIndex + 1} needs a unique lowercase ID.`);
         }
-        if (!groupName || groupName.length > 120 || typeof group.required !== 'boolean' ||
+        if (!groupName || groupName.length > 100 || typeof group.required !== 'boolean' ||
             !Number.isSafeInteger(minSelections) || !Number.isSafeInteger(maxSelections) ||
-            (minSelections as number) < 0 || (maxSelections as number) < (minSelections as number) ||
+            (minSelections as number) < 0 || (minSelections as number) > 20 ||
+            (maxSelections as number) < 1 || (maxSelections as number) > 20 ||
+            (maxSelections as number) < (minSelections as number) ||
             (group.required && (minSelections as number) < 1) || !Array.isArray(group.options) ||
-            (maxSelections as number) > group.options.length) {
+            group.options.length < 1 || group.options.length > 30 || (maxSelections as number) > group.options.length) {
           throw new Error(`Modifier group "${groupName || id}" has invalid names, selection limits, or options.`);
         }
         groupIds.add(id);
@@ -237,7 +240,8 @@ export class RestaurantMenuManagerComponent {
           const optionId = typeof option.id === 'string' ? option.id.trim() : '';
           const optionName = typeof option.name === 'string' ? option.name.trim() : '';
           if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(optionId) || optionIds.has(optionId) ||
-              !optionName || optionName.length > 120 || !Number.isSafeInteger(option.priceDeltaMinor)) {
+              !optionName || optionName.length > 100 || !Number.isSafeInteger(option.priceDeltaMinor) ||
+              (option.priceDeltaMinor as number) < 0 || (option.priceDeltaMinor as number) > Number.MAX_SAFE_INTEGER) {
             throw new Error(`Option ${optionIndex + 1} in "${groupName}" needs a unique lowercase ID, name, and integer price delta.`);
           }
           optionIds.add(optionId);
