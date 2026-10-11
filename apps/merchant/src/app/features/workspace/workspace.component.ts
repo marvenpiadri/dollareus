@@ -1,13 +1,27 @@
 import { DatePipe } from '@angular/common';
-import { AuthPanelComponent } from '../auth/auth-panel.component';
-import { RestaurantMenuManagerComponent } from '../restaurants/menus/restaurant-menu-manager.component';
+import { Component, computed, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-
-type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, EntryPointRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+import {
+  CategoryRow,
+  CustomerRow,
+  EntryPointRow,
+  FulfillmentStage,
+  InventoryRow,
+  MenuItemRow,
+  MenuModifierGroup,
+  MenuModifierOption,
+  MenuRow,
+  OrderRow,
+  PosCartLine,
+  ProductRow,
+  ProductStatus,
+  ShipmentDetails
+} from '../../shared/models/commerce.models';
+import { AuthPanelComponent } from '../auth/auth-panel.component';
+import { RestaurantMenuManagerComponent } from '../restaurants/menus/restaurant-menu-manager.component';
+import { CHANNEL_NAVIGATION, NavItem, PRIMARY_NAVIGATION } from './workspace-navigation';
 
 
 @Component({
@@ -214,10 +228,8 @@ export class WorkspaceComponent {
   protected readonly search = signal('');
   protected readonly productFilter = signal<'All' | ProductStatus>('All');
   protected readonly toast = signal('');
-  protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
-    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Menus',symbol:'☷'},{label:'QR Studio',symbol:'▦'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
-  ];
-  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
+  protected readonly primaryNav = PRIMARY_NAVIGATION;
+  protected readonly channelNav = CHANNEL_NAVIGATION;
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly orders = signal<OrderRow[]>([]);
