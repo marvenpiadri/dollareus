@@ -1,8 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { AuthPanelComponent } from './auth-panel.component';
-import { PublicHomeComponent } from './public-home.component';
-import { QrStudioComponent } from './qr-studio.component';
+import { AuthPanelComponent } from './features/auth/auth-panel.component';
+import { PublicHomeComponent } from './features/public-home/public-home.component';
+import { QrStudioComponent } from './features/qr-studio/qr-studio.component';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
