@@ -143,68 +143,13 @@
               <div class="table-wrap"><table><thead><tr><th>CUSTOMER</th><th>EMAIL</th><th>PHONE</th></tr></thead><tbody>@for(customer of customers();track customer.id){<tr><td>{{customer.displayName || 'Unnamed customer'}}</td><td>{{customer.email || '—'}}</td><td>{{customer.phone || '—'}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No customer records yet. Add a customer to get started.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{customers().length}} customers</div></section>
           }
           @if (activeNav() === 'Menus') {
-            <section class="panel product-panel">
-              <div class="panel-heading"><div><h2>Restaurant menus</h2><p>Create menus, publish them, and control item availability. Changes are saved to the organization API.</p></div></div>
-              <form class="customer-form" (submit)="createMenu($event)">
-                <label>Menu name<input name="name" required maxlength="180" placeholder="e.g. Lunch menu"></label>
-                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lunch-menu"></label>
-                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label><label>Service periods<input name="servicePeriods" maxlength="800" placeholder="all-day or lunch, dinner" value="all-day"></label>
-                <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
-              </form>
-              <div class="panel-heading"><div><h2>Menu categories</h2><p>Use store categories to group restaurant dishes.</p></div></div>
-              <form class="customer-form" (submit)="createCategory($event)">
-                <label>Category name<input name="name" required maxlength="120" placeholder="e.g. Starters"></label>
-                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="starters"></label>
-                <button class="button secondary" type="submit" [disabled]="categoryBusy()">{{categoryBusy()?'Saving…':'＋ Add category'}}</button>
-              </form>
-              <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SLUG</th><th>STATUS</th></tr></thead><tbody>@for(category of categories();track category.id){<tr><td>{{category.name}}</td><td>{{category.slug}}</td><td>{{category.status}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No categories yet. Add one to group dishes.</td></tr>}</tbody></table></div>
-              @if(menuError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{menuError()}}</p>}
-              <div class="table-wrap"><table><thead><tr><th>MENU</th><th>ITEMS</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
-                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" aria-label="Move menu up" [disabled]="menuBusy() || menus().indexOf(menu) === 0" (click)="moveMenu(menu,-1)">↑</button><button class="button small" type="button" aria-label="Move menu down" [disabled]="menuBusy() || menus().indexOf(menu) === menus().length - 1" (click)="moveMenu(menu,1)">↓</button><button class="button small" type="button" (click)="editingMenu.set(menu)">Edit menu</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
-                @if(menus().length === 0){<tr><td colspan="4" class="empty-state">Create your first menu to start adding restaurant items.</td></tr>}
-              </tbody></table></div>
-              @if(editingMenu(); as menuToEdit){
-                <form class="customer-form" (submit)="saveMenu($event, menuToEdit)">
-                  <div class="panel-heading"><div><h2>Edit menu</h2><p>Update the menu details shown to customers.</p></div><button class="button small" type="button" (click)="editingMenu.set(null)">Cancel</button></div>
-                  <label>Menu name<input name="name" required maxlength="180" [value]="menuToEdit.name"></label>
-                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="menuToEdit.slug"></label>
-                  <label>Description<input name="description" maxlength="5000" [value]="menuToEdit.description || ''"></label>
-                  <label>Service periods<input name="servicePeriods" required maxlength="800" [value]="menuToEdit.servicePeriods.join(', ')" placeholder="lunch, dinner"></label>
-                  <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save menu changes'}}</button>
-                </form>
-              }
-              @if(selectedMenuId()){
-                <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{selectedMenuName()}}</p></div></div>
-                <form class="customer-form" (submit)="createMenuItem($event)">
-                  <label>Item name<input name="name" required maxlength="180" placeholder="e.g. Chicken sandwich"></label>
-                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
-                  <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required placeholder="45.00"></label>
-                  <label>Description<input name="description" maxlength="5000" placeholder="Optional description"></label>
-                  <label>Category<select name="categoryId"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
-                  <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" placeholder="e.g. milk, sesame, nuts"></label>
-                  <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" placeholder="e.g. vegetarian, vegan, gluten-free"></label>
-                  <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
-                </form>
-                <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>CATEGORY</th><th>DIETARY / ALLERGENS</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
-                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td>{{categoryName(item.categoryId)}}</td><td><div>{{(item.dietaryLabels || []).join(', ') || '—'}}</div><small class="muted">{{(item.allergens || []).length ? 'Contains: ' + (item.allergens || []).join(', ') : 'No allergens listed'}}</small></td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><div class="product-actions"><button class="button secondary small" type="button" (click)="editingMenuItem.set(item)">Edit details</button><button class="button small" type="button" aria-label="Move dish up" [disabled]="menuBusy() || selectedMenuItems().indexOf(item) === 0" (click)="moveMenuItem(item,-1)">↑</button><button class="button small" type="button" aria-label="Move dish down" [disabled]="menuBusy() || selectedMenuItems().indexOf(item) === selectedMenuItems().length - 1" (click)="moveMenuItem(item,1)">↓</button><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
-                  @if(selectedMenuItems().length === 0){<tr><td colspan="6" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
-                </tbody></table></div>
-                @if(editingMenuItem()){
-                  <div class="panel-heading"><div><h2>Edit menu item details</h2><p>{{editingMenuItem()?.name}} · allergens and dietary labels should reflect the recipe and preparation process.</p></div><button type="button" (click)="editingMenuItem.set(null)">Cancel</button></div>
-                  <form class="customer-form" (submit)="saveMenuItemDetails($event)">
-                    <label>Item name<input name="name" required maxlength="180" [value]="editingMenuItem()?.name || ''"></label>
-                    <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="editingMenuItem()?.slug || ''"></label>
-                    <label>Description<input name="description" maxlength="5000" [value]="editingMenuItem()?.description || ''"></label>
-                    <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required [value]="(editingMenuItem()?.priceAmountMinor || 0) / 100"></label>
-                    <label>Category<select name="categoryId" [value]="editingMenuItem()?.categoryId || ''"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
-                    <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" [value]="(editingMenuItem()?.allergens || []).join(', ')" placeholder="milk, sesame, nuts"></label>
-                    <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" [value]="(editingMenuItem()?.dietaryLabels || []).join(', ')" placeholder="vegetarian, vegan, gluten-free"></label>
-                    <label>Modifier groups (JSON)<textarea name="modifierGroupsJson" rows="7" [value]="modifierGroupsJson(editingMenuItem())" placeholder='[{"id":"size","name":"Size","required":true,"minSelections":1,"maxSelections":1,"options":[{"id":"regular","name":"Regular","priceDeltaMinor":0},{"id":"large","name":"Large","priceDeltaMinor":500}]}]'></textarea><small class="muted">Optional. Prices are in minor currency units (e.g. 500 = 5.00 MAD). Use unique lowercase IDs for groups and options.</small></label>
-                    <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save item details'}}</button>
-                  </form>
-                }
-              }
-            </section>
+            <dlr-restaurant-menu-manager
+              [organizationId]="organizationId()"
+              [storeId]="storeId()"
+              [currency]="storeCurrency()"
+              (notifyRequested)="notify($event)"
+              (dataChanged)="refreshWorkspace()"
+            />
           }
           @if (activeNav() === 'Inventory') {
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Inventory</h2><p>Adjust stock by variant and location. Reserved quantities are protected.</p></div></div>

@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { AuthPanelComponent } from '../auth/auth-panel.component';
+import { RestaurantMenuManagerComponent } from '../restaurants/menus/restaurant-menu-manager.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -12,7 +13,7 @@ import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow,
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
@@ -157,7 +158,6 @@ export class WorkspaceComponent {
         dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
         modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
       }))));
-      if (!loadedMenus.some((menu) => menu.id === this.selectedMenuId())) this.selectedMenuId.set(loadedMenus[0]?.id ?? '');
       const sessions = Array.isArray(sessionRows) ? sessionRows : [];
       this.posSessions.set(sessions);
       this.posOrders.set(Array.isArray(posOrderRows) ? posOrderRows : []);
@@ -223,14 +223,8 @@ export class WorkspaceComponent {
   protected readonly orders = signal<OrderRow[]>([]);
   protected readonly customers = signal<CustomerRow[]>([]);
   protected readonly categories = signal<CategoryRow[]>([]);
-  protected readonly categoryBusy = signal(false);
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
-  protected readonly selectedMenuId = signal('');
-  protected readonly editingMenuItem = signal<MenuItemRow | null>(null);
-  protected readonly editingMenu = signal<MenuRow | null>(null);
-  protected readonly menuBusy = signal(false);
-  protected readonly menuError = signal('');
   protected readonly entryPoints = signal<EntryPointRow[]>([]);
   protected readonly selectedQrId = signal('');
   protected readonly qrBusy = signal(false);
@@ -845,7 +839,6 @@ export class WorkspaceComponent {
     } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not change QR entry point status.'); }
     finally { this.qrBusy.set(false); }
   }
-  protected selectedMenuName(): string { return this.menus().find(menu => menu.id === this.selectedMenuId())?.name ?? 'Menu'; }
   protected selectedPosMenuItem(): MenuItemRow | null { return this.menuItems().find(item => item.id === this.posVariantId() && item.status === 'active' && item.availability !== 'unavailable' && this.menus().some(menu => menu.id === item.menuId && menu.status === 'active')) ?? null; }
   protected togglePosModifier(groupId: string, optionId: string, checked: boolean, maxSelections: number): void {
     this.posModifiers.update(current => {
@@ -869,185 +862,9 @@ export class WorkspaceComponent {
     const item = this.selectedPosMenuItem();
     return (item?.modifierGroups ?? []).map(group => ({ groupId: group.id, optionIds: this.posModifiers()[group.id] ?? [] })).filter(selection => selection.optionIds.length > 0);
   }
-  protected modifierGroupsJson(item: MenuItemRow | null): string { return JSON.stringify(item?.modifierGroups ?? [], null, 2); }
 
   protected availablePosMenuItems(): MenuItemRow[] { const activeMenus = new Set(this.menus().filter(menu => menu.status === 'active').map(menu => menu.id)); return this.menuItems().filter(item => item.status === 'active' && item.availability !== 'unavailable' && activeMenus.has(item.menuId)); }
-  protected selectedMenuItems(): MenuItemRow[] { return this.menuItems().filter(item => item.menuId === this.selectedMenuId()); }
-  protected async createCategory(event: Event): Promise<void> {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const values = new FormData(form);
-    const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    if (!name || !slug || !this.storeId()) { this.menuError.set('Enter a category name and URL slug.'); return; }
-    this.categoryBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
-        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
-      });
-      form.reset();
-      await this.loadWorkspace();
-      this.notify('Menu category created.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create category.'); }
-    finally { this.categoryBusy.set(false); }
-  }
-  protected async createMenu(event: Event): Promise<void> {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const values = new FormData(form);
-    const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    const description = String(values.get('description') ?? '').trim();
-    const servicePeriods = String(values.get('servicePeriods') ?? 'all-day').split(',').map(value => value.trim()).filter(Boolean);
-    if (!name || !slug || servicePeriods.length === 0) return;
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      const created = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
-        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods, status: 'draft' })
-      });
-      await this.loadWorkspace();
-      if (created?.id) this.selectedMenuId.set(String(created.id));
-      form.reset(); this.notify('Menu created as a draft.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async saveMenu(event: Event, menu: MenuRow): Promise<void> {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const values = new FormData(form);
-    const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    const description = String(values.get('description') ?? '').trim();
-    const servicePeriods = String(values.get('servicePeriods') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    if (!name || !slug || servicePeriods.length === 0) {
-      this.menuError.set('Provide a name, slug, and at least one service period.');
-      return;
-    }
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id), {
-        method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, servicePeriods })
-      });
-      await this.loadWorkspace();
-      this.editingMenu.set(null);
-      this.notify('Menu details updated.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async createMenuItem(event: Event): Promise<void> {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const values = new FormData(form);
-    const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    const price = Number(values.get('price'));
-    const description = String(values.get('description') ?? '').trim();
-    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    const categoryId = String(values.get('categoryId') ?? '').trim() || null;
-    const menuId = this.selectedMenuId();
-    if (!menuId || !name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
-      this.menuError.set('Choose a menu and enter a valid item name, slug, and non-negative price.'); return;
-    }
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
-        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', categoryId, allergens, dietaryLabels, availability: 'available', metadata: {} })
-      });
-      await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async saveMenuItemDetails(event: Event): Promise<void> {
-    event.preventDefault();
-    const item = this.editingMenuItem();
-    if (!item) return;
-    const values = new FormData(event.currentTarget as HTMLFormElement);
-    const categoryId = String(values.get('categoryId') ?? '').trim() || null;
-    const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    const description = String(values.get('description') ?? '').trim();
-    const price = Number(values.get('price'));
-    if (!name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) { this.menuError.set('Enter a valid item name, slug, and non-negative price.'); return; }
-    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    let modifierGroups: MenuModifierGroup[];
-    try {
-      const parsedModifiers: unknown = JSON.parse(String(values.get('modifierGroupsJson') ?? '[]'));
-      if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
-      modifierGroups = parsedModifiers as MenuModifierGroup[];
-    } catch {
-      this.menuError.set('Modifier groups must be valid JSON containing an array.'); return;
-    }
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
-        method: 'PATCH', body: JSON.stringify({ name, slug, description: description || null, priceAmountMinor: Math.round(price * 100), categoryId, allergens, dietaryLabels, modifierGroups })
-      });
-      this.editingMenuItem.set(null);
-      await this.loadWorkspace();
-      this.notify('Menu item details updated.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu item details.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async moveMenu(menu: MenuRow, delta: -1 | 1): Promise<void> {
-    const ordered = [...this.menus()];
-    const index = ordered.findIndex(row => row.id === menu.id);
-    const target = index + delta;
-    if (index < 0 || target < 0 || target >= ordered.length || this.menuBusy()) return;
-    [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/menus/reorder', {
-        method: 'PUT', body: JSON.stringify({ menuIds: ordered.map(row => row.id) })
-      });
-      await this.loadWorkspace();
-      this.notify('Menu order saved.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder menus. Reload and try again.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async moveMenuItem(item: MenuItemRow, delta: -1 | 1): Promise<void> {
-    const ordered = [...this.selectedMenuItems()];
-    const index = ordered.findIndex(row => row.id === item.id);
-    const target = index + delta;
-    if (index < 0 || target < 0 || target >= ordered.length || this.menuBusy()) return;
-    [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/reorder', {
-        method: 'PUT', body: JSON.stringify({ itemIds: ordered.map(row => row.id) })
-      });
-      await this.loadWorkspace();
-      this.notify('Dish order saved.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder dishes. Reload and try again.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async setMenuStatus(menu: MenuRow, status: 'draft' | 'active'): Promise<void> {
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id) + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
-      await this.loadWorkspace(); this.notify(status === 'active' ? 'Menu published.' : 'Menu unpublished.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu status.'); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async setMenuItemAvailability(item: MenuItemRow, availability: 'available' | 'unavailable' | 'limited'): Promise<void> {
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ availability }) });
-      this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, availability } : row));
-      this.notify('Item availability updated.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item availability.'); await this.loadWorkspace(); }
-    finally { this.menuBusy.set(false); }
-  }
-  protected async setMenuItemStatus(item: MenuItemRow, status: 'draft' | 'active'): Promise<void> {
-    this.menuBusy.set(true); this.menuError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ status }) });
-      this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, status } : row));
-      this.notify(status === 'active' ? 'Menu item published.' : 'Menu item unpublished.');
-    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item status.'); }
-    finally { this.menuBusy.set(false); }
-  }
+  protected refreshWorkspace(): void { void this.loadWorkspace(); }
   protected addProduct(): void { this.activeNav.set('Products'); this.editingProduct.set(null); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected editProduct(product: ProductRow): void { this.editingProduct.set(product); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected closeProductEditor(): void { if (!this.productSaveBusy()) { this.productEditorOpen.set(false); this.editingProduct.set(null); } }
