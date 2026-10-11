@@ -584,7 +584,8 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
     [request.params.entryPointId]
   );
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
-  return { data: { ...camelize(result.rows[0]!), targetUrlPath: result.rows[0].target_path === '/' ? '/' + result.rows[0].store_slug : '/' + result.rows[0].store_slug + result.rows[0].target_path }, requestId: request.id };
+  const row = result.rows[0];
+  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath: row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path }, requestId: request.id };
 });
 
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
