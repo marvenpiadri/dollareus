@@ -136,6 +136,11 @@ try {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, slug: `smoke-menu-${suffix}`, name: 'Smoke Menu', description: null, servicePeriods: ['lunch', 'dinner'], status: 'draft', position: 0 })
   });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 403, {
+    method: 'PATCH', headers: viewerHeaders,
+    body: JSON.stringify({ status: 'active' })
+  });
+  checks.push('viewer role cannot publish restaurant menus');
   const menuItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, metadata: {} })
@@ -163,6 +168,11 @@ try {
   const entryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
   if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id)) throw new Error('QR entry point did not persist.');
   checks.push('restaurant menu publishing, item availability controls, and managed QR entry points');
+  await request('/api/v1/organizations/' + organizationId + '/domains', 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ storeId, hostname: 'viewer-' + suffix + '.example.org' })
+  });
+  checks.push('viewer role cannot register custom domains');
   const domainResponse = await request('/api/v1/organizations/' + organizationId + '/domains', 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, hostname: 'shop-' + suffix + '.example.org' })
