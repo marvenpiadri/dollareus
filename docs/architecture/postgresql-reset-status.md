@@ -57,7 +57,7 @@ In progress. The public homepage and browser-side QR Studio are available withou
 - [x] add authenticated product media upload/retrieval routes backed by Neon S3-compatible object storage; browser-side WebP resizing/compression, 2400×2400 server dimension ceiling, 4 MiB optimized-upload limit, and metadata persistence are implemented. Configure `AWS_S3_BUCKET` on the API host and complete real-bucket round-trip verification.
 - [x] add the first developer API access layer: bearer credentials are organization-scoped, their token is only returned once, stored as a SHA-256 hash, scope-checked, revocable, and usage-metered. The merchant workspace can create, list, revoke, and inspect usage totals for credentials. This is an API foundation, not yet a complete developer portal.
 - reimplement domain routes against PostgreSQL;
-- finish restaurant menu editing, publishing and modifier workflows;
+- [x] expand restaurant menu management with store categories, category assignment, and editable allergen/dietary metadata; finish modifier workflows and browser-level menu UX checks;
 - [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
 - [ ] verify the shipping UI/API in CI and against the intended Neon schema; COD collection is recorded through the existing manual/offline payment workflow.
 - [x] add refund records and API controls for manually recorded refunds against successful payments; online payment gateway processing remains intentionally deferred.
