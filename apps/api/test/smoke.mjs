@@ -218,11 +218,12 @@ try {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ slug: `smoke-dish-second-${suffix}`, name: 'Second Smoke Dish', description: null, priceAmountMinor: 3000, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 1, modifierGroups: [{ id: 'extras', name: 'Optional extras', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'extra-sauce', name: 'Extra sauce', priceDeltaMinor: 200 }, { id: 'extra-cheese', name: 'Extra cheese', priceDeltaMinor: 350 }] }], metadata: {} })
   });
-  if (secondDish.payload?.data?.modifierGroups?.[0]?.required !== false
-      || secondDish.payload?.data?.modifierGroups?.[0]?.minSelections !== 0
-      || secondDish.payload?.data?.modifierGroups?.[0]?.maxSelections !== 2
-      || Number(secondDish.payload?.data?.modifierGroups?.[0]?.options?.[1]?.priceDeltaMinor) !== 350) {
-    throw new Error('Optional modifier bounds and price deltas did not persist.');
+  const optionalModifierGroup = secondDish.payload?.data?.metadata?.modifierGroups?.[0];
+  if (optionalModifierGroup?.required !== false
+      || optionalModifierGroup?.minSelections !== 0
+      || optionalModifierGroup?.maxSelections !== 2
+      || Number(optionalModifierGroup?.options?.[1]?.priceDeltaMinor) !== 350) {
+    throw new Error('Optional modifier bounds and price deltas did not persist in dish metadata.');
   }
   checks.push('optional restaurant modifiers preserve selection bounds and option price deltas');
   const reorderedItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 200, {
