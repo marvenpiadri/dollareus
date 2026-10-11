@@ -89,6 +89,24 @@ try {
   if (!storeId) throw new Error('Store creation did not return an id.');
   checks.push('store creation');
 
+  const menu = await request(`/api/v1/organizations/${organizationId}/menus`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, slug: `smoke-menu-${suffix}`, name: 'Smoke Menu', description: null, servicePeriods: ['lunch', 'dinner'], status: 'draft', position: 0 })
+  });
+  const menuItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, metadata: {} })
+  });
+  const menuItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 200, { headers: authHeaders });
+  if (!menuItems.payload?.data?.some((item) => item.id === menuItem.payload?.data?.id)) throw new Error('Restaurant menu item did not persist.');
+  const entryPoint = await request(`/api/v1/organizations/${organizationId}/entry-points`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, type: 'qr', targetPath: '/menu' })
+  });
+  const entryPoints = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/entry-points`, 200, { headers: authHeaders });
+  if (!entryPoints.payload?.data?.some((item) => item.id === entryPoint.payload?.data?.id)) throw new Error('QR entry point did not persist.');
+  checks.push('restaurant menus, menu items, and managed QR entry points');
+
   const productId = `product-${suffix}`;
   const product = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
     method: 'POST', headers: authHeaders,
@@ -179,7 +197,9 @@ try {
 
   await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
   await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 404);
-  checks.push('unpublished stores stay private');
+  await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 404);
+  await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 404);
+  checks.push('unpublished stores and their QR entry points stay private');
 
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
   for (const check of checks) console.log(`  ✓ ${check}`);
