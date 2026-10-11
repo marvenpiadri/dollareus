@@ -344,6 +344,14 @@ try {
   if (Number(posOrder.payload?.data?.totalMinor) !== 2598 || posOrder.payload?.data?.status !== 'confirmed' || posOrder.payload?.data?.items?.length !== 1) {
     throw new Error('POS order pricing, initial status, or line snapshots are incorrect.');
   }
+  await request(`${posBase}/orders`, 400, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
+      idempotencyKey: `smoke-pos-menu-missing-modifier-${suffix}`,
+      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1 }]
+    })
+  });
   const posMenuOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({
