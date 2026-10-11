@@ -1,8 +1,5 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { AuthPanelComponent } from '../auth/auth-panel.component';
-import { PublicHomeComponent } from '../public-home/public-home.component';
-import { QrStudioComponent } from '../qr-studio/qr-studio.component';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
@@ -23,7 +20,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, PublicHomeComponent, QrStudioComponent],
+  imports: [DatePipe],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
@@ -51,72 +48,9 @@ export class WorkspaceComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  protected readonly publicPage = signal<'home' | 'menu' | 'qr' | 'login' | 'signup' | 'app'>('home');
-  protected readonly publicMenuStoreSlug = signal('');
-  protected readonly publicMenuStore = signal<any | null>(null);
-  protected readonly publicMenus = signal<any[]>([]);
-  protected readonly publicMenuLoading = signal(false);
-  protected readonly publicMenuError = signal('');
-
-  constructor() {
-    const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/';
-    const authAction = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null;
-    const segments = path.split('/').filter(Boolean);
-    const isMenuRoute = path === '/menu' || (segments.length === 2 && segments[1] === 'menu');
-    const pathStoreSlug = segments.length === 2 && segments[1] === 'menu' ? segments[0] : '';
-    const hostnameLabels = typeof window !== 'undefined' ? window.location.hostname.toLowerCase().split('.') : [];
-    const hostStoreSlug = path === '/menu' && hostnameLabels.length >= 3 ? hostnameLabels[0] : '';
-    const menuSlug = pathStoreSlug || hostStoreSlug;
-    const page = authAction === 'verify-email' || authAction === 'reset-password' ? 'login' : path === '/qr' ? 'qr' : isMenuRoute ? 'menu' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
-    this.publicPage.set(page);
-    this.publicMenuStoreSlug.set(menuSlug);
-    if (page === 'menu') {
-      this.authReady.set(true); this.workspaceLoading.set(false);
-      void this.loadPublicMenu(menuSlug);
-    } else if (page === 'app' || page === 'login' || page === 'signup') void this.checkSession();
-    else { this.authReady.set(true); this.workspaceLoading.set(false); }
-  }
-
-  private async loadPublicMenu(storeSlug: string): Promise<void> {
-    if (!storeSlug) {
-      this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
-      return;
-    }
-    this.publicMenuLoading.set(true);
-    this.publicMenuError.set('');
-    try {
-      const encodedSlug = encodeURIComponent(storeSlug);
-      const [store, menus] = await Promise.all([
-        this.apiRequest('/api/v1/public/stores/' + encodedSlug),
-        this.apiRequest('/api/v1/public/stores/' + encodedSlug + '/menus')
-      ]);
-      this.publicMenuStore.set(store);
-      this.publicMenus.set(Array.isArray(menus) ? menus : []);
-    } catch (error) {
-      this.publicMenuError.set(error instanceof Error ? error.message : 'Could not load this restaurant menu.');
-    } finally {
-      this.publicMenuLoading.set(false);
-    }
-  }
-
-  protected publicMenuSections(menu: { items?: any[] }): { name: string; items: any[] }[] {
-    const sections = new Map<string, any[]>();
-    for (const item of menu.items ?? []) {
-      const name = typeof item.categoryName === 'string' && item.categoryName.trim() ? item.categoryName.trim() : 'Other dishes';
-      const items = sections.get(name) ?? [];
-      items.push(item);
-      sections.set(name, items);
-    }
-    return [...sections.entries()].map(([name, items]) => ({ name, items }));
-  }
+  constructor() { void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
-    const action = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null;
-    if (action === 'verify-email' || action === 'reset-password') {
-      this.authenticated.set(false);
-      this.authReady.set(true);
-      return;
-    }
     const apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
     try {
       const response = await fetch(apiBase + '/api/v1/auth/session', { credentials: 'include' });
@@ -130,7 +64,6 @@ export class WorkspaceComponent {
   }
 
   protected onSignedIn(): void {
-    this.publicPage.set('app');
     if (typeof window !== 'undefined') window.history.replaceState({}, '', '/app');
     this.authenticated.set(true);
     this.authReady.set(true);
