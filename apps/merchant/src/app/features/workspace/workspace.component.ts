@@ -6,6 +6,7 @@ import { InventoryManagementComponent } from '../inventory/inventory-management.
 import { OverviewDashboardComponent } from '../overview/overview-dashboard.component';
 import { OrderManagementComponent } from '../orders/order-management.component';
 import { ProductCatalogComponent } from '../products/product-catalog.component';
+import { PosWorkspaceComponent } from '../pos/pos-workspace.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -18,7 +19,7 @@ import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow,
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
