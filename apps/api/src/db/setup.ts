@@ -46,7 +46,7 @@ try {
       .sort((left, right) => left.localeCompare(right));
 
     for (const name of files) {
-      if (!/^\\d{4}_[a-z0-9_]+\\.sql$/.test(name)) {
+      if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(name)) {
         throw new Error(`Invalid migration filename "${name}". Use ####_lowercase_description.sql.`);
       }
     }
