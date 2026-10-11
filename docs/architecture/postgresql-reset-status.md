@@ -1,6 +1,8 @@
 # PostgreSQL reset — implementation status
 
-Last reviewed: 2026-10-11
+Last reviewed: 2026-10-12
+
+See [the delivery roadmap](../roadmap.md) for the remaining phases and post-launch plan.
 
 ## Product decision
 
@@ -8,11 +10,13 @@ Dollareus is being treated as a new application. PostgreSQL is the source of tru
 
 ## Phase 1 — database foundation
 
-Status: in progress.
+Status: implementation in place; live Neon acceptance pending.
 
 - [x] Add a clean schema at `apps/api/db/schema.sql`.
 - [x] Remove SQL `DEFAULT` clauses; the API must supply values explicitly.
 - [x] Add a checksummed SQL migration runner (`pnpm db:migrate`) with transaction-per-migration, PostgreSQL advisory locking, applied-version tracking, and fail-closed handling for untracked non-empty schemas.
+- [x] Add read-only `pnpm db:status` to inspect pending migrations, checksum drift, unknown migrations, and untracked existing tables without modifying the database.
+- [x] Make API readiness report when PostgreSQL is reachable but the migration ledger or initial schema migration is missing.
 - [x] Keep `pnpm db:setup` as a backwards-compatible alias to the migration runner.
 - [x] Require `DATABASE_URL` when the API imports the PostgreSQL pool.
 - [x] Replace the removed legacy migration runner with a clean, ordered initial schema migration.
@@ -31,7 +35,7 @@ Status: in progress.
 
 ## Phase 2 — PostgreSQL API
 
-Status: core commerce API expansion implemented and CI-verified; live Neon integration and production configuration remain pending.
+Status: core commerce API expansion implemented; database-level tenant integrity is being strengthened; live Neon integration and production configuration remain pending.
 
 The API currently has PostgreSQL-backed endpoints for:
 - health checks;
@@ -49,7 +53,7 @@ The API currently has PostgreSQL-backed endpoints for:
 - order-scoped fulfillment create/list/update APIs with carrier, tracking number/URL, expected delivery, notes, validated delivery-stage transitions, and audit events;
 - order-scoped refund history and refund-recording APIs for successful offline/manual payments, with transaction locks, per-payment refundable-balance checks, idempotency keys, audit events, and derived partial/full refund status. This records a refund operationally; it does not initiate a bank, card, or payment-provider transfer.
 
-The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
+Migration `0002_enforce_transaction_tenant_integrity.sql` adds composite foreign keys so order items, payments, refunds and fulfillments cannot reference orders or payments from another organization, even if a future handler has an ownership-check bug. The schema snapshot is kept aligned with this migration. The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
 
 ## Phase 3 — complete the application
 
@@ -75,7 +79,7 @@ In progress. The public homepage, browser-side QR Studio, and a minimal publishe
 
 ## Operational note
 
-The schema setup is intentionally not automatic on API startup. It is a one-time, explicit operation against an empty database. It does not drop existing objects or migrate old records. The live Neon schema has not yet been verified from this development session.
+Migrations are intentionally not run implicitly during API startup; schema changes should be an explicit deployment step. Run `pnpm db:status` first, then `pnpm db:migrate` only after confirming the target database. The runner does not drop existing objects or automatically adopt an untracked non-empty schema. The live Neon schema has not yet been verified from this development session.
 
 ## Product architecture decision — 2026-10-11
 
