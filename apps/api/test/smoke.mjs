@@ -247,6 +247,10 @@ try {
   if (!Array.isArray(listedProduct.media)) throw new Error('Product listing must return a media array.');
   checks.push('product listing and media metadata projection');
 
+  await request(`/api/v1/organizations/${organizationId}/categories`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ storeId, name: 'Viewer category', slug: `viewer-category-${suffix}`, description: null, position: 0, status: 'active' })
+  });
   const category = await request(`/api/v1/organizations/${organizationId}/categories`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, name: 'Accessories', slug: `accessories-${suffix}`, description: null, position: 0, status: 'active' })
