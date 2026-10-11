@@ -47,19 +47,23 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                 <h2 style="margin:0;font-size:25px;letter-spacing:-.025em">{{menu.name}}</h2>
                 @if(menu.description){<p style="margin:8px 0 18px;color:#667260;line-height:1.6">{{menu.description}}</p>}
                 @else {<div style="height:14px"></div>}
-                @for(item of menu.items || [];track item.id){
-                  <article style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:17px 0;border-top:1px solid #e5e9e1">
-                    <div style="min-width:0;flex:1">
-                      @if(item.categoryName){<p style="margin:0 0 5px;color:#63705b;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase">{{item.categoryName}}</p>}
-                      <h3 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h3>
-                      @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
-                      @if(item.availability === 'limited'){<p style="display:inline-block;margin:8px 0 0;padding:4px 8px;border-radius:999px;background:#fff0d6;color:#81510c;font-size:11px;font-weight:800">Limited availability</p>}
-                      @if(item.dietaryLabels?.length){<p style="margin:8px 0 0;color:#456a3e;font-size:12px;font-weight:700">{{item.dietaryLabels.join(' · ')}}</p>}
-                      @if(item.allergens?.length){<p style="margin:5px 0 0;color:#8b5b2c;font-size:12px">Contains: {{item.allergens.join(', ')}}</p>}
-                      @for(group of item.modifierGroups || [];track group.id){<p style="margin:7px 0 0;color:#667260;font-size:12px"><b>{{group.name}}:</b> @for(option of group.options;track option.id){<span>{{option.name}}@if(option.priceDeltaMinor>0){ ( +{{money(option.priceDeltaMinor,item.currency)}})}@if(!$last){ · }</span>}</p>}
-                    </div>
-                    <strong style="flex-shrink:0;padding-top:2px;font-size:16px;white-space:nowrap">{{money(item.priceAmountMinor,item.currency)}}</strong>
-                  </article>
+                @for(section of publicMenuSections(menu);track section.name){
+                  <section style="padding-top:10px">
+                    <h3 style="margin:14px 0 2px;color:#46583d;font-size:12px;font-weight:850;letter-spacing:.1em;text-transform:uppercase">{{section.name}}</h3>
+                    @for(item of section.items;track item.id){
+                      <article style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:17px 0;border-top:1px solid #e5e9e1">
+                        <div style="min-width:0;flex:1">
+                          <h4 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h4>
+                          @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
+                          @if(item.availability === 'limited'){<p style="display:inline-block;margin:8px 0 0;padding:4px 8px;border-radius:999px;background:#fff0d6;color:#81510c;font-size:11px;font-weight:800">Limited availability</p>}
+                          @if(item.dietaryLabels?.length){<p style="margin:8px 0 0;color:#456a3e;font-size:12px;font-weight:700">{{item.dietaryLabels.join(' · ')}}</p>}
+                          @if(item.allergens?.length){<p style="margin:5px 0 0;color:#8b5b2c;font-size:12px">Contains: {{item.allergens.join(', ')}}</p>}
+                          @for(group of item.modifierGroups || [];track group.id){<p style="margin:7px 0 0;color:#667260;font-size:12px"><b>{{group.name}}:</b> @for(option of group.options;track option.id){<span>{{option.name}}@if(option.priceDeltaMinor>0){ (+{{money(option.priceDeltaMinor,item.currency)}})}@if(!$last){ · }</span>}</p>}
+                        </div>
+                        <strong style="flex-shrink:0;padding-top:2px;font-size:16px;white-space:nowrap">{{money(item.priceAmountMinor,item.currency)}}</strong>
+                      </article>
+                    }
+                  </section>
                 } @empty {<p style="padding:18px 0;color:#667260">No available dishes in this menu yet.</p>}
               </section>
             } @empty {
@@ -394,6 +398,17 @@ export class AppComponent {
     } finally {
       this.publicMenuLoading.set(false);
     }
+  }
+
+  protected publicMenuSections(menu: { items?: any[] }): { name: string; items: any[] }[] {
+    const sections = new Map<string, any[]>();
+    for (const item of menu.items ?? []) {
+      const name = typeof item.categoryName === 'string' && item.categoryName.trim() ? item.categoryName.trim() : 'Other dishes';
+      const items = sections.get(name) ?? [];
+      items.push(item);
+      sections.set(name, items);
+    }
+    return [...sections.entries()].map(([name, items]) => ({ name, items }));
   }
 
   private async checkSession(): Promise<void> {
