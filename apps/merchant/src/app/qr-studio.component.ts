@@ -38,7 +38,7 @@ export class QrStudioComponent implements OnDestroy {
     const extra = frame === 'none' ? 0 : 88;
     const totalHeight = size + extra;
     const qrY = frame === 'top-label' ? extra : 0;
-    const inner = qrSvg.match(/<svg\\b[^>]*>([\\s\\S]*?)<\\/svg>/i)?.[1] ?? '';
+    const inner = qrSvg.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/i)?.[1] ?? '';
     const text = (value: string, y: number, fontSize: number, weight: number) => value ? `<text x="${size / 2}" y="${y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="${weight}" fill="${this.accent()}">${xmlText(value)}</text>` : '';
     let heading = '';
     if (frame !== 'none') {
