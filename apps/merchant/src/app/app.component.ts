@@ -4,11 +4,13 @@ import { AuthPanelComponent } from './auth-panel.component';
 import { PublicHomeComponent } from './public-home.component';
 import { QrStudioComponent } from './qr-studio.component';
 
-type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
+type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
 interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
 interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
+interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
+interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
 type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
 interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null; estimatedDeliveryDate: string | null; notes: string | null; createdAt: string; updatedAt: string; }
@@ -115,6 +117,36 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
               @if(customerFormOpen()){<form class="customer-form" (submit)="createCustomer($event)"><label>Display name<input name="displayName" maxlength="180" placeholder="Customer name"></label><label>Email<input name="email" type="email" maxlength="254" placeholder="customer@example.com"></label><label>Phone<input name="phone" maxlength="80" placeholder="+212…"></label>@if(customerSaveError()){<p role="alert">{{customerSaveError()}}</p>}<button class="button primary" type="submit" [disabled]="customerSaveBusy()">{{customerSaveBusy()?'Saving…':'Save customer'}}</button></form>}
               <div class="table-wrap"><table><thead><tr><th>CUSTOMER</th><th>EMAIL</th><th>PHONE</th></tr></thead><tbody>@for(customer of customers();track customer.id){<tr><td>{{customer.displayName || 'Unnamed customer'}}</td><td>{{customer.email || '—'}}</td><td>{{customer.phone || '—'}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No customer records yet. Add a customer to get started.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{customers().length}} customers</div></section>
+          }
+          @if (activeNav() === 'Menus') {
+            <section class="panel product-panel">
+              <div class="panel-heading"><div><h2>Restaurant menus</h2><p>Create menus, publish them, and control item availability. Changes are saved to the organization API.</p></div></div>
+              <form class="customer-form" (submit)="createMenu($event)">
+                <label>Menu name<input name="name" required maxlength="180" placeholder="e.g. Lunch menu"></label>
+                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lunch-menu"></label>
+                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label>
+                <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
+              </form>
+              @if(menuError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{menuError()}}</p>}
+              <div class="table-wrap"><table><thead><tr><th>MENU</th><th>ITEMS</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
+                @if(menus().length === 0){<tr><td colspan="4" class="empty-state">Create your first menu to start adding restaurant items.</td></tr>}
+              </tbody></table></div>
+              @if(selectedMenuId()){
+                <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{menus().find(m => m.id === selectedMenuId())?.name || 'Menu'}}</p></div></div>
+                <form class="customer-form" (submit)="createMenuItem($event)">
+                  <label>Item name<input name="name" required maxlength="180" placeholder="e.g. Chicken sandwich"></label>
+                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
+                  <label>Price ({{storeCurrency()}})<input name="price" type="number" min="0" step="0.01" required placeholder="45.00"></label>
+                  <label>Description<input name="description" maxlength="5000" placeholder="Optional description"></label>
+                  <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
+                </form>
+                <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
+                  @for(item of menuItems().filter(i => i.menuId === selectedMenuId());track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></td></tr>}
+                  @if(menuItems().filter(i => i.menuId === selectedMenuId()).length === 0){<tr><td colspan="4" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
+                </tbody></table></div>
+              }
+            </section>
           }
           @if (activeNav() === 'Inventory') {
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Inventory</h2><p>Adjust stock by variant and location. Reserved quantities are protected.</p></div></div>
@@ -262,12 +294,13 @@ export class AppComponent {
           tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiBase() + String(p.media[0].contentUrl) + '?width=300' : null
         };
       }));
-      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows] = await Promise.all([
+      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows] = await Promise.all([
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
         this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
-        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders')
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
+        this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus')
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
@@ -279,6 +312,15 @@ export class AppComponent {
         email: typeof customer.email === 'string' ? customer.email : null, phone: typeof customer.phone === 'string' ? customer.phone : null
       })));
       this.inventory.set(Array.isArray(inventoryRows) ? inventoryRows as InventoryRow[] : []);
+      const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
+      this.menus.set(loadedMenus);
+      const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiRequest('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
+      this.menuItems.set(itemGroups.flatMap((group, index) => (Array.isArray(group) ? group : []).map((item: any): MenuItemRow => ({
+        id: String(item.id), menuId: String(item.menuId ?? loadedMenus[index].id), slug: String(item.slug ?? ''), name: String(item.name ?? ''),
+        description: typeof item.description === 'string' ? item.description : null, priceAmountMinor: Number(item.priceAmountMinor ?? 0), currency: String(item.currency ?? store.defaultCurrency ?? 'MAD'),
+        status: String(item.status ?? 'draft') as MenuItemRow['status'], availability: String(item.availability ?? 'available') as MenuItemRow['availability'], position: Number(item.position ?? 0)
+      }))));
+      if (!loadedMenus.some((menu) => menu.id === this.selectedMenuId())) this.selectedMenuId.set(loadedMenus[0]?.id ?? '');
       const sessions = Array.isArray(sessionRows) ? sessionRows : [];
       this.posSessions.set(sessions);
       this.posOrders.set(Array.isArray(posOrderRows) ? posOrderRows : []);
@@ -336,13 +378,18 @@ export class AppComponent {
   protected readonly productFilter = signal<'All' | ProductStatus>('All');
   protected readonly toast = signal('');
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
-    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
+    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Menus',symbol:'☷'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
   ];
   protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly orders = signal<OrderRow[]>([]);
   protected readonly customers = signal<CustomerRow[]>([]);
+  protected readonly menus = signal<MenuRow[]>([]);
+  protected readonly menuItems = signal<MenuItemRow[]>([]);
+  protected readonly selectedMenuId = signal('');
+  protected readonly menuBusy = signal(false);
+  protected readonly menuError = signal('');
   protected readonly inventory = signal<InventoryRow[]>([]);
   protected readonly posSessions = signal<any[]>([]);
   protected readonly posOrders = signal<any[]>([]);
@@ -720,7 +767,73 @@ export class AppComponent {
     finally { this.orderActionBusyId.set(''); }
   }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
-  protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected selectNav(item: NavItem): void { this.activeNav.set(item); if (!['Overview','Products','Menus','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.'); }
+  protected async createMenu(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const values = new FormData(form);
+    const name = String(values.get('name') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim();
+    const description = String(values.get('description') ?? '').trim();
+    if (!name || !slug) return;
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      const created = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
+        method: 'POST', body: JSON.stringify({ storeId: this.storeId(), slug, name, description: description || null, servicePeriods: ['all-day'], status: 'draft' })
+      });
+      await this.loadWorkspace();
+      if (created?.id) this.selectedMenuId.set(String(created.id));
+      form.reset(); this.notify('Menu created as a draft.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async createMenuItem(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const values = new FormData(form);
+    const name = String(values.get('name') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim();
+    const price = Number(values.get('price'));
+    const description = String(values.get('description') ?? '').trim();
+    const menuId = this.selectedMenuId();
+    if (!menuId || !name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
+      this.menuError.set('Choose a menu and enter a valid item name, slug, and non-negative price.'); return;
+    }
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
+        method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'draft', allergens: [], dietaryLabels: [], availability: 'available', metadata: {} })
+      });
+      await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async setMenuStatus(menu: MenuRow, status: 'draft' | 'active'): Promise<void> {
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menu.id) + '/status', { method: 'PATCH', body: JSON.stringify({ status }) });
+      await this.loadWorkspace(); this.notify(status === 'active' ? 'Menu published.' : 'Menu unpublished.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu status.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async setMenuItemAvailability(item: MenuItemRow, availability: 'available' | 'unavailable' | 'limited'): Promise<void> {
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ availability }) });
+      this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, availability } : row));
+      this.notify('Item availability updated.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item availability.'); await this.loadWorkspace(); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async setMenuItemStatus(item: MenuItemRow, status: 'draft' | 'active'): Promise<void> {
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), { method: 'PATCH', body: JSON.stringify({ status }) });
+      this.menuItems.update(items => items.map(row => row.id === item.id ? { ...row, status } : row));
+      this.notify(status === 'active' ? 'Menu item published.' : 'Menu item unpublished.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update item status.'); }
+    finally { this.menuBusy.set(false); }
+  }
   protected addProduct(): void { this.activeNav.set('Products'); this.editingProduct.set(null); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected editProduct(product: ProductRow): void { this.editingProduct.set(product); this.productSaveError.set(''); this.productEditorOpen.set(true); }
   protected closeProductEditor(): void { if (!this.productSaveBusy()) { this.productEditorOpen.set(false); this.editingProduct.set(null); } }
