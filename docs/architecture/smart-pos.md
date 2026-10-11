@@ -47,7 +47,7 @@ The current order-creation route re-reads canonical product/menu/service prices 
 ## Important safety and correctness requirements before production
 
 1. Add tests for cross-store item IDs, stale/inactive variants, closed sessions, duplicate line items, totals, concurrent order numbering and currency mismatch.
-2. Add explicit staff roles/permissions, audit events, idempotency keys and session ownership rules.
+2. [x] Enforce operator roles for POS writes; record audit events and support order idempotency. Define stricter session ownership/shift reconciliation before production.
 3. Add payment adapters and a durable payment state machine; an order must not imply a card payment succeeded.
 4. Add inventory ledger/reservation semantics for retail and kitchen ticket state for restaurants.
 5. Extend the initial validated order status transitions with domain-specific policies, payment-aware completion rules and audited actor IDs.
