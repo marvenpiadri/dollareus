@@ -9,6 +9,8 @@ interface ProductRow { id: string; name: string; slug: string; description: stri
 interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
+type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
+interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null; estimatedDeliveryDate: string | null; notes: string | null; createdAt: string; updatedAt: string; }
 
 @Component({
   selector: 'dlr-root',
@@ -76,8 +78,23 @@ interface InventoryRow { locationId: string; locationName: string; storeId: stri
           <section class="panel product-panel"><div class="panel-heading product-heading"><div><h2>Products</h2><p>Keep your catalog organized and ready to sell.</p></div><div class="product-actions"><label class="product-search">⌕ <input aria-label="Filter products" placeholder="Search products..." [value]="search()" (input)="search.set($any($event.target).value)"></label><button class="button primary small" type="button" (click)="addProduct()">＋ Add product</button></div></div><div class="filters">@for(filter of filters;track filter){<button type="button" [class.selected]="productFilter() === filter" (click)="productFilter.set(filter)">{{ filter }} <span>{{ filterCount(filter) }}</span></button>}</div><div class="table-wrap"><table class="products-table"><thead><tr><th>PRODUCT</th><th>STATUS</th><th>INVENTORY</th><th>CATEGORY</th><th>PRICE</th><th></th></tr></thead><tbody>@for(product of filteredProducts();track product.id){<tr><td><div class="product-cell"><span class="product-art" [class]="product.tone">{{ product.initials }}</span><span><b>{{ product.name }}</b><small>SKU: {{ product.sku }}</small></span></div></td><td><span class="status" [class]="product.status === 'Active' ? 'paid' : product.status === 'Draft' ? 'draft' : 'pending'">{{ product.status }}</span></td><td [class.low]="product.stock !== null && product.stock > 0 && product.stock < 10" [class.empty]="product.stock === 0">{{ product.stock === null ? 'Not tracked' : product.stock === 0 ? 'Out of stock' : product.stock + ' in stock' }}</td><td class="muted">{{ product.category }}</td><td class="total">{{ money(product.priceMinor,product.currency) }}</td><td><button class="more" type="button" [attr.aria-label]="'More options for ' + product.name" (click)="editProduct(product)">···</button></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No products match your search. <button type="button" (click)="search.set('');productFilter.set('All')">Clear filters</button></td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ filteredProducts().length }} of {{ products().length }} database products <button type="button" (click)="selectNav('Products')">View product catalog →</button></div></section>
           }
           @if (activeNav() === 'Orders') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Track offline payments here. Dollareus does not process online payments.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th><th>PAYMENTS</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td><td><button class="button secondary small" type="button" (click)="openPaymentTracker(order)">{{selectedPaymentOrder()?.resourceId===order.resourceId?'Viewing':'Track payment'}}</button></td></tr>} @empty {<tr><td colspan="7" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
+            <section class="panel product-panel"><div class="panel-heading"><div><h2>Orders</h2><p>Track offline payments here. Dollareus does not process online payments.</p></div></div>@if(orderActionError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{orderActionError()}}</p>}<div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>STATUS</th><th>PAYMENT</th><th>TOTAL</th><th>UPDATE</th><th>PAYMENTS</th><th>SHIPPING</th></tr></thead><tbody>@for(order of orders();track order.resourceId){<tr><td class="order-id">{{order.id}}</td><td>{{order.customer}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td>{{orderStatusLabel(order.paymentStatus)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td>@if(order.status==='pending'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="pending">Pending</option><option value="confirmed">Confirm</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='confirmed'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="processing">Start processing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='processing'){<select aria-label="Update order status" [value]="order.status" [disabled]="orderActionBusyId()===order.resourceId" (change)="updateOrderStatus(order,$any($event.target).value)"><option value="processing">Processing</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</td><td><button class="button secondary small" type="button" (click)="openPaymentTracker(order)">{{selectedPaymentOrder()?.resourceId===order.resourceId?'Viewing':'Track payment'}}</button></td><td><button class="button secondary small" type="button" (click)="openShipmentTracker(order)">{{selectedShipmentOrder()?.resourceId===order.resourceId?'Viewing':'Track shipment'}}</button></td></tr>} @empty {<tr><td colspan="8" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{orders().length}} database orders</div></section>
             @if(selectedPaymentOrder(); as paymentOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Payment tracking · {{paymentOrder.id}}</h2><p>Record cash, cash on delivery, bank transfer, mobile money, card-terminal, or other offline payments. Confirm receipt manually.</p></div><button class="button secondary small" type="button" (click)="selectedPaymentOrder.set(null);paymentDetails.set(null)">Close</button></div>@if(paymentDetailsBusy()){<p style="padding:16px">Loading payment history…</p>} @else if(paymentDetails()){<div style="display:flex;gap:20px;flex-wrap:wrap;padding:12px 17px"><div><small>Total</small><strong style="display:block">{{money(paymentDetails().totalMinor,paymentDetails().currency)}}</strong></div><div><small>Recorded as received</small><strong style="display:block">{{money(paymentDetails().paidAmountMinor,paymentDetails().currency)}}</strong></div><div><small>Remaining balance</small><strong style="display:block">{{money(paymentDetails().balanceMinor,paymentDetails().currency)}}</strong></div></div><form class="customer-form" (submit)="recordManualPayment($event)"><label>Method<select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)"><option value="cash">Cash</option><option value="cash_on_delivery">Cash on delivery</option><option value="bank_transfer">Bank transfer</option><option value="mobile_money">Mobile money</option><option value="card_terminal">Card terminal</option><option value="other">Other</option></select></label><label>Amount ({{paymentDetails().currency}})<input type="number" min="0.01" step="0.01" required [value]="paymentAmount()" (input)="paymentAmount.set($any($event.target).value)" placeholder="0.00"></label><label>Reference (optional)<input maxlength="200" [value]="paymentReference()" (input)="paymentReference.set($any($event.target).value)" placeholder="Receipt or transfer reference"></label><label>Note (optional)<input maxlength="1000" [value]="paymentNote()" (input)="paymentNote.set($any($event.target).value)" placeholder="Who collected it, transfer details…"></label><label>Receipt status<select [value]="paymentRecordStatus()" (change)="paymentRecordStatus.set($any($event.target).value)"><option value="succeeded">Received / verified</option><option value="pending">Expected / not yet received</option></select></label><button class="button primary small" type="submit" [disabled]="paymentSaveBusy()"> {{paymentSaveBusy()?'Saving…':'Record offline payment'}} </button></form><div class="table-wrap"><table><thead><tr><th>DATE</th><th>METHOD</th><th>REFERENCE / NOTE</th><th>AMOUNT</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>@for(payment of paymentDetails().payments;track payment.id){<tr><td>{{payment.createdAt}}</td><td>{{orderStatusLabel(payment.providerPayload?.method ?? 'other')}}</td><td>{{payment.providerPayload?.reference || payment.providerPayload?.note || '—'}}</td><td class="total">{{money(payment.amountMinor,payment.currency)}}</td><td>{{orderStatusLabel(payment.status)}}</td><td>@if(payment.status==='pending'){<button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'succeeded')">Confirm received</button><button class="button secondary small" type="button" (click)="finalizeManualPayment(payment.id,'cancelled')">Cancel</button>} @else {<span class="muted">Recorded</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No payment records yet. Record the first offline payment above.</td></tr>}</tbody></table></div></div>}</section>}
+            @if(selectedShipmentOrder(); as shipmentOrder){<section class="panel product-panel" style="margin-top:16px"><div class="panel-heading"><div><h2>Shipment tracking · {{shipmentOrder.id}}</h2><p>Record the courier and delivery progress. For cash on delivery, record collected cash separately under Track payment.</p></div><button class="button secondary small" type="button" (click)="selectedShipmentOrder.set(null);shipmentDetails.set(null)">Close</button></div>
+              @if(shipmentBusy()){<p style="padding:18px">Loading shipment details…</p>} @else {
+                <form class="customer-form shipment-form" (submit)="saveShipment($event)">
+                  <label>Delivery stage<select [value]="shipmentStage()" (change)="shipmentStage.set($any($event.target).value)"><option value="preparing">Preparing package</option><option value="shipped">Shipped</option><option value="out_for_delivery">Out for delivery</option><option value="delivered">Delivered</option><option value="delivery_failed">Delivery failed</option><option value="returned">Returned</option><option value="cancelled">Cancelled</option></select></label>
+                  <label>Courier / carrier<input maxlength="120" [value]="shipmentCarrier()" (input)="shipmentCarrier.set($any($event.target).value)" placeholder="Your chosen delivery company"></label>
+                  <label>Tracking number<input maxlength="160" [value]="shipmentTrackingNumber()" (input)="shipmentTrackingNumber.set($any($event.target).value)" placeholder="Courier tracking number"></label>
+                  <label>Tracking URL<input type="url" maxlength="1000" [value]="shipmentTrackingUrl()" (input)="shipmentTrackingUrl.set($any($event.target).value)" placeholder="https://carrier.example/track/…"></label>
+                  <label>Expected delivery<input type="date" [value]="shipmentEstimatedDate()" (input)="shipmentEstimatedDate.set($any($event.target).value)"></label>
+                  <label>Delivery notes<input maxlength="1000" [value]="shipmentNotes()" (input)="shipmentNotes.set($any($event.target).value)" placeholder="Delivery instructions or exception"></label>
+                  <button class="button primary small" type="submit" [disabled]="shipmentSaveBusy()">{{shipmentSaveBusy()?'Saving…':(shipmentDetails()?.fulfillments?.length?'Save shipment updates':'Create shipment record')}}</button>
+                </form>
+                @if(orderActionError()){<p role="alert" style="padding:8px 17px;color:#b91c1c;font-size:13px">{{orderActionError()}}</p>}
+                @if(shipmentDetails(); as shipmentData){<div class="table-wrap"><table><thead><tr><th>STAGE</th><th>COURIER</th><th>TRACKING</th><th>EXPECTED</th><th>NOTES</th><th>UPDATED</th></tr></thead><tbody>@for(shipment of shipmentData.fulfillments;track shipment.id){<tr><td><span class="status" [class]="statusClass(shipment.stage)">{{orderStatusLabel(shipment.stage)}}</span></td><td>{{shipment.carrier || 'Not assigned'}}</td><td>@if(shipment.trackingUrl){<a [href]="shipment.trackingUrl" target="_blank" rel="noopener noreferrer">{{shipment.trackingNumber || 'Open tracking'}}</a>} @else { {{shipment.trackingNumber || '—'}} }</td><td>{{shipment.estimatedDeliveryDate || '—'}}</td><td>{{shipment.notes || '—'}}</td><td>{{shipment.updatedAt | date:'mediumDate'}}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No shipment has been recorded yet.</td></tr>}</tbody></table></div>}
+              }
+            </section>}
           }
           @if (activeNav() === 'Customers') {
             <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
@@ -312,6 +329,16 @@ export class AppComponent {
   protected readonly paymentReference = signal('');
   protected readonly paymentNote = signal('');
   protected readonly paymentRecordStatus = signal('succeeded');
+  protected readonly selectedShipmentOrder = signal<OrderRow | null>(null);
+  protected readonly shipmentDetails = signal<{ orderId: string; fulfillments: ShipmentDetails[] } | null>(null);
+  protected readonly shipmentBusy = signal(false);
+  protected readonly shipmentSaveBusy = signal(false);
+  protected readonly shipmentStage = signal<FulfillmentStage>('preparing');
+  protected readonly shipmentCarrier = signal('');
+  protected readonly shipmentTrackingNumber = signal('');
+  protected readonly shipmentTrackingUrl = signal('');
+  protected readonly shipmentEstimatedDate = signal('');
+  protected readonly shipmentNotes = signal('');
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
     const filter = this.productFilter();
@@ -398,6 +425,90 @@ export class AppComponent {
   private async refreshPaymentDetails(order: OrderRow): Promise<void> {
     const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/payments');
     this.paymentDetails.set(details);
+  }
+
+
+  protected async openShipmentTracker(order: OrderRow): Promise<void> {
+    this.selectedShipmentOrder.set(order);
+    this.shipmentDetails.set(null);
+    this.orderActionError.set('');
+    this.shipmentBusy.set(true);
+    this.shipmentStage.set('preparing');
+    this.shipmentCarrier.set('');
+    this.shipmentTrackingNumber.set('');
+    this.shipmentTrackingUrl.set('');
+    this.shipmentEstimatedDate.set('');
+    this.shipmentNotes.set('');
+    try {
+      const details = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/fulfillments');
+      this.shipmentDetails.set(details);
+      const latest = Array.isArray(details.fulfillments) ? details.fulfillments[0] as ShipmentDetails | undefined : undefined;
+      if (latest) {
+        this.shipmentStage.set(latest.stage);
+        this.shipmentCarrier.set(latest.carrier ?? '');
+        this.shipmentTrackingNumber.set(latest.trackingNumber ?? '');
+        this.shipmentTrackingUrl.set(latest.trackingUrl ?? '');
+        this.shipmentEstimatedDate.set(latest.estimatedDeliveryDate ?? '');
+        this.shipmentNotes.set(latest.notes ?? '');
+      }
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not load shipment details.');
+    } finally {
+      this.shipmentBusy.set(false);
+    }
+  }
+
+  protected async saveShipment(event: Event): Promise<void> {
+    event.preventDefault();
+    const order = this.selectedShipmentOrder();
+    if (!order) return;
+    const trackingUrl = this.shipmentTrackingUrl().trim();
+    if (trackingUrl) {
+      try {
+        const url = new URL(trackingUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid protocol');
+      } catch {
+        this.orderActionError.set('Enter a valid tracking link beginning with https:// or http://.');
+        return;
+      }
+    }
+    const latest = this.shipmentDetails()?.fulfillments?.[0];
+    const terminal = latest && ['cancelled', 'returned'].includes(latest.stage);
+    const restartAfterDelivery = latest?.stage === 'delivered' && this.shipmentStage() === 'preparing';
+    const createNew = !latest || terminal || restartAfterDelivery;
+    const payload = {
+      stage: this.shipmentStage(),
+      carrier: this.shipmentCarrier().trim() || null,
+      trackingNumber: this.shipmentTrackingNumber().trim() || null,
+      trackingUrl: trackingUrl || null,
+      estimatedDeliveryDate: this.shipmentEstimatedDate() || null,
+      notes: this.shipmentNotes().trim() || null
+    };
+    this.shipmentSaveBusy.set(true);
+    this.orderActionError.set('');
+    try {
+      const base = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.resourceId) + '/fulfillments';
+      await this.apiRequest(createNew ? base : base + '/' + encodeURIComponent(latest!.id), {
+        method: createNew ? 'POST' : 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      const details = await this.apiRequest(base);
+      this.shipmentDetails.set(details);
+      const current = Array.isArray(details.fulfillments) ? details.fulfillments[0] as ShipmentDetails | undefined : undefined;
+      if (current) {
+        this.shipmentStage.set(current.stage);
+        this.shipmentCarrier.set(current.carrier ?? '');
+        this.shipmentTrackingNumber.set(current.trackingNumber ?? '');
+        this.shipmentTrackingUrl.set(current.trackingUrl ?? '');
+        this.shipmentEstimatedDate.set(current.estimatedDeliveryDate ?? '');
+        this.shipmentNotes.set(current.notes ?? '');
+      }
+      this.notify('Shipment details saved and audited.');
+    } catch (error) {
+      this.orderActionError.set(error instanceof Error ? error.message : 'Could not save shipment details.');
+    } finally {
+      this.shipmentSaveBusy.set(false);
+    }
   }
 
   protected async updateOrderStatus(order: OrderRow, status: string): Promise<void> {
