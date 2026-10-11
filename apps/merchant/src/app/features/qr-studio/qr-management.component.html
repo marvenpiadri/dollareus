@@ -1,0 +1,39 @@
+<section class="panel product-panel">
+              <div class="panel-heading"><div><h2>Storefront publishing</h2><p>Publish the store before its restaurant menus and saved QR entry points can be accessed publicly.</p></div><span class="status-pill">{{storePublished() ? 'Published' : 'Private'}}</span></div>
+              <div class="customer-form">
+                <label>Default public experience<select [value]="storeExperience()" (change)="storeExperienceChangeRequested.emit($any($event.target).value)"><option value="menu">Restaurant menu</option><option value="commerce">Commerce</option><option value="catalog">Catalog</option><option value="services">Services</option></select></label>
+                <button class="button primary" type="button" [disabled]="qrBusy()" (click)="toggleStorefrontPublishingRequested.emit()">{{qrBusy() ? 'Saving…' : (storePublished() ? 'Unpublish storefront' : 'Publish storefront')}}</button>
+              </div>
+              <div class="panel-heading"><div><h2>Branded QR entry points</h2><p>Create permanent entry-point records for this store and save brand styling alongside each destination. Only published storefront paths will be publicly resolvable.</p></div><a href="/qr" target="_blank" rel="noopener noreferrer">Open standalone QR generator ↗</a></div>
+              @if(qrError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{qrError()}}</p>}
+              <form class="customer-form" (submit)="createQrEntryPointRequested.emit($event)">
+                <label>Brand / restaurant name<input name="brandName" maxlength="120" [value]="qrBrandName()" (input)="qrBrandNameChangeRequested.emit($any($event.target).value)" placeholder="{{storeName()}}"></label>
+                <label>Destination<select name="targetPath" [value]="qrTargetPath()" (change)="qrTargetPathChangeRequested.emit($any($event.target).value)"><option value="/menu">Restaurant menu</option><option value="/">Store homepage</option><option value="/catalog">Product catalog</option><option value="/services">Services</option></select></label>
+                <label>QR foreground<input type="color" [value]="qrForeground()" (input)="qrForegroundChangeRequested.emit($any($event.target).value)"></label>
+                <label>Background<input type="color" [value]="qrBackground()" (input)="qrBackgroundChangeRequested.emit($any($event.target).value)"></label>
+                <label>Brand accent<input type="color" [value]="qrAccent()" (input)="qrAccentChangeRequested.emit($any($event.target).value)"></label>
+                <label>Frame style<select [value]="qrFrame()" (change)="qrFrameChangeRequested.emit($any($event.target).value)"><option value="none">No frame</option><option value="bottom-label">Label below</option><option value="top-label">Label above</option></select></label>
+                <label>Printed label<input maxlength="80" [value]="qrLabel()" (input)="qrLabelChangeRequested.emit($any($event.target).value)" placeholder="Scan to view menu"></label>
+                <label>Logo URL (HTTPS)<input type="url" [value]="qrLogoUrl()" (input)="qrLogoUrlChangeRequested.emit($any($event.target).value)" placeholder="https://…/logo.png"></label>
+                <button class="button primary" type="submit" [disabled]="qrBusy()">{{qrBusy()?'Saving…':'＋ Save branded QR entry point'}}</button>
+              </form>
+              <div class="table-wrap"><table><thead><tr><th>ENTRY POINT</th><th>DESTINATION</th><th>BRANDING</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+                @for(point of entryPoints();track point.id){<tr><td><b>{{point.branding?.brandName || storeName()}}</b><div class="muted">{{point.type}} · {{point.id.slice(0,8)}}</div></td><td>{{point.targetPath}}</td><td><span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.foregroundColor || '#123456'"></span> <span style="display:inline-block;width:13px;height:13px;border-radius:50%;border:1px solid #d1d5db;vertical-align:middle" [style.background]="point.branding?.backgroundColor || '#ffffff'"></span> {{point.branding?.frame || 'none'}}</td><td><span class="status-pill">{{point.status}}</span></td><td><div class="product-actions"><a class="button small" [class.disabled]="!point.targetUrl" [attr.href]="point.targetUrl ? qrGeneratorUrl(point) : null" target="_blank" rel="noopener noreferrer">Generate QR</a><button class="button small" type="button" (click)="editQrEntryPointRequested.emit(point)">Edit branding</button><button class="button small" type="button" [disabled]="qrBusy()" (click)="toggleQrEntryPointRequested.emit(point)">{{point.status === 'active' ? 'Disable' : 'Enable'}}</button></div></td></tr>}
+                @if(entryPoints().length === 0){<tr><td colspan="5" class="empty-state">No saved QR entry points yet. Create one above to store a restaurant or store destination with its branding.</td></tr>}
+              </tbody></table></div>
+              @if(selectedQrId()){
+                <div class="panel-heading"><div><h2>Edit saved branding</h2><p>Changes are stored on the selected entry point.</p></div></div>
+                <form class="customer-form" (submit)="saveQrBrandingRequested.emit($event)">
+                  <label>Brand / restaurant name<input name="brandName" maxlength="120" [value]="qrBrandName()" (input)="qrBrandNameChangeRequested.emit($any($event.target).value)"></label>
+                  <label>QR foreground<input type="color" [value]="qrForeground()" (input)="qrForegroundChangeRequested.emit($any($event.target).value)"></label>
+                  <label>Background<input type="color" [value]="qrBackground()" (input)="qrBackgroundChangeRequested.emit($any($event.target).value)"></label>
+                  <label>Brand accent<input type="color" [value]="qrAccent()" (input)="qrAccentChangeRequested.emit($any($event.target).value)"></label>
+                  <label>Frame style<select [value]="qrFrame()" (change)="qrFrameChangeRequested.emit($any($event.target).value)"><option value="none">No frame</option><option value="bottom-label">Label below</option><option value="top-label">Label above</option></select></label>
+                  <label>Printed label<input maxlength="80" [value]="qrLabel()" (input)="qrLabelChangeRequested.emit($any($event.target).value)"></label>
+                  <label>Logo URL (HTTPS)<input type="url" [value]="qrLogoUrl()" (input)="qrLogoUrlChangeRequested.emit($any($event.target).value)" placeholder="https://…/logo.png"></label>
+                  <button class="button primary" type="submit" [disabled]="qrBusy()">{{qrBusy()?'Saving…':'Save branding changes'}}</button>
+                  <button class="button secondary" type="button" (click)="cancelQrEditRequested.emit()">Cancel editing</button>
+                </form>
+              }
+              <p class="muted" style="padding:0 17px 16px">Branding and destinations are saved in Dollareus. Generate QR opens the standalone branded PNG/SVG exporter; public URL, TLS, and logo CORS behavior still need production verification.</p>
+            </section>
