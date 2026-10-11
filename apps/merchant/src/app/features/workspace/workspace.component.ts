@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { AuthPanelComponent } from '../auth/auth-panel.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
+import { SessionService } from '../../core/auth/session.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
@@ -39,15 +40,13 @@ export class WorkspaceComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  constructor(private readonly router: Router, private readonly apiClient: ApiClientService) { void this.checkSession(); }
+  constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService) { void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
     try {
-      await this.apiClient.request('/api/v1/auth/session');
-      this.authenticated.set(true);
-      await this.loadWorkspace();
-    } catch {
-      this.authenticated.set(false);
+      const authenticated = await this.sessionService.isAuthenticated();
+      this.authenticated.set(authenticated);
+      if (authenticated) await this.loadWorkspace();
     } finally {
       this.authReady.set(true);
     }
@@ -63,7 +62,7 @@ export class WorkspaceComponent {
 
   protected async signOut(): Promise<void> {
     try {
-      await this.apiClient.request('/api/v1/auth/logout', { method: 'POST' });
+      await this.sessionService.signOut();
     } finally {
       this.authenticated.set(false);
       void this.router.navigateByUrl('/login');
