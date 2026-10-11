@@ -53,7 +53,8 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 ## Phase 3 — complete the application
 
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
-- reimplement POS, domain and media routes against PostgreSQL;
+- [x] reimplement PostgreSQL-backed POS session/order APIs and add the initial retail POS workspace for opening/closing registers, creating server-priced product orders, and audited status transitions; restaurant menu-item UI, POS payment recording, and inventory deduction remain pending.
+- reimplement domain and media routes against PostgreSQL;
 - finish restaurant menu editing, publishing and modifier workflows;
 - [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
 - [ ] verify the shipping UI/API in CI and against the intended Neon schema; COD collection is recorded through the existing manual/offline payment workflow.
@@ -83,4 +84,4 @@ Long-term delivery integrations (including third-party food delivery services) s
 
 ## Verification note
 
-GitHub Actions previously passed on commit `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77`: Angular production build, API TypeScript check, and the PostgreSQL-backed HTTP smoke suite succeeded at that commit. Refund API and smoke-test changes were added afterward and still require a fresh CI run. The CI suite uses a disposable PostgreSQL service and does not verify the user's live Neon database. The live Neon schema/setup and browser-level visual/responsive checks remain pending. The merchant UI readability pass is committed; inspect it in a browser before considering the visual QA checklist complete.
+GitHub Actions passed on commit `ba55d57cb1b15fcde82a98f99443b712851ec464`: Angular production build, API TypeScript check, and PostgreSQL-backed HTTP smoke tests for authentication, commerce, manual refunds, fulfillment, and POS sessions/orders. The CI database is disposable and does not verify the live Neon database. The CI suite uses a disposable PostgreSQL service and does not verify the user's live Neon database. The live Neon schema/setup and browser-level visual/responsive checks remain pending. The merchant UI readability pass is committed; inspect it in a browser before considering the visual QA checklist complete.
