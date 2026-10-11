@@ -53,6 +53,21 @@ export class PosWorkspaceComponent {
     });
   }
 
+  protected async refreshPosData(): Promise<void> {
+    await this.loadPosData();
+    if (!this.posError()) this.notifyRequested.emit('POS registers and orders refreshed from the server.');
+  }
+
+  private async refreshPosOrders(): Promise<boolean> {
+    try {
+      const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
+      this.posOrders.set(Array.isArray(rows) ? rows : []);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async loadPosData(): Promise<void> {
     const organizationId = this.organizationId(), storeId = this.storeId();
     if (!organizationId || !storeId) return;
@@ -226,7 +241,11 @@ export class PosWorkspaceComponent {
       this.dataChanged.emit();
       this.notifyRequested.emit('POS order status updated and audited.');
     } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not update this POS order.');
+      const message = error instanceof Error ? error.message : 'Could not confirm the POS order status update.';
+      const reconciled = await this.refreshPosOrders();
+      this.posError.set(reconciled
+        ? message + ' The latest order state was reloaded from the server; verify it before trying again.'
+        : message + ' The latest order state could not be reloaded. Use Refresh POS data before retrying.');
     } finally { this.posSaveBusy.set(false); }
   }
 
