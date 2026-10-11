@@ -1,6 +1,6 @@
 # PostgreSQL reset — implementation status
 
-Last reviewed: 2026-10-10
+Last reviewed: 2026-10-11
 
 ## Product decision
 
