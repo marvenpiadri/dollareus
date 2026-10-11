@@ -16,7 +16,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
 
 
 @Component({
@@ -113,11 +113,9 @@ export class WorkspaceComponent {
           tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
         };
       }));
-      const [orderRows, inventoryRows, sessionRows, posOrderRows, menuRows, categoryRows] = await Promise.all([
+      const [orderRows, inventoryRows, menuRows, categoryRows] = await Promise.all([
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
       ]);
@@ -140,14 +138,6 @@ export class WorkspaceComponent {
         dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
         modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
       }))));
-      const sessions = Array.isArray(sessionRows) ? sessionRows : [];
-      this.posSessions.set(sessions);
-      this.posOrders.set(Array.isArray(posOrderRows) ? posOrderRows : []);
-      const openSession = sessions.find((session: any) => session.status === 'open');
-      this.selectedPosSessionId.set(openSession ? String(openSession.id) : '');
-      if (!this.posVariantId() || !this.products().some((product) => product.variantId === this.posVariantId() && product.status === 'Active')) {
-        this.posVariantId.set(this.products().find((product) => product.status === 'Active' && product.variantId)?.variantId ?? '');
-      }
       this.products.update((rows) => rows.map((product) => {
         const levels = this.inventory().filter((item) => item.variantId === product.variantId && item.quantityOnHand !== null);
         return { ...product, stock: levels.length ? levels.reduce((sum, item) => sum + Number(item.quantityOnHand ?? 0), 0) : null };
@@ -207,22 +197,6 @@ export class WorkspaceComponent {
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
   protected readonly inventory = signal<InventoryRow[]>([]);
-  protected readonly posSessions = signal<any[]>([]);
-  protected readonly posOrders = signal<any[]>([]);
-  protected readonly selectedPosSessionId = signal('');
-  protected readonly posSessionLabel = signal('Main register');
-  protected readonly posTerminalType = signal('retail');
-  protected readonly posVariantId = signal('');
-  protected readonly posSourceType = signal<'product' | 'menu_item'>('product');
-  protected readonly posModifiers = signal<Record<string, string[]>>({});
-  protected readonly posCart = signal<PosCartLine[]>([]);
-  protected readonly posQuantity = signal('1');
-  protected readonly posFulfillment = signal('counter');
-  protected readonly posCustomerNote = signal('');
-  protected readonly posBusy = signal(false);
-  protected readonly posSaveBusy = signal(false);
-  protected readonly posError = signal('');
-  protected readonly posCartError = signal('');
   protected readonly orderActionBusyId = signal('');
   protected readonly orderActionError = signal('');
   protected readonly selectedPaymentOrder = signal<OrderRow | null>(null);
@@ -335,156 +309,6 @@ export class WorkspaceComponent {
     this.paymentDetails.set(details);
   }
 
-
-  protected hasOpenPosSession(): boolean { return this.posSessions().some((session: any) => session.status === 'open'); }
-
-  protected async createPosSession(event: Event): Promise<void> {
-    event.preventDefault();
-    const label = this.posSessionLabel().trim();
-    if (!label) { this.posError.set('Enter a register name.'); return; }
-    this.posBusy.set(true); this.posError.set('');
-    try {
-      const session = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions', {
-        method: 'POST', body: JSON.stringify({ label, terminalType: this.posTerminalType() })
-      });
-      this.posSessions.update(rows => [session, ...rows.filter(row => row.id !== session.id)]);
-      this.selectedPosSessionId.set(String(session.id));
-      this.notify('POS register opened.');
-    } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not open this register.');
-    } finally { this.posBusy.set(false); }
-  }
-
-  protected async closePosSession(): Promise<void> {
-    const sessionId = this.selectedPosSessionId();
-    if (!sessionId) return;
-    this.posBusy.set(true); this.posError.set('');
-    try {
-      const closed = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions/' + encodeURIComponent(sessionId) + '/close', {
-        method: 'PATCH', body: JSON.stringify({})
-      });
-      this.posSessions.update(rows => rows.map(row => row.id === sessionId ? closed : row));
-      this.selectedPosSessionId.set('');
-      this.notify('POS register closed.');
-    } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not close this register.');
-    } finally { this.posBusy.set(false); }
-  }
-
-  protected addPosCartItem(event: Event): void {
-    event.preventDefault();
-    const variantId = this.posVariantId();
-    const quantity = Number(this.posQuantity());
-    const sourceType = this.posSourceType();
-    const product = sourceType === 'product' ? this.products().find(row => row.variantId === variantId && row.status === 'Active') : null;
-    const menuItem = sourceType === 'menu_item' ? this.selectedPosMenuItem() : null;
-    if (!this.selectedPosSessionId() || (sourceType === 'product' ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 || (sourceType === 'menu_item' && !this.posModifiersValid())) {
-      this.posCartError.set('Choose an open register, a valid active item, quantity, and all required modifier options.');
-      return;
-    }
-    const modifiers = sourceType === 'menu_item' ? this.selectedPosModifiersPayload() : [];
-    const modifierDelta = modifiers.reduce((sum, selection) => {
-      const group = menuItem?.modifierGroups?.find(candidate => candidate.id === selection.groupId);
-      return sum + selection.optionIds.reduce((subtotal, optionId) => subtotal + Number(group?.options.find(option => option.id === optionId)?.priceDeltaMinor ?? 0), 0);
-    }, 0);
-    const name = sourceType === 'product' ? product!.name : menuItem!.name;
-    const sourceItemId = sourceType === 'product' ? product!.id : menuItem!.id;
-    const sourceVariantId = sourceType === 'product' ? variantId : undefined;
-    const priceAmountMinor = sourceType === 'product' ? product!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
-    const currency = sourceType === 'product' ? product!.currency : menuItem!.currency;
-    const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
-    const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
-    this.posCartError.set('');
-    const existingLine = this.posCart().find(line => line.key === key);
-    if (existingLine && existingLine.quantity + quantity > 10000) {
-      this.posCartError.set('A ticket line cannot exceed 10,000 units.');
-      return;
-    }
-    this.posCart.update(lines => {
-      if (!existingLine) return [...lines, { key, sourceType, sourceItemId, sourceVariantId, quantity, name, priceAmountMinor, currency, metadata }];
-      return lines.map(line => line.key === key ? { ...line, quantity: line.quantity + quantity } : line);
-    });
-    this.posQuantity.set('1');
-    if (sourceType === 'menu_item') this.posModifiers.set({});
-    this.notify('Item added to the POS ticket.');
-  }
-
-  protected removePosCartItem(key: string): void { this.posCart.update(lines => lines.filter(line => line.key !== key)); }
-  protected posCartTotalMinor(): number { return this.posCart().reduce((sum, line) => sum + line.priceAmountMinor * line.quantity, 0); }
-
-  protected async createPosOrder(): Promise<void> {
-    const sessionId = this.selectedPosSessionId();
-    if (!sessionId || !this.posCart().length) {
-      this.posError.set('Choose an open register and add at least one item to the ticket.');
-      return;
-    }
-    this.posSaveBusy.set(true); this.posError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
-          customerNote: this.posCustomerNote().trim() || null,
-          idempotencyKey: 'merchant-pos-' + crypto.randomUUID(),
-          items: this.posCart().map(line => ({
-            sourceType: line.sourceType, sourceItemId: line.sourceItemId,
-            ...(line.sourceVariantId ? { sourceVariantId: line.sourceVariantId } : {}),
-            quantity: line.quantity, ...(line.metadata ? { metadata: line.metadata } : {})
-          }))
-        })
-      });
-      const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
-      this.posOrders.set(Array.isArray(rows) ? rows : []);
-      this.posQuantity.set('1'); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
-      this.notify('POS order created with server-calculated pricing.');
-    } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not create this POS order.');
-    } finally { this.posSaveBusy.set(false); }
-  }
-
-  protected async recordPosPayment(order: any): Promise<void> {
-    if (!order?.id || order.status === 'cancelled') return;
-    this.posSaveBusy.set(true); this.posError.set('');
-    try {
-      const endpoint = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.id) + '/payments';
-      const details = await this.apiClient.request(endpoint);
-      const balance = Number(details?.balanceMinor);
-      if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('The order payment balance could not be verified.');
-      if (balance === 0) {
-        this.notify('This order is already fully paid.');
-        return;
-      }
-      await this.apiClient.request(endpoint, {
-        method: 'POST',
-        body: JSON.stringify({
-          method: this.paymentMethod(),
-          status: 'succeeded',
-          amountMinor: balance,
-          note: 'Recorded from merchant POS',
-          idempotencyKey: 'pos-payment-' + order.id + '-' + crypto.randomUUID()
-        })
-      });
-      await this.loadWorkspace();
-      this.notify('Offline payment recorded. No external payment was processed.');
-    } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not record POS payment.');
-    } finally { this.posSaveBusy.set(false); }
-  }
-
-  protected async updatePosOrderStatus(order: any, status: string): Promise<void> {
-    if (!order?.id || status === order.status) return;
-    this.posSaveBusy.set(true); this.posError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders/' + encodeURIComponent(order.id) + '/status', {
-        method: 'PATCH', body: JSON.stringify({ status })
-      });
-      const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
-      this.posOrders.set(Array.isArray(rows) ? rows : []);
-      this.notify('POS order status updated and audited.');
-    } catch (error) {
-      this.posError.set(error instanceof Error ? error.message : 'Could not update this POS order.');
-    } finally { this.posSaveBusy.set(false); }
-  }
 
   protected async openRefundTracker(order: OrderRow): Promise<void> {
     this.selectedRefundOrder.set(order);
@@ -654,31 +478,6 @@ export class WorkspaceComponent {
     if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
     if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.');
   }
-  protected selectedPosMenuItem(): MenuItemRow | null { return this.menuItems().find(item => item.id === this.posVariantId() && item.status === 'active' && item.availability !== 'unavailable' && this.menus().some(menu => menu.id === item.menuId && menu.status === 'active')) ?? null; }
-  protected togglePosModifier(groupId: string, optionId: string, checked: boolean, maxSelections: number): void {
-    this.posModifiers.update(current => {
-      const selected = current[groupId] ?? [];
-      if (!checked) return { ...current, [groupId]: selected.filter(id => id !== optionId) };
-      if (selected.includes(optionId)) return current;
-      if (maxSelections === 1) return { ...current, [groupId]: [optionId] };
-      if (selected.length >= maxSelections) return current;
-      return { ...current, [groupId]: [...selected, optionId] };
-    });
-  }
-  protected posModifiersValid(): boolean {
-    const item = this.selectedPosMenuItem();
-    if (!item) return false;
-    return (item.modifierGroups ?? []).every(group => {
-      const count = (this.posModifiers()[group.id] ?? []).length;
-      return count >= group.minSelections && count <= group.maxSelections;
-    });
-  }
-  protected selectedPosModifiersPayload(): Array<{ groupId: string; optionIds: string[] }> {
-    const item = this.selectedPosMenuItem();
-    return (item?.modifierGroups ?? []).map(group => ({ groupId: group.id, optionIds: this.posModifiers()[group.id] ?? [] })).filter(selection => selection.optionIds.length > 0);
-  }
-
-  protected availablePosMenuItems(): MenuItemRow[] { const activeMenus = new Set(this.menus().filter(menu => menu.status === 'active').map(menu => menu.id)); return this.menuItems().filter(item => item.status === 'active' && item.availability !== 'unavailable' && activeMenus.has(item.menuId)); }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
   protected addProduct(): void { this.selectNav('Products'); this.openProductEditorRequest.update(value => value + 1); }
 
