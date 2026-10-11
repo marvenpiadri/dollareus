@@ -37,14 +37,14 @@ The API currently has PostgreSQL-backed endpoints for:
 - creating and listing organizations, including the first owner membership;
 - creating and listing stores and storefront settings;
 - listing and creating products with variants;
-- reading published store and catalog projections;\n- store-scoped category listing and creation;\n- organization-scoped customer listing and creation;\n- inventory location creation, stock-level reads and guarded stock adjustments;\n- order listing and transactional, server-priced order creation with immutable line snapshots and idempotency-key support.
+- reading published store and catalog projections;\n- store-scoped category listing and creation;\n- organization-scoped customer listing and creation;\n- inventory location creation, stock-level reads and guarded stock adjustments;\n- order listing and transactional, server-priced order creation with immutable line snapshots and idempotency-key support;\n- restaurant menu and menu-item create/list APIs plus a public published-menu projection;\n- managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup.
 
 The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
 
 ## Phase 3 — complete the application
 
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
-- reimplement the remaining menu, POS, entry-point, domain and media routes against PostgreSQL;\n- connect the merchant orders, customers and inventory screens to the new endpoints;
+- reimplement POS, domain and media routes against PostgreSQL;\n- finish restaurant menu editing, publishing and modifier workflows;\n- connect the merchant orders, customers and inventory screens to the new endpoints;
 - finish order status/fulfillment actions and remaining merchant workflows;
 - extend tenant-isolation, transaction, validation, and API integration tests;\n- run and resolve CI on the new implementation before live database/provider testing;
 - connect the Angular merchant dashboard to the API;
