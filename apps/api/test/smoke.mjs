@@ -296,6 +296,14 @@ try {
       variants: [{ id: `order-variant-${suffix}`, sku: `ORDER-${suffix}`, title: 'Standard', options: {}, amountMinor: 1299, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }]
     })
   });
+  await request(`/api/v1/organizations/${organizationId}/products`, 403, {
+    method: 'POST', headers: viewerHeaders,
+    body: JSON.stringify({ storeId, slug: `viewer-product-${suffix}`, name: 'Viewer product', description: null, status: 'draft', kind: 'physical', availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: [], variants: [{ id: `viewer-variant-${suffix}`, sku: null, title: 'Standard', options: {}, amountMinor: 100, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }] })
+  });
+  await request(`/api/v1/organizations/${organizationId}/products/${activeProduct.payload?.data?.id}`, 403, {
+    method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ name: 'Unauthorized edit' })
+  });
+  checks.push('viewer role cannot create or edit products');
   await request(`/api/v1/organizations/${organizationId}/products/${activeProduct.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ categoryIds: [category.payload?.data?.id] })
