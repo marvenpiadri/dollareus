@@ -428,6 +428,19 @@ try {
   await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 404);
   checks.push('unpublished stores and their QR entry points stay private');
 
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 403, {
+    method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ published: true })
+  });
+  const storefront = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
+  });
+  if (storefront.payload?.data?.published !== true || storefront.payload?.data?.defaultExperience !== 'menu') throw new Error('Storefront publishing settings did not persist.');
+  const publicMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  if (!publicMenu.payload?.data?.some((item) => item.id === menu.payload?.data?.id && item.items?.some((dish) => dish.id === menuItem.payload?.data?.id))) throw new Error('Published restaurant menu or item was not publicly accessible.');
+  const publicEntryPoint = await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 200);
+  if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
+  checks.push('storefront publishing, public restaurant menu access, and branded public QR destinations');
+
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
   for (const check of checks) console.log(`  ✓ ${check}`);
 } finally {
