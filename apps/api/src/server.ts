@@ -1513,6 +1513,8 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
     let subtotal = 0;
     for (const item of parsed.data.items) {
       let source: any;
+      let modifierDelta = 0;
+      const modifierSnapshot: Array<Record<string, unknown>> = [];
       if (item.sourceType === 'menu_item') {
         source = (await client.query(
           "SELECT i.id,i.menu_id,i.name,i.price_amount_minor AS amount_minor,i.currency,i.status,i.availability,i.metadata,m.status AS menu_status FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id WHERE i.id=$1 AND i.organization_id=$2 AND i.store_id=$3 FOR SHARE OF i,m",
@@ -1520,6 +1522,47 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         )).rows[0];
         if (!source || source.status !== 'active' || source.availability === 'unavailable' || source.menu_status !== 'active') {
           await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_ITEM', 'Every menu item must belong to this store and be active and available.');
+        }
+        const groups = Array.isArray(source.metadata?.modifierGroups) ? source.metadata.modifierGroups as Array<any> : [];
+        const rawSelections = item.metadata?.modifiers;
+        if (rawSelections !== undefined && !Array.isArray(rawSelections)) {
+          await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'Menu modifier selections must be a list of selected option groups.');
+        }
+        const selections = (rawSelections ?? []) as Array<any>;
+        const selectionByGroup = new Map<string, string[]>();
+        for (const selection of selections) {
+          if (!selection || typeof selection.groupId !== 'string' || !Array.isArray(selection.optionIds) || selection.optionIds.some((id: unknown) => typeof id !== 'string')) {
+            await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'Each modifier selection needs a group ID and option ID list.');
+          }
+          if (selectionByGroup.has(selection.groupId)) {
+            await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'Each modifier group can only be submitted once.');
+          }
+          selectionByGroup.set(selection.groupId, selection.optionIds as string[]);
+        }
+        const validGroupIds = new Set(groups.map((group: any) => String(group.id)));
+        if ([...selectionByGroup.keys()].some((groupId) => !validGroupIds.has(groupId))) {
+          await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'A selected modifier group does not belong to this menu item.');
+        }
+        for (const group of groups) {
+          const groupId = String(group.id);
+          const optionIds = selectionByGroup.get(groupId) ?? [];
+          const options = Array.isArray(group.options) ? group.options as Array<any> : [];
+          const minSelections = Number(group.minSelections ?? (group.required ? 1 : 0));
+          const maxSelections = Number(group.maxSelections ?? 1);
+          if (!Number.isInteger(minSelections) || !Number.isInteger(maxSelections) || minSelections < 0 || maxSelections < minSelections || optionIds.length < minSelections || optionIds.length > maxSelections || new Set(optionIds).size !== optionIds.length) {
+            await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'Choose the required number of options for each modifier group.');
+          }
+          const selectedOptions: Array<Record<string, unknown>> = [];
+          for (const optionId of optionIds) {
+            const option = options.find((candidate: any) => String(candidate.id) === optionId);
+            const priceDeltaMinor = Number(option?.priceDeltaMinor);
+            if (!option || !Number.isSafeInteger(priceDeltaMinor) || priceDeltaMinor < 0 || typeof option.name !== 'string') {
+              await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_MODIFIERS', 'A selected modifier option is invalid.');
+            }
+            modifierDelta += priceDeltaMinor;
+            selectedOptions.push({ id: optionId, name: option.name, priceDeltaMinor });
+          }
+          if (selectedOptions.length) modifierSnapshot.push({ groupId, groupName: String(group.name), options: selectedOptions });
         }
       } else {
         if (!item.sourceVariantId) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_VARIANT_REQUIRED', 'Product and service lines require an active variant.'); }
@@ -1532,7 +1575,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
           await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_ITEM', 'Every product or service line must reference an active variant of the expected type in this store.');
         }
       }
-      const unitAmount = Number(source.amount_minor);
+      const unitAmount = Number(source.amount_minor) + modifierDelta;
       const lineTotal = unitAmount * item.quantity;
       if (!Number.isSafeInteger(unitAmount) || !Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(subtotal + lineTotal)) {
         await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_AMOUNT_TOO_LARGE', 'The POS order exceeds the supported amount.');
@@ -1550,7 +1593,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         variantTitle: item.sourceType === 'menu_item' ? 'Menu item' : String(source.variant_title),
         options: item.sourceType === 'menu_item' ? {} : (source.options ?? {}),
         name: item.sourceType === 'menu_item' ? String(source.name) : String(source.name) + (source.variant_title ? ' · ' + source.variant_title : ''),
-        quantity: item.quantity, unitAmount, total: lineTotal, metadata: item.metadata ?? {}
+        quantity: item.quantity, unitAmount, total: lineTotal, metadata: { ...(item.metadata ?? {}), ...(modifierSnapshot.length ? { modifierSnapshot } : {}) }
       });
     }
     const numberResult = await client.query('SELECT GREATEST(COALESCE((SELECT MAX(order_number) FROM orders WHERE organization_id=$1),0),COALESCE((SELECT MAX(order_number) FROM pos_orders WHERE organization_id=$1),0))+1 AS order_number', [organizationId]);
