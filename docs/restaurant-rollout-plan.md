@@ -1,5 +1,7 @@
 # Dollareus restaurant rollout plan
 
+> Architecture work is tracked separately from restaurant feature acceptance. The Angular merchant client is being standardized on Angular 22 with external templates/styles and feature-oriented folders. API and shared packages remain outside Angular `src/` as part of the workspace monorepo.
+
 This is the execution plan for the restaurant pilot. Complete each phase's exit gate before starting the next. Keep retail expansion, Mageus, delivery marketplaces, and broad integrations out of scope until the restaurant pilot is dependable.
 
 ## Phase 1 — Public menu and QR entry (active)
