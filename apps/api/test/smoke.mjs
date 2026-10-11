@@ -170,7 +170,7 @@ try {
   if (domainResponse.payload?.data?.status !== 'verification_required' || domainResponse.payload?.data?.verification?.recordType !== 'TXT') throw new Error('Custom domain verification instructions were not returned.');
   const listedDomains = await request('/api/v1/organizations/' + organizationId + '/stores/' + storeId + '/domains', 200, { headers: authHeaders });
   if (!listedDomains.payload?.data?.some((domain) => domain.id === domainResponse.payload?.data?.id)) throw new Error('Custom domain was not listed.');
-  await request('/api/v1/organizations/' + organizationId + '/domains/' + domainResponse.payload?.data?.id + '/disable', 200, { method: 'POST', headers: authHeaders });
+  await request('/api/v1/organizations/' + organizationId + '/domains/' + domainResponse.payload?.data?.id + '/disable', 200, { method: 'POST', headers: authHeaders, body: JSON.stringify({}) });
   checks.push('custom domain registration, listing, and disabling');
 
   const productId = `product-${suffix}`;
