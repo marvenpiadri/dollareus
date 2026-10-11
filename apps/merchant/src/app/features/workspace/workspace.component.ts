@@ -5,20 +5,8 @@ import { ApiClientService } from '../../core/api/api-client.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-type ProductStatus = 'Active' | 'Draft' | 'Archived';
-interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; categoryIds?: string[]; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
-interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
-interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
-interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
-interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-type PosCartLine = { key: string; sourceType: 'product' | 'menu_item'; sourceItemId: string; sourceVariantId?: string; quantity: number; name: string; priceAmountMinor: number; currency: string; metadata?: Record<string, unknown> };
-type MenuModifierOption = { id: string; name: string; priceDeltaMinor: number };
-type MenuModifierGroup = { id: string; name: string; required: boolean; minSelections: number; maxSelections: number; options: MenuModifierOption[] };
-interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; modifierGroups?: MenuModifierGroup[]; metadata?: Record<string, unknown>; }
-interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
-interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
-type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
-interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage; carrier: string | null; trackingNumber: string | null; trackingUrl: string | null; estimatedDeliveryDate: string | null; notes: string | null; createdAt: string; updatedAt: string; }
+import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, EntryPointRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+
 
 @Component({
   selector: 'dlr-workspace',
