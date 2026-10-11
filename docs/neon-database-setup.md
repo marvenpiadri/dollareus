@@ -84,7 +84,7 @@ If the API reports a connection error, check that the URL belongs to the same Ne
 - Store production `DATABASE_URL` only in the API host's server-side environment/secret settings.
 - Confirm backups/retention and test a restore before accepting real business data.
 - Run `pnpm db:migrate` as a controlled deployment step before releasing API code that depends on a new schema.
-- Never edit a migration that has already been applied; create the next numbered SQL file.
+- Never edit a migration that has already been applied; create the next numbered SQL file and update `apps/api/src/db/schema-version.ts` to match it.
 - Back up production data before migrations that alter or remove columns, indexes, or constraints.
 - Verify the deployed API health endpoint and run a small staging workflow.
 - Do not treat query/connection spikes in Neon as proof that the full schema or application workflows are correct.
