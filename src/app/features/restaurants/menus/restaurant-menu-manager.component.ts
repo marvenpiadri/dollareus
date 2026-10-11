@@ -244,7 +244,7 @@ export class RestaurantMenuManagerComponent {
           return { id: optionId, name: optionName, priceDeltaMinor: option.priceDeltaMinor as number };
         });
         return {
-          id, name: groupName, required: group.required,
+          id, name: groupName, required: group.required as boolean,
           minSelections: minSelections as number, maxSelections: maxSelections as number, options
         };
       });
