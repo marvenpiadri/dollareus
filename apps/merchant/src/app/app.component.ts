@@ -3,7 +3,7 @@ import { AuthPanelComponent } from './auth-panel.component';
 import { PublicHomeComponent } from './public-home.component';
 import { QrStudioComponent } from './qr-studio.component';
 
-type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'Online store' | 'Integrations' | 'Settings';
+type NavItem = 'Overview' | 'Orders' | 'Products' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 type ProductStatus = 'Active' | 'Draft' | 'Archived';
 interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; status: ProductStatus; initials: string; tone: string; }
 interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
@@ -71,7 +71,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
           </section>
           <section class="two-column">
             <article class="panel"><div class="panel-heading"><div><h2>Recent orders</h2><p>A quick look at your latest sales.</p></div><button type="button" (click)="selectNav('Orders')">View all orders →</button></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>CHANNEL</th><th>TOTAL</th><th>STATUS</th></tr></thead><tbody>@for(order of orders();track order.id){<tr><td class="order-id">{{ order.id }}</td><td>{{ order.customer }}</td><td><span class="channel-dot" [class.mageus]="order.channel === 'Mageus'" [class.pos]="order.channel === 'POS'"></span>{{ order.channel }}</td><td class="total">{{ money(order.totalMinor,order.currency) }}</td><td><span class="status" [class]="statusClass(order.status)">{{ orderStatusLabel(order.status) }}</span></td></tr>} @empty {<tr><td colspan="5" class="empty-state">No orders yet. Orders created through checkout or POS will appear here.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{ orders().length }} recent orders <button type="button" (click)="selectNav('Orders')">Open order manager →</button></div></article>
-            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Online store</b><small>{{ storeSlug() }}</small></span><em>Not published</em></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus</b><small>Creator storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="openQrStudio()">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
+            <article class="panel channels"><div class="panel-heading"><div><h2>Sales channels</h2><p>Where customers find you.</p></div><button type="button" (click)="selectNav('Integrations')">···</button></div><div class="channel-row"><span class="channel-icon">▣</span><span><b>Custom website / app</b><small>Dollareus API access</small></span><em>API access planned</em></div><div class="channel-row"><span class="channel-icon mageus-icon">m.</span><span><b>Mageus storefront</b><small>Default public storefront</small></span><button type="button" (click)="notify('Mageus will connect through scoped authorization.')">Connect</button></div><div class="channel-row"><span class="channel-icon">▤</span><span><b>In-person POS</b><small>Sell in person</small></span><button type="button" (click)="notify('POS is planned as a business module.')">Set up</button></div><div class="channel-row"><span class="channel-icon qr-icon">▦</span><span><b>QR commerce</b><small>Menus and product links</small></span><button type="button" (click)="openQrStudio()">Explore</button></div><button class="add-channel" type="button" (click)="selectNav('Integrations')">＋ Add a sales channel</button></article>
           </section>
           }
           @if (activeNav() === 'Overview' || activeNav() === 'Products') {
@@ -248,7 +248,7 @@ export class AppComponent {
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
-        channel: 'Online store', totalMinor: Number(order.totalMinor ?? 0), currency: String(order.currency ?? store.defaultCurrency ?? 'MAD'),
+        channel: String(order.channel ?? 'Mageus'), totalMinor: Number(order.totalMinor ?? 0), currency: String(order.currency ?? store.defaultCurrency ?? 'MAD'),
         status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.effectivePaymentStatus ?? order.paymentStatus ?? 'unpaid')
       })));
       this.customers.set((Array.isArray(customerRows) ? customerRows : []).map((customer: any): CustomerRow => ({
@@ -307,7 +307,7 @@ export class AppComponent {
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
     {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'Products',symbol:'◇'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
   ];
-  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'Online store',symbol:'▣'},{label:'Integrations',symbol:'⌘'}];
+  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly orders = signal<OrderRow[]>([]);
