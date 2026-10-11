@@ -683,14 +683,19 @@ app.put<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiza
   }
 });
 
-app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string } }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
   const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
   const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
+  const storeId = request.query.storeId?.trim() || null;
+  if (storeId) {
+    const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+    if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
+  }
   const result = await pool.query(
-    "SELECT o.*, COALESCE(o.metadata->>'channel','Mageus') AS channel, CASE WHEN o.payment_status IN ('paid','partially_refunded','refunded','authorized','failed') THEN o.payment_status WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.order_id=o.id AND p.organization_id=o.organization_id AND p.status='succeeded'),0)>0 THEN 'partially_paid' ELSE o.payment_status END AS effective_payment_status, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 ORDER BY o.created_at DESC LIMIT $2",
-    [organizationId, limit]
+    "SELECT o.*, COALESCE(o.metadata->>'channel','Mageus') AS channel, CASE WHEN o.payment_status IN ('paid','partially_refunded','refunded','authorized','failed') THEN o.payment_status WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.order_id=o.id AND p.organization_id=o.organization_id AND p.status='succeeded'),0)>0 THEN 'partially_paid' ELSE o.payment_status END AS effective_payment_status, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'sku',i.sku_snapshot,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'options',i.options_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.organization_id=$1 AND ($2::text IS NULL OR o.store_id=$2) ORDER BY o.created_at DESC LIMIT $3",
+    [organizationId, storeId, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
 });
