@@ -573,6 +573,37 @@ CREATE TABLE refunds (
 CREATE INDEX refunds_order_idx ON refunds(organization_id, order_id, created_at DESC);
 CREATE INDEX refunds_payment_idx ON refunds(payment_id, status);
 
+CREATE TABLE api_credentials (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  created_by text NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 120),
+  token_prefix text NOT NULL CHECK (length(token_prefix) BETWEEN 8 AND 32),
+  token_hash text NOT NULL UNIQUE,
+  scopes text[] NOT NULL CHECK (cardinality(scopes) > 0 AND scopes <@ ARRAY['read','write']::text[]),
+  expires_at timestamptz,
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  CHECK (expires_at IS NULL OR expires_at > created_at)
+);
+CREATE INDEX api_credentials_org_created_idx ON api_credentials(organization_id, created_at DESC);
+CREATE INDEX api_credentials_active_idx ON api_credentials(organization_id, expires_at) WHERE revoked_at IS NULL;
+
+CREATE TABLE api_usage_events (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  credential_id text NOT NULL REFERENCES api_credentials(id) ON DELETE CASCADE,
+  request_id text NOT NULL,
+  method text NOT NULL,
+  route_template text NOT NULL,
+  status_code integer NOT NULL CHECK (status_code BETWEEN 100 AND 599),
+  created_at timestamptz NOT NULL
+);
+CREATE INDEX api_usage_events_org_created_idx ON api_usage_events(organization_id, created_at DESC);
+CREATE INDEX api_usage_events_credential_created_idx ON api_usage_events(credential_id, created_at DESC);
+
 CREATE TABLE audit_events (
   id text PRIMARY KEY,
   organization_id text REFERENCES organizations(id) ON DELETE SET NULL,
