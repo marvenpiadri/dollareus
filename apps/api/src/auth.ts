@@ -130,9 +130,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (displayName.length > 120) {
       return reply.code(400).send({ error: { code: 'INVALID_DISPLAY_NAME', message: 'Display name must be 120 characters or fewer.', requestId: request.id } });
     }
-    if (!process.env.AUTH_EMAIL_API_KEY || !process.env.AUTH_EMAIL_FROM || !process.env.AUTH_PUBLIC_URL) {
-      return reply.code(503).send({ error: { code: 'AUTH_EMAIL_NOT_CONFIGURED', message: 'Email verification is not configured yet.', requestId: request.id } });
-    }
     const salt = randomBytes(16);
     const derived = await scrypt(password, salt, 64) as Buffer;
     const passwordHash = `scrypt:${salt.toString('hex')}:${derived.toString('hex')}`;
@@ -151,17 +148,22 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       }
       throw error;
     } finally { client.release(); }
-    let verificationToken = '';
-    try {
-      verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
-      const verificationUrl = authPublicUrl('/?auth=verify-email', verificationToken);
-      await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Welcome to Dollareus.</p><p>Confirm your email address using the link below. This link expires in 24 hours.</p><p><a href="${verificationUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this message.</p>`);
-    } catch (error) {
-      if (verificationToken) await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(verificationToken)]);
-      await pool.query('DELETE FROM users WHERE id=$1', [userId]);
-      throw error;
+    let verificationEmailSent = false;
+    if (process.env.AUTH_EMAIL_API_KEY && process.env.AUTH_EMAIL_FROM && process.env.AUTH_PUBLIC_URL) {
+      let verificationToken = '';
+      try {
+        verificationToken = await issueEmailToken(userId, 'verify_email', 1000 * 60 * 60 * 24);
+        const verificationUrl = authPublicUrl('/?auth=verify-email', verificationToken);
+        await sendAuthEmail(email, 'Verify your Dollareus email', `<p>Welcome to Dollareus.</p><p>Confirm the email address used to create your account. This link expires in 24 hours.</p><p><a href="${verificationUrl}">Verify email address</a></p><p>If you did not create this account, you can ignore this message.</p>`);
+        verificationEmailSent = true;
+      } catch (error) {
+        if (verificationToken) await pool.query('DELETE FROM auth_email_tokens WHERE token_hash=$1', [hash(verificationToken)]);
+        console.error('[auth-email] Verification delivery failed after account creation:', error instanceof Error ? error.message : 'Unknown error');
+      }
     }
-    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false, verificationRequired: true }, requestId: request.id });
+    const session = await createSession(userId);
+    setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
+    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false, verificationEmailSent }, requestId: request.id });
   });
 
   app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -185,10 +187,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
     const valid = Boolean(row && row.status === 'active' && passwordMatches);
     if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
-    const verified = await pool.query('SELECT email_verified_at FROM users WHERE id=$1', [row.id]);
-    if (!verified.rows[0]?.email_verified_at) {
-      return reply.code(403).send({ error: { code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before signing in.', requestId: request.id } });
-    }
     const session = await createSession(row.id);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
     return { data: { id: row.id, email: row.email, displayName: row.display_name }, requestId: request.id };
