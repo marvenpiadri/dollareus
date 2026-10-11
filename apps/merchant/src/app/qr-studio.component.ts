@@ -50,8 +50,8 @@ export class QrStudioComponent implements OnDestroy {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${totalHeight}" viewBox="0 0 ${size} ${totalHeight}"><rect width="100%" height="100%" fill="${this.light()}"/><svg x="0" y="${qrY}" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" preserveAspectRatio="xMidYMid meet">${inner}</svg>${logo}${heading}</svg>`;
   }
   private async composePng(qrPng: string, size: number, frame: QrFrame, brand: string, label: string, logoUrl: string): Promise<string> {
-    if (frame === 'none' || (!brand.trim() && !label.trim())) return qrPng;
-    const extra = 88;
+    if ((frame === 'none' && !logoUrl) || (!brand.trim() && !label.trim() && !logoUrl)) return qrPng;
+    const extra = frame === 'none' ? 0 : 88;
     const totalHeight = size + extra;
     const qrY = frame === 'top-label' ? extra : 0;
     const image = new Image();
@@ -71,13 +71,15 @@ export class QrStudioComponent implements OnDestroy {
         context.drawImage(logoImage, size / 2 - 28, qrY + size / 2 - 28, 56, 56);
       } catch { /* The SVG retains the logo URL; keep PNG export usable when its host disallows cross-origin image access. */ }
     }
-    context.fillStyle = this.accent(); context.textAlign = 'center';
-    if (frame === 'top-label') {
-      if (brand.trim()) { context.font = '700 17px Arial, sans-serif'; context.fillText(brand.trim(), size / 2, 31, size - 24); }
-      if (label.trim()) { context.font = '500 12px Arial, sans-serif'; context.fillText(label.trim(), size / 2, 59, size - 24); }
-    } else {
-      if (brand.trim()) { context.font = '700 17px Arial, sans-serif'; context.fillText(brand.trim(), size / 2, size + 29, size - 24); }
-      if (label.trim()) { context.font = '500 12px Arial, sans-serif'; context.fillText(label.trim(), size / 2, size + 56, size - 24); }
+    if (frame !== 'none') {
+      context.fillStyle = this.accent(); context.textAlign = 'center';
+      if (frame === 'top-label') {
+        if (brand.trim()) { context.font = '700 17px Arial, sans-serif'; context.fillText(brand.trim(), size / 2, 31, size - 24); }
+        if (label.trim()) { context.font = '500 12px Arial, sans-serif'; context.fillText(label.trim(), size / 2, 59, size - 24); }
+      } else {
+        if (brand.trim()) { context.font = '700 17px Arial, sans-serif'; context.fillText(brand.trim(), size / 2, size + 29, size - 24); }
+        if (label.trim()) { context.font = '500 12px Arial, sans-serif'; context.fillText(label.trim(), size / 2, size + 56, size - 24); }
+      }
     }
     return canvas.toDataURL('image/png');
   }
