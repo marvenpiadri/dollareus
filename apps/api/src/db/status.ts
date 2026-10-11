@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
+import { REQUIRED_SCHEMA_VERSION } from './schema-version.js';
 
 const migrationsDirectory = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
 
@@ -16,6 +17,10 @@ try {
   const invalidNames = files.filter((name) => !/^\\d{4}_[a-z0-9_]+\\.sql$/.test(name));
   if (invalidNames.length) {
     throw new Error(`Invalid migration filename(s): ${invalidNames.join(', ')}`);
+  }
+  if (files.at(-1) !== REQUIRED_SCHEMA_VERSION) {
+    console.error(`[db:status] Runtime schema version is ${REQUIRED_SCHEMA_VERSION}, but the latest migration file is ${files.at(-1) ?? 'missing'}. Update apps/api/src/db/schema-version.ts.`);
+    exitCode = 1;
   }
 
   const ledger = await pool.query<{ exists: boolean }>(
