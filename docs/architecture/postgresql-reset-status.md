@@ -41,7 +41,7 @@ The API currently has PostgreSQL-backed endpoints for:
 - store-scoped category listing and creation;
 - organization-scoped customer listing and creation;
 - inventory location creation, stock-level reads and guarded stock adjustments;
-- order listing and transactional, server-priced order creation with immutable line snapshots and idempotency-key support;
+- order listing and transactional, server-priced order creation with immutable line snapshots, idempotency-key support and audited status transitions;
 - restaurant menu and menu-item create/list APIs plus a public published-menu projection;
 - managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup.
 
