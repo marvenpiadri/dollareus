@@ -500,6 +500,7 @@ app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organi
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/categories', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = CategoryInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The category payload is invalid.');
   const now = new Date();
