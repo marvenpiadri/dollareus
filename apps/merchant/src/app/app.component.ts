@@ -11,7 +11,9 @@ interface OrderRow { id: string; resourceId: string; customer: string; channel: 
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
 interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; metadata?: Record<string, unknown>; }
+type MenuModifierOption = { id: string; name: string; priceDeltaMinor: number };
+type MenuModifierGroup = { id: string; name: string; required: boolean; minSelections: number; maxSelections: number; options: MenuModifierOption[] };
+interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; modifierGroups?: MenuModifierGroup[]; metadata?: Record<string, unknown>; }
 interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
 type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
@@ -112,7 +114,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               @if(posError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{posError()}}</p>}
               <form class="customer-form" (submit)="createPosSession($event)"><label>Register name<input name="label" required maxlength="120" [value]="posSessionLabel()" (input)="posSessionLabel.set($any($event.target).value)"></label><label>Terminal type<select [value]="posTerminalType()" (change)="posTerminalType.set($any($event.target).value)"><option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="service">Services</option><option value="general">General</option></select></label><button class="button primary small" type="submit" [disabled]="posBusy()">{{posBusy()?'Opening…':'Open register'}}</button></form>
               <div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;padding:14px 17px;border-bottom:1px solid #eef0eb"><label style="display:grid;gap:6px;flex:1;min-width:220px;color:#6f786a;font-size:13px;font-weight:700">Active register<select [value]="selectedPosSessionId()" (change)="selectedPosSessionId.set($any($event.target).value)" style="height:42px;padding:0 10px;border:1px solid #cbd5e1;border-radius:7px;background:white"><option value="">Choose an open register</option>@for(session of posSessions();track session.id){@if(session.status==='open'){<option [value]="session.id">{{session.label}} · {{orderStatusLabel(session.terminalType)}}</option>}}</select></label><button class="button secondary small" type="button" [disabled]="posBusy() || !selectedPosSessionId()" (click)="closePosSession()">Close register</button></div>
-              <form class="customer-form" (submit)="createPosOrder($event)"><label>Sale type<select [value]="posSourceType()" (change)="posSourceType.set($any($event.target).value);posVariantId.set('')"><option value="product">Retail product</option><option value="menu_item">Restaurant menu item</option></select></label><label>{{posSourceType()==='product' ? 'Product' : 'Menu item'}}<select required [value]="posVariantId()" (change)="posVariantId.set($any($event.target).value)"><option value="">Choose an active item</option>@if(posSourceType()==='product'){@for(product of products();track product.id){@if(product.status==='Active' && product.variantId){<option [value]="product.variantId">{{product.name}} · {{money(product.priceMinor,product.currency)}}</option>}}} @else {@for(item of availablePosMenuItems();track item.id){<option [value]="item.id">{{item.name}} · {{money(item.priceAmountMinor,item.currency)}}</option>}}</select></label><label>Quantity<input type="number" min="1" max="10000" step="1" required [value]="posQuantity()" (input)="posQuantity.set($any($event.target).value)"></label><label>Fulfillment<select [value]="posFulfillment()" (change)="posFulfillment.set($any($event.target).value)"><option value="counter">Counter sale</option><option value="takeaway">Takeaway</option><option value="dine_in">Dine in</option><option value="delivery">Delivery</option><option value="service">Service</option></select></label><label>Note (optional)<input maxlength="1000" [value]="posCustomerNote()" (input)="posCustomerNote.set($any($event.target).value)" placeholder="Customer or receipt note"></label><button class="button primary small" type="submit" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posVariantId()">{{posSaveBusy()?'Saving…':'Create POS order'}}</button></form>
+              <form class="customer-form" (submit)="createPosOrder($event)"><label>Sale type<select [value]="posSourceType()" (change)="posSourceType.set($any($event.target).value);posVariantId.set('');posModifiers.set({})"><option value="product">Retail product</option><option value="menu_item">Restaurant menu item</option></select></label><label>{{posSourceType()==='product' ? 'Product' : 'Menu item'}}<select required [value]="posVariantId()" (change)="posVariantId.set($any($event.target).value);posModifiers.set({})"><option value="">Choose an active item</option>@if(posSourceType()==='product'){@for(product of products();track product.id){@if(product.status==='Active' && product.variantId){<option [value]="product.variantId">{{product.name}} · {{money(product.priceMinor,product.currency)}}</option>}}} @else {@for(item of availablePosMenuItems();track item.id){<option [value]="item.id">{{item.name}} · {{money(item.priceAmountMinor,item.currency)}}</option>}}</select></label>@if(posSourceType()==='menu_item' && selectedPosMenuItem(); as posMenuItem){@for(group of posMenuItem.modifierGroups || [];track group.id){<fieldset style="display:grid;gap:8px;min-width:220px;padding:12px;border:1px solid #e2e8f0;border-radius:9px"><legend style="font-size:13px;font-weight:700">{{group.name}} · choose {{group.minSelections===group.maxSelections ? group.maxSelections : group.minSelections+'–'+group.maxSelections}}</legend>@for(option of group.options;track option.id){<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" [checked]="(posModifiers()[group.id] || []).includes(option.id)" (change)="togglePosModifier(group.id,option.id,$any($event.target).checked,group.maxSelections)">{{option.name}} @if(option.priceDeltaMinor>0){<span class="muted">+{{money(option.priceDeltaMinor,storeCurrency())}}</span>}</label>}</fieldset>}}<label>Quantity<input type="number" min="1" max="10000" step="1" required [value]="posQuantity()" (input)="posQuantity.set($any($event.target).value)"></label><label>Fulfillment<select [value]="posFulfillment()" (change)="posFulfillment.set($any($event.target).value)"><option value="counter">Counter sale</option><option value="takeaway">Takeaway</option><option value="dine_in">Dine in</option><option value="delivery">Delivery</option><option value="service">Service</option></select></label><label>Note (optional)<input maxlength="1000" [value]="posCustomerNote()" (input)="posCustomerNote.set($any($event.target).value)" placeholder="Customer or receipt note"></label><button class="button primary small" type="submit" [disabled]="posSaveBusy() || !selectedPosSessionId() || !posVariantId() || (posSourceType()==='menu_item' && !posModifiersValid())">{{posSaveBusy()?'Saving…':'Create POS order'}}</button></form>
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 17px;border-bottom:1px solid #eef0eb"><label style="display:grid;gap:6px;min-width:190px;color:#6f786a;font-size:13px;font-weight:700">Offline payment method<select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)" style="height:42px;padding:0 10px;border:1px solid #cbd5e1;border-radius:7px;background:white"><option value="cash">Cash</option><option value="card_terminal">External card terminal</option><option value="mobile_money">Mobile money</option><option value="bank_transfer">Bank transfer</option><option value="other">Other</option></select></label><span class="muted">Record only after payment is collected or confirmed.</span></div><div class="table-wrap"><table><thead><tr><th>ORDER</th><th>ITEMS</th><th>FULFILLMENT</th><th>TOTAL</th><th>STATUS</th><th>PAYMENT / UPDATE</th></tr></thead><tbody>@for(order of posOrders();track order.id){<tr><td class="order-id">#{{order.orderNumber}}</td><td>@for(item of order.items || [];track item.id){<div>{{item.quantity}} × {{item.name}}</div>}</td><td>{{orderStatusLabel(order.fulfillment)}}</td><td class="total">{{money(order.totalMinor,order.currency)}}</td><td><span class="status" [class]="statusClass(order.status)">{{orderStatusLabel(order.status)}}</span></td><td><div style="display:grid;gap:7px;min-width:150px"><button class="button secondary small" type="button" [disabled]="posSaveBusy() || order.status==='cancelled'" (click)="recordPosPayment(order)">Record remaining payment</button>@if(order.status==='confirmed'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="confirmed">Confirmed</option><option value="preparing">Preparing</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='preparing'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="preparing">Preparing</option><option value="ready">Ready</option><option value="cancelled">Cancel</option></select>} @else if(order.status==='ready'){<select aria-label="Update POS order status" [disabled]="posSaveBusy()" (change)="updatePosOrderStatus(order,$any($event.target).value)"><option value="ready">Ready</option><option value="completed">Complete</option><option value="cancelled">Cancel</option></select>} @else {<span class="muted">Final state</span>}</div></td></tr>} @empty {<tr><td colspan="6" class="empty-state">No POS orders yet. Open a register and create your first in-person sale.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{posOrders().length}} POS orders · payment records update the canonical order record; no payment processor is connected.</div></section>
           }
           @if (activeNav() === 'QR Studio') {
@@ -204,6 +206,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                     <label>Category<select name="categoryId" [value]="editingMenuItem()?.categoryId || ''"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
                     <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" [value]="(editingMenuItem()?.allergens || []).join(', ')" placeholder="milk, sesame, nuts"></label>
                     <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" [value]="(editingMenuItem()?.dietaryLabels || []).join(', ')" placeholder="vegetarian, vegan, gluten-free"></label>
+                    <label>Modifier groups (JSON)<textarea name="modifierGroupsJson" rows="7" [value]="modifierGroupsJson(editingMenuItem())" placeholder='[{"id":"size","name":"Size","required":true,"minSelections":1,"maxSelections":1,"options":[{"id":"regular","name":"Regular","priceDeltaMinor":0},{"id":"large","name":"Large","priceDeltaMinor":500}]}]'></textarea><small class="muted">Optional. Prices are in minor currency units (e.g. 500 = 5.00 MAD). Use unique lowercase IDs for groups and options.</small></label>
                     <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save item details'}}</button>
                   </form>
                 }
@@ -423,7 +426,8 @@ export class AppComponent {
         status: String(item.status ?? 'draft') as MenuItemRow['status'], availability: String(item.availability ?? 'available') as MenuItemRow['availability'], position: Number(item.position ?? 0),
         categoryId: typeof item.categoryId === 'string' ? item.categoryId : null,
         allergens: Array.isArray(item.allergens) ? item.allergens.map(String) : [],
-        dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : []
+        dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
+        modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
       }))));
       if (!loadedMenus.some((menu) => menu.id === this.selectedMenuId())) this.selectedMenuId.set(loadedMenus[0]?.id ?? '');
       const sessions = Array.isArray(sessionRows) ? sessionRows : [];
@@ -521,6 +525,7 @@ export class AppComponent {
   protected readonly posTerminalType = signal('retail');
   protected readonly posVariantId = signal('');
   protected readonly posSourceType = signal<'product' | 'menu_item'>('product');
+  protected readonly posModifiers = signal<Record<string, string[]>>({});
   protected readonly posQuantity = signal('1');
   protected readonly posFulfillment = signal('counter');
   protected readonly posCustomerNote = signal('');
@@ -720,7 +725,7 @@ export class AppComponent {
           idempotencyKey: 'merchant-pos-' + crypto.randomUUID(),
           items: [sourceType === 'product'
             ? { sourceType: 'product', sourceItemId: product!.id, sourceVariantId: variantId, quantity }
-            : { sourceType: 'menu_item', sourceItemId: menuItem!.id, quantity }]
+            : { sourceType: 'menu_item', sourceItemId: menuItem!.id, quantity, metadata: { modifiers: this.selectedPosModifiersPayload() } }]
         })
       });
       const rows = await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
@@ -1073,6 +1078,31 @@ export class AppComponent {
     finally { this.qrBusy.set(false); }
   }
   protected selectedMenuName(): string { return this.menus().find(menu => menu.id === this.selectedMenuId())?.name ?? 'Menu'; }
+  protected selectedPosMenuItem(): MenuItemRow | null { return this.menuItems().find(item => item.id === this.posVariantId() && item.status === 'active' && item.availability !== 'unavailable' && this.menus().some(menu => menu.id === item.menuId && menu.status === 'active')) ?? null; }
+  protected togglePosModifier(groupId: string, optionId: string, checked: boolean, maxSelections: number): void {
+    this.posModifiers.update(current => {
+      const selected = current[groupId] ?? [];
+      if (!checked) return { ...current, [groupId]: selected.filter(id => id !== optionId) };
+      if (selected.includes(optionId)) return current;
+      if (maxSelections === 1) return { ...current, [groupId]: [optionId] };
+      if (selected.length >= maxSelections) return current;
+      return { ...current, [groupId]: [...selected, optionId] };
+    });
+  }
+  protected posModifiersValid(): boolean {
+    const item = this.selectedPosMenuItem();
+    if (!item) return false;
+    return (item.modifierGroups ?? []).every(group => {
+      const count = (this.posModifiers()[group.id] ?? []).length;
+      return count >= group.minSelections && count <= group.maxSelections;
+    });
+  }
+  protected selectedPosModifiersPayload(): Array<{ groupId: string; optionIds: string[] }> {
+    const item = this.selectedPosMenuItem();
+    return (item?.modifierGroups ?? []).map(group => ({ groupId: group.id, optionIds: this.posModifiers()[group.id] ?? [] })).filter(selection => selection.optionIds.length > 0);
+  }
+  protected modifierGroupsJson(item: MenuItemRow | null): string { return JSON.stringify(item?.modifierGroups ?? [], null, 2); }
+
   protected availablePosMenuItems(): MenuItemRow[] { const activeMenus = new Set(this.menus().filter(menu => menu.status === 'active').map(menu => menu.id)); return this.menuItems().filter(item => item.status === 'active' && item.availability !== 'unavailable' && activeMenus.has(item.menuId)); }
   protected selectedMenuItems(): MenuItemRow[] { return this.menuItems().filter(item => item.menuId === this.selectedMenuId()); }
   protected async createCategory(event: Event): Promise<void> {
@@ -1144,10 +1174,18 @@ export class AppComponent {
     const categoryId = String(values.get('categoryId') ?? '').trim() || null;
     const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    let modifierGroups: MenuModifierGroup[];
+    try {
+      const parsedModifiers: unknown = JSON.parse(String(values.get('modifierGroupsJson') ?? '[]'));
+      if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
+      modifierGroups = parsedModifiers as MenuModifierGroup[];
+    } catch {
+      this.menuError.set('Modifier groups must be valid JSON containing an array.'); return;
+    }
     this.menuBusy.set(true); this.menuError.set('');
     try {
       await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
-        method: 'PATCH', body: JSON.stringify({ categoryId, allergens, dietaryLabels })
+        method: 'PATCH', body: JSON.stringify({ categoryId, allergens, dietaryLabels, modifierGroups })
       });
       this.editingMenuItem.set(null);
       await this.loadWorkspace();
