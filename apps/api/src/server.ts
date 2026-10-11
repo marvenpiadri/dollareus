@@ -30,11 +30,12 @@ app.addHook('onRequest', async (request, reply) => {
 await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
 await registerAuthRoutes(app);
 
-app.addHook('onResponse', async (request, reply) => {
+app.addHook('onSend', async (request, reply, payload) => {
   const credential = request.apiCredential;
-  if (!credential || !request.url.startsWith('/api/v1/')) return;
+  if (!credential || !request.url.startsWith('/api/v1/')) return payload;
   const routeTemplate = request.routeOptions?.url ?? request.url.split('?')[0] ?? '/unknown';
   await pool.query('INSERT INTO api_usage_events (id,organization_id,credential_id,request_id,method,route_template,status_code,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), credential.organizationId, credential.id, request.id, request.method, routeTemplate.slice(0, 300), reply.statusCode, new Date()]).catch((error) => request.log.error({ err: error, credentialId: credential.id }, 'API usage event could not be recorded'));
+  return payload;
 });
 
 app.setErrorHandler((error, request, reply) => {
