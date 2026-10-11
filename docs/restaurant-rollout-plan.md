@@ -1,86 +1,121 @@
-# Restaurant rollout plan
+# Dollareus restaurant rollout plan
 
-This plan deliberately finishes one restaurant capability at a time. Do not start a later phase until the current phase's exit criteria are met and the required checks pass.
+This is the execution plan for the restaurant pilot. Complete each phase's exit gate before starting the next. Keep retail expansion, Mageus, delivery marketplaces, and broad integrations out of scope until the restaurant pilot is dependable.
 
-## Phase 1 — Menu management and public menu (current)
+## Phase 1 — Public menu and QR entry (active)
 
-### Scope
-- Restaurant menus and menu items: create, edit, order/position, draft/active state, publish/unpublish.
-- Store-scoped categories, prices/currency, availability, allergens and dietary labels.
-- Modifier groups/options and server-side validation of modifier selection and price deltas.
-- Public menu page at the store menu URL, with only published menus and active items.
-- Public availability semantics: unavailable dishes are hidden; limited-availability dishes remain visible and clearly labelled.
-- Branded QR entry points that resolve to the correct public menu.
-- Tenant/role authorization and API smoke coverage for the above.
+### Goal
+A guest can open a restaurant-specific URL or scan its QR code and see an accurate, public menu without signing in.
 
-### Exit criteria
-- [ ] A manager can create/edit a menu and dishes, set categories and dietary/allergen information, and publish/unpublish.
-- [ ] Modifier constraints and prices are validated server-side; invalid cross-store category references are rejected.
-- [ ] Public pages never expose unpublished stores/menus or draft/archived/unavailable dishes.
-- [ ] Limited availability is visible to customers rather than silently appearing fully available.
-- [ ] Public menu works at phone and desktop widths with clear loading, empty, and error states.
-- [ ] QR destination and branding are correct for the configured deployment URL.
-- [ ] Latest CI passes and a browser-level staging walkthrough passes.
+### Included
+- Published-store and enabled-menu-experience gating.
+- Published menus and active dishes only.
+- Dishes grouped by category with prices, descriptions, allergens, dietary labels, modifier information, and clear limited-availability labels.
+- Unavailable dishes, draft menus, and unpublished stores stay hidden.
+- Branded QR entry points resolve to the right restaurant menu.
+- Public menu loading, error, and empty states.
 
-### Current evidence and remaining work
-- Implemented: manager-authorized menu creation, editing of menu name/slug/description/service periods, publish/unpublish, dish creation and editing (name/slug/description/price/category/allergens/dietary labels/modifier groups), availability controls, public menu rendering, storefront publishing, and branded QR destinations.
-- Public menu and menu-targeted QR endpoints require the store to be published and the `menu` experience to be enabled. The product catalog API independently requires `commerce` or `catalog` to be enabled. Automated smoke coverage verifies disabled menu pages and QR destinations return 404 while an enabled catalog remains accessible.
-- Latest build, API type-check, and PostgreSQL-backed API smoke tests passed after menu editing, editable dish fields, and public menu/QR experience gating: [run 38170779156](https://github.com/marvenpiadri/dollareus/actions/runs/38170779156).
-- Still required before Phase 1 closure: browser-level mobile/desktop walkthrough, visual/accessibility review, live database/schema verification, and real deployed URL/TLS/QR verification.
+### Verified in repository/CI
+- Public menu page and API are implemented.
+- Category grouping is implemented in [CI run 38171271714](https://github.com/marvenpiadri/dollareus/actions/runs/38171271714).
+- Public menu API smoke checks verify category name, allergens, dietary labels, modifier groups, limited availability, and hiding unavailable dishes in [CI run 38171550934](https://github.com/marvenpiadri/dollareus/actions/runs/38171550934).
+- Latest branch CI passed in [run 38171576417](https://github.com/marvenpiadri/dollareus/actions/runs/38171576417).
 
-## Phase 2 — Restaurant POS ticket workflow
+### Exit gate — still open
+- [ ] Browser walkthrough at desktop and phone widths: direct URL, QR destination, loading/error/empty states, long dish names, and narrow-screen layout.
+- [ ] Review keyboard navigation, contrast, and screen-reader labels.
+- [ ] Verify the live deployment URL, HTTPS, QR target, and configured branding.
+- [ ] Confirm public menu behavior against the actual deployed database and configuration.
 
-### Scope
-- Open/close register sessions and handle interrupted sessions safely.
-- Add multiple menu items to a ticket, select modifiers, change quantities, and show clear totals.
-- Keep server-side pricing authoritative; prevent duplicate or invalid ticket lines.
-- Record cash/manual payment only after it has been collected; clearly distinguish recorded payments from online payment processing.
-- Ticket/order status transitions, receipt/ticket detail, error recovery, and staff permissions.
+**Do not start Phase 2 until these checks are recorded.** Automated CI passing is necessary, but not a substitute for browser/live verification.
 
-### Exit criteria
-- [ ] Browser-level staff walkthrough passes for a normal sale and failure cases.
-- [ ] Totals and modifiers match server calculations.
-- [ ] Duplicate requests are safe and order/payment state remains consistent.
-- [ ] No card-processing capability is advertised unless a real provider is integrated.
+## Phase 2 — Restaurant menu management
 
-## Phase 3 — Stock and cancellation correctness
+### Goal
+A restaurant manager can maintain the menu entirely through the merchant workspace.
 
-### Scope
-- Transactional deduction of tracked stock on the agreed POS completion event.
-- Stock movement history, concurrent sales/insufficient-stock protection, and safe cancellation/refund rules.
-- Decide explicitly how stock is restored on cancellation/refund.
-- Ingredient/BOM tracking is a separate enhancement after basic stock correctness.
+### Included
+- Create, edit, reorder, publish, and unpublish menus.
+- Manage service periods, categories, dish names/descriptions/prices, availability, allergens, and dietary labels.
+- Manage modifier groups/options, including required/optional selection and price deltas.
+- Validate modifier constraints and store/category scope server-side.
+- Ensure edits persist after reload and draft/archived content remains private.
 
-### Exit criteria
-- [ ] No negative stock from concurrent register sales.
-- [ ] Cancellation/refund behavior and stock restoration are documented and tested.
-- [ ] Audit trail explains each stock movement.
+### Exit gate
+- [ ] Walk through create → edit → publish → change availability → unpublish.
+- [ ] Exercise required/optional modifiers, min/max selections, price deltas, and invalid definitions.
+- [ ] Verify tenant isolation and persistence after reload.
+- [ ] Record a browser/manual walkthrough before moving on.
 
-## Phase 4 — Controlled staging and first restaurant pilot
+## Phase 3 — Restaurant POS and kitchen ticket workflow
 
-### Scope
-- Verify production-like Neon database connectivity and schema setup.
-- Verify S3-compatible image storage round trip.
-- Configure production auth/email/OAuth, HTTPS, CORS, cookies, public URL, and secrets.
-- Add health/uptime/error monitoring, backup/restore check, deployment rollback, and support procedure.
-- Run end-to-end tests with one controlled restaurant using test data.
+### Goal
+Staff can build and progress a restaurant ticket without confusing menu items with retail products.
 
-### Exit criteria
-- [ ] Real staging environment passes authentication, menu, QR, POS, and stock workflows.
-- [ ] Backups and restore are verified; secrets are rotated and stored only in the host's secret manager.
-- [ ] No real online payments are accepted until a provider, signed webhooks, reconciliation, and actual refund handling are complete.
+### Included
+- Register sessions, multiple ticket lines, quantities, modifiers, notes, and server-authoritative totals.
+- Clear order states for new/confirmed, preparing, ready, completed, and cancelled.
+- Role checks, retry/idempotency behavior, and clear error recovery.
+- Cash/offline payment recording only when collected; never imply that a manual record is an online charge.
 
-## Phase 5 — Customer ordering and integrations
+### Exit gate
+- [ ] Browser walkthrough of normal sales and failure cases on desktop and narrow screens.
+- [ ] Verify totals and modifier deltas against server calculations.
+- [ ] Review duplicate requests, concurrent completion, and cancellation behavior.
+- [ ] Clearly distinguish manual/offline payment records from online processing.
 
-### Scope
+The current POS is an in-app register/order workflow. It is not a certified fiscal cash register and does not yet include card-terminal, receipt-printer, kitchen-display, or delivery-platform adapters.
+
+## Phase 4 — Stock and cancellation correctness
+
+### Goal
+Tracked inventory remains correct during sales, retries, cancellation, and refund workflows.
+
+### Included
+- Transactional stock deduction at an explicitly chosen POS/order transition.
+- Concurrency-safe insufficient-stock checks and stock movement history.
+- Explicit cancellation/refund stock-restoration rules.
+- Ingredient/BOM tracking only after basic stock correctness is proven.
+
+### Exit gate
+- [ ] Concurrent sales cannot produce negative tracked stock.
+- [ ] Cancellation/refund and stock restoration behavior is documented and tested.
+- [ ] Stock movement audit trail explains each adjustment.
+
+## Phase 5 — Controlled staging and first restaurant pilot
+
+### Goal
+One invited restaurant can use Dollareus in a controlled environment with test data and a clear support/recovery process.
+
+### Included
+- Separate staging and production databases; verify schema and safe setup/migration procedure.
+- Verify live Neon connectivity and S3-compatible image upload/read/cleanup if media is enabled.
+- Configure authentication, email/OAuth, HTTPS, CORS, secure cookies, public URL, and host-managed secrets.
+- Health/error monitoring, backups, restore test, rollback plan, and support runbook.
+- Real device QR scan and domain/TLS/routing verification.
+
+### Exit gate
+- [ ] Latest CI passes on the final pilot candidate.
+- [ ] Clean-account staging walkthrough passes for menu, QR, POS, and stock.
+- [ ] Live database, auth, URL/domain, and any enabled storage integrations are verified.
+- [ ] Secret rotation and backup/restore checks are recorded.
+- [ ] Pilot limits and rollback/support procedures are documented.
+
+## Phase 6 — Customer ordering and integrations (later)
+
+### Goal
+Enable online orders and external systems only after the in-restaurant workflow is reliable.
+
+### Included
 - Customer cart, checkout, order confirmation, and restaurant order acceptance.
-- Real payment provider, signed webhooks, idempotency, reconciliation, and provider refunds.
-- Optional later adapters for printers, kitchen display systems, physical terminals, and delivery partners.
+- Payment provider, signed webhooks, idempotency, reconciliation, and actual provider refunds.
+- Separate acceptance tests for physical terminals, printers/KDS, and delivery partners.
 
-### Exit criteria
-- [ ] Online order/payment lifecycle is tested end to end.
-- [ ] Each hardware, payment, or delivery integration has its own adapter-level acceptance tests.
+### Exit gate
+- [ ] Online order/payment lifecycle passes end to end.
+- [ ] Provider refunds and webhook failure/retry paths are verified.
+- [ ] Each hardware/payment/delivery adapter has independent acceptance tests.
 
-## Release rule
+## Current execution position
 
-The first release target is a **controlled restaurant pilot**, not a promise of a fully featured restaurant POS or public commerce platform. Finish and verify Phase 1 before expanding Phase 2. Keep future ecommerce, Mageus, delivery, and broad integrations out of the current implementation scope.
+**Phase 1 is active and not yet complete.** Automated checks are green, but the browser/manual walkthrough and live URL/TLS/QR verification remain outstanding. Do not advance to Phase 2 until the Phase 1 exit gate is recorded. No real online payments should be accepted before the relevant payment-provider and reconciliation work is complete.
