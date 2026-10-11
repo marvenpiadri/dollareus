@@ -271,13 +271,6 @@ export class WorkspaceComponent {
   protected readonly customerSaveError = signal('');
   protected readonly inventoryBusy = signal(false);
   protected readonly inventoryError = signal('');
-  protected readonly apiCredentials = signal<any[]>([]);
-  protected readonly apiCredentialName = signal('External integration');
-  protected readonly apiCredentialScopes = signal('read');
-  protected readonly apiCredentialExpiry = signal('90');
-  protected readonly apiCredentialBusy = signal(false);
-  protected readonly apiCredentialError = signal('');
-  protected readonly apiCredentialToken = signal('');
   protected readonly orderActionBusyId = signal('');
   protected readonly orderActionError = signal('');
   protected readonly selectedPaymentOrder = signal<OrderRow | null>(null);
@@ -708,50 +701,9 @@ export class WorkspaceComponent {
     finally { this.orderActionBusyId.set(''); }
   }
   protected pageDescription(): string { return this.activeNav() === 'Products' ? 'Manage your catalog, prices and product availability.' : this.activeNav() === 'QR Studio' ? 'Create and manage branded QR entry points for menus and storefronts.' : this.activeNav() === 'Menus' ? 'Build restaurant menus, publish items, and control availability.' : this.activeNav() === 'Orders' ? 'Review orders and their saved item snapshots.' : this.activeNav() === 'POS' ? 'Open a register and create in-person sales.' : this.activeNav() === 'Customers' ? 'Keep customer contact details and notes together.' : this.activeNav() === 'Inventory' ? 'Track stock by location and reorder threshold.' : 'Configure your business workspace and connected channels.'; }
-  protected async loadApiCredentials(): Promise<void> {
-    if (!this.organizationId()) return;
-    this.apiCredentialBusy.set(true);
-    this.apiCredentialError.set('');
-    try { this.apiCredentials.set(await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials')); }
-    catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not load API credentials.'); }
-    finally { this.apiCredentialBusy.set(false); }
-  }
-  protected async createApiCredential(event: Event): Promise<void> {
-    event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const values = new FormData(form);
-    const name = String(values.get('name') ?? '').trim();
-    const scopes = String(values.get('scopes') ?? 'read').split(',') as ('read' | 'write')[];
-    const expiry = String(values.get('expiry') ?? '90');
-    const expiresAt = expiry === 'never' ? undefined : new Date(Date.now() + Number(expiry) * 86400000).toISOString();
-    this.apiCredentialBusy.set(true); this.apiCredentialError.set(''); this.apiCredentialToken.set('');
-    try {
-      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials', { method: 'POST', body: JSON.stringify({ name, scopes, ...(expiresAt ? { expiresAt } : {}) }) });
-      this.apiCredentialToken.set(String(result.token ?? ''));
-      this.apiCredentialName.set('External integration');
-      form.reset();
-      await this.loadApiCredentials();
-      this.notify('API credential created. Copy its token before hiding it.');
-    } catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not create API credential.'); }
-    finally { this.apiCredentialBusy.set(false); }
-  }
-  protected async revokeApiCredential(credential: any): Promise<void> {
-    if (!credential?.id || !globalThis.confirm('Revoke "' + String(credential.name) + '"? Applications using this token will stop working.')) return;
-    this.apiCredentialBusy.set(true); this.apiCredentialError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/api-credentials/' + encodeURIComponent(credential.id), { method: 'DELETE', body: JSON.stringify({}) });
-      await this.loadApiCredentials(); this.notify('API credential revoked.');
-    } catch (error) { this.apiCredentialError.set(error instanceof Error ? error.message : 'Could not revoke API credential.'); }
-    finally { this.apiCredentialBusy.set(false); }
-  }
-  protected copyApiCredentialToken(): void {
-    const token = this.apiCredentialToken();
-    if (!token || !globalThis.navigator?.clipboard) { this.apiCredentialError.set('Clipboard access is unavailable. Select and copy the token manually.'); return; }
-    void globalThis.navigator.clipboard.writeText(token).then(() => this.notify('API token copied.')).catch(() => this.apiCredentialError.set('Could not access the clipboard. Select and copy the token manually.'));
-  }
   protected selectNav(item: NavItem): void {
     this.activeNav.set(item);
-    if (item === 'API & channels') { void this.loadApiCredentials(); return; }
+    if (item === 'API & channels') return;
     if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
     if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.');
   }

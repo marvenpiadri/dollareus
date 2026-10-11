@@ -250,21 +250,7 @@
           @if (activeNav() === 'API & channels') {
             <dlr-api-credentials
               [organizationId]="organizationId()"
-              [apiCredentialName]="apiCredentialName()"
-              [apiCredentialScopes]="apiCredentialScopes()"
-              [apiCredentialExpiry]="apiCredentialExpiry()"
-              [apiCredentialBusy]="apiCredentialBusy()"
-              [apiCredentialError]="apiCredentialError()"
-              [apiCredentialToken]="apiCredentialToken()"
-              [apiCredentials]="apiCredentials()"
-              (createApiCredentialRequested)="createApiCredential($event)"
-              (apiCredentialNameChangeRequested)="apiCredentialName.set($event)"
-              (apiCredentialScopesChangeRequested)="apiCredentialScopes.set($event)"
-              (apiCredentialExpiryChangeRequested)="apiCredentialExpiry.set($event)"
-              (copyApiCredentialTokenRequested)="copyApiCredentialToken()"
-              (clearApiCredentialTokenRequested)="apiCredentialToken.set('')"
-              (revokeApiCredentialRequested)="revokeApiCredential($event)"
-              (refreshApiCredentialsRequested)="loadApiCredentials()"
+              (notifyRequested)="notify($event)"
             />
           }
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
