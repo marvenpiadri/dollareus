@@ -638,8 +638,9 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
       return fail(reply, request, 409, 'ORDER_NOT_PAYABLE', 'Payments cannot be recorded against a cancelled or refunded order.');
     }
     if (parsed.data.idempotencyKey) {
-      const existing = await client.query('SELECT id FROM payments WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
+      const existing = await client.query('SELECT id,order_id FROM payments WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
+        if (String(existing.rows[0].order_id) !== orderId) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'PAYMENT_CONFLICT', 'This idempotency key was already used for a different order.'); }
         await client.query('COMMIT');
         const existingPayment = await pool.query('SELECT id,order_id,provider,status,amount_minor,currency,provider_payload,created_at,updated_at FROM payments WHERE id=$1 AND organization_id=$2', [existing.rows[0].id, organizationId]);
         return { data: camelize(existingPayment.rows[0]), requestId: request.id };
@@ -718,7 +719,7 @@ app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string
     const payload = { ...(paymentResult.rows[0].provider_payload ?? {}), confirmation: next === 'succeeded' ? 'manually_confirmed' : 'manually_closed', confirmedBy: request.identity!.uid, confirmedAt: now.toISOString() };
     await client.query('UPDATE payments SET status=$1,provider_payload=$2::jsonb,updated_at=$3 WHERE id=$4', [next, JSON.stringify(payload), now, paymentId]);
     const paid = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
-    const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0) + (next === 'succeeded' ? Number(paymentResult.rows[0].amount_minor) : 0);
+    const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0);
     const paymentStatus = paidAmountMinor >= Number(orderResult.rows[0].total_minor) ? 'paid' : 'unpaid';
     await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [paymentStatus, now, orderId, organizationId]);
     await client.query(
