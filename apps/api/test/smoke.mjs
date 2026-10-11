@@ -177,6 +177,35 @@ try {
   });
   const menuItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 200, { headers: authHeaders });
   if (!menuItems.payload?.data?.some((item) => item.id === menuItem.payload?.data?.id)) throw new Error('Restaurant menu item did not persist.');
+  const secondMenu = await request(`/api/v1/organizations/${organizationId}/menus`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, slug: `smoke-menu-second-${suffix}`, name: 'Second Smoke Menu', description: null, servicePeriods: ['breakfast'], status: 'draft', position: 1 })
+  });
+  const secondDish = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ slug: `smoke-dish-second-${suffix}`, name: 'Second Smoke Dish', description: null, priceAmountMinor: 3000, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 1, metadata: {} })
+  });
+  const reorderedItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 200, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ itemIds: [secondDish.payload?.data?.id, menuItem.payload?.data?.id] })
+  });
+  if (reorderedItems.payload?.data?.[0]?.id !== secondDish.payload?.data?.id || Number(reorderedItems.payload?.data?.[0]?.position) !== 0) throw new Error('Menu item reorder did not persist the requested order.');
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 409, {
+    method: 'PUT', headers: authHeaders, body: JSON.stringify({ itemIds: [menuItem.payload?.data?.id] })
+  });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 403, {
+    method: 'PUT', headers: viewerHeaders, body: JSON.stringify({ itemIds: [secondDish.payload?.data?.id, menuItem.payload?.data?.id] })
+  });
+  const reorderedMenus = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/menus/reorder`, 200, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ menuIds: [secondMenu.payload?.data?.id, menu.payload?.data?.id] })
+  });
+  if (reorderedMenus.payload?.data?.[0]?.id !== secondMenu.payload?.data?.id || Number(reorderedMenus.payload?.data?.[0]?.position) !== 0) throw new Error('Menu reorder did not persist the requested order.');
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/menus/reorder`, 409, {
+    method: 'PUT', headers: authHeaders, body: JSON.stringify({ menuIds: [menu.payload?.data?.id] })
+  });
+  checks.push('transactional menu and dish reordering, stale-order conflict handling, and manager-only access');
+
   const publishedMenu = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ status: 'active' })

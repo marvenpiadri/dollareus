@@ -237,7 +237,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
               <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SLUG</th><th>STATUS</th></tr></thead><tbody>@for(category of categories();track category.id){<tr><td>{{category.name}}</td><td>{{category.slug}}</td><td>{{category.status}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No categories yet. Add one to group dishes.</td></tr>}</tbody></table></div>
               @if(menuError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{menuError()}}</p>}
               <div class="table-wrap"><table><thead><tr><th>MENU</th><th>ITEMS</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
-                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" (click)="editingMenu.set(menu)">Edit menu</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
+                @for(menu of menus();track menu.id){<tr><td><b>{{menu.name}}</b><div class="muted">{{menu.slug}}</div></td><td>{{menu.itemCount}}</td><td><span class="status-pill">{{menu.status}}</span></td><td><div class="product-actions"><button class="button small" type="button" (click)="selectedMenuId.set(menu.id)">Manage items</button><button class="button small" type="button" aria-label="Move menu up" [disabled]="menuBusy() || menus().indexOf(menu) === 0" (click)="moveMenu(menu,-1)">↑</button><button class="button small" type="button" aria-label="Move menu down" [disabled]="menuBusy() || menus().indexOf(menu) === menus().length - 1" (click)="moveMenu(menu,1)">↓</button><button class="button small" type="button" (click)="editingMenu.set(menu)">Edit menu</button><button class="button small" type="button" [disabled]="menuBusy()" (click)="setMenuStatus(menu,menu.status === 'active' ? 'draft' : 'active')">{{menu.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
                 @if(menus().length === 0){<tr><td colspan="4" class="empty-state">Create your first menu to start adding restaurant items.</td></tr>}
               </tbody></table></div>
               @if(editingMenu(); as menuToEdit){
@@ -263,7 +263,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
                 </form>
                 <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>CATEGORY</th><th>DIETARY / ALLERGENS</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
-                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td>{{categoryName(item.categoryId)}}</td><td><div>{{(item.dietaryLabels || []).join(', ') || '—'}}</div><small class="muted">{{(item.allergens || []).length ? 'Contains: ' + (item.allergens || []).join(', ') : 'No allergens listed'}}</small></td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><div class="product-actions"><button class="button secondary small" type="button" (click)="editingMenuItem.set(item)">Edit details</button><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
+                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td>{{categoryName(item.categoryId)}}</td><td><div>{{(item.dietaryLabels || []).join(', ') || '—'}}</div><small class="muted">{{(item.allergens || []).length ? 'Contains: ' + (item.allergens || []).join(', ') : 'No allergens listed'}}</small></td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><div class="product-actions"><button class="button secondary small" type="button" (click)="editingMenuItem.set(item)">Edit details</button><button class="button small" type="button" aria-label="Move dish up" [disabled]="menuBusy() || selectedMenuItems().indexOf(item) === 0" (click)="moveMenuItem(item,-1)">↑</button><button class="button small" type="button" aria-label="Move dish down" [disabled]="menuBusy() || selectedMenuItems().indexOf(item) === selectedMenuItems().length - 1" (click)="moveMenuItem(item,1)">↓</button><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
                   @if(selectedMenuItems().length === 0){<tr><td colspan="6" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
                 </tbody></table></div>
                 @if(editingMenuItem()){
@@ -1378,6 +1378,38 @@ export class AppComponent {
       await this.loadWorkspace();
       this.notify('Menu item details updated.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu item details.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async moveMenu(menu: MenuRow, delta: -1 | 1): Promise<void> {
+    const ordered = [...this.menus()];
+    const index = ordered.findIndex(row => row.id === menu.id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= ordered.length || this.menuBusy()) return;
+    [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/menus/reorder', {
+        method: 'PUT', body: JSON.stringify({ menuIds: ordered.map(row => row.id) })
+      });
+      await this.loadWorkspace();
+      this.notify('Menu order saved.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder menus. Reload and try again.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async moveMenuItem(item: MenuItemRow, delta: -1 | 1): Promise<void> {
+    const ordered = [...this.selectedMenuItems()];
+    const index = ordered.findIndex(row => row.id === item.id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= ordered.length || this.menuBusy()) return;
+    [ordered[index], ordered[target]] = [ordered[target]!, ordered[index]!];
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/reorder', {
+        method: 'PUT', body: JSON.stringify({ itemIds: ordered.map(row => row.id) })
+      });
+      await this.loadWorkspace();
+      this.notify('Dish order saved.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not reorder dishes. Reload and try again.'); }
     finally { this.menuBusy.set(false); }
   }
   protected async setMenuStatus(menu: MenuRow, status: 'draft' | 'active'): Promise<void> {
