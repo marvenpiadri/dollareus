@@ -166,13 +166,21 @@ try {
   });
   const createdProductId = product.payload?.data?.id;
   if (!createdProductId) throw new Error('Product creation did not return an id.');
-  checks.push('product creation');
+  await request(`/api/v1/organizations/${organizationId}/products/${createdProductId}/media`, 403, {
+    method: 'POST', headers: { ...viewerHeaders, 'content-type': 'image/webp' }, body: Buffer.from('not-an-image')
+  });
+  await request(`/api/v1/organizations/${organizationId}/products/${createdProductId}/media`, 415, {
+    method: 'POST', headers: { ...authHeaders, 'content-type': 'image/webp' }, body: Buffer.from('not-an-image')
+  });
+  checks.push('product creation and private image-upload authorization/type validation');
 
   const listed = await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: authHeaders });
   if (!Array.isArray(listed.payload?.data) || !listed.payload.data.some((item) => item.id === createdProductId)) {
     throw new Error('The created product was not returned by the catalog endpoint.');
   }
-  checks.push('product listing');
+  const listedProduct = listed.payload.data.find((item) => item.id === createdProductId);
+  if (!Array.isArray(listedProduct.media)) throw new Error('Product listing must return a media array.');
+  checks.push('product listing and media metadata projection');
 
   const category = await request(`/api/v1/organizations/${organizationId}/categories`, 201, {
     method: 'POST', headers: authHeaders,
