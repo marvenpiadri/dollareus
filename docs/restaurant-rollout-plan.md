@@ -25,7 +25,7 @@ This plan deliberately finishes one restaurant capability at a time. Do not star
 ### Current evidence and remaining work
 - Implemented: menu/menu-item APIs, manager authorization, category/allergen/dietary fields, modifier persistence and public projection, public menu page, storefront publishing, QR destinations.
 - Implemented in this step: public menu label for limited-availability dishes; smoke coverage that unavailable dishes are excluded and limited dishes remain visible with modifier groups.
-- Still required before phase closure: confirm the new CI runs, test the public menu in a browser at mobile/desktop widths, verify real deployed URL/TLS and QR behavior, and confirm the live database/schema.
+- Automated build/API smoke runs for the limited-availability UI and public-menu filtering test passed. Still required before phase closure: test the public menu in a browser at mobile/desktop widths, verify real deployed URL/TLS and QR behavior, and confirm the live database/schema.
 
 ## Phase 2 — Restaurant POS ticket workflow
 
