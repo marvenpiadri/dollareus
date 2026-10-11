@@ -26,6 +26,46 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
   template: `
     @if (publicPage() === 'home') {
       <dlr-public-home />
+    } @else if (publicPage() === 'menu') {
+      <main style="min-height:100vh;background:#f7f7f2;color:#172016;padding:24px 16px 64px">
+        <div style="width:min(100%,760px);margin:0 auto">
+          <header style="padding:28px 0 24px;border-bottom:1px solid #dce2d7">
+            <a href="/" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#51624c;font-size:13px;font-weight:700"><span class="brand-mark">d.</span>Dollareus</a>
+            @if(publicMenuLoading()){<p style="margin:28px 0;color:#667260">Loading restaurant menu…</p>}
+            @else if(publicMenuError()){<section role="alert" style="margin-top:24px;padding:18px;background:white;border:1px solid #e3e7df;border-radius:12px"><h1 style="margin:0 0 8px;font-size:22px">Menu unavailable</h1><p style="margin:0;color:#667260;line-height:1.6">{{publicMenuError()}}</p></section>}
+            @else {
+              <p style="margin:26px 0 7px;color:#63705b;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase">{{publicMenuStore()?.businessType || 'Restaurant'}}</p>
+              <h1 style="margin:0;font-size:clamp(32px,7vw,48px);letter-spacing:-.04em">{{publicMenuStore()?.name}}</h1>
+              @if(publicMenuStore()?.description){<p style="margin:12px 0 0;max-width:600px;color:#65715f;line-height:1.7">{{publicMenuStore()?.description}}</p>}
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px"><span style="padding:6px 10px;border-radius:999px;background:#e8eee3;color:#46583d;font-size:12px;font-weight:700">{{publicMenuStore()?.defaultCurrency}}</span><span style="padding:6px 10px;border-radius:999px;background:#e8eee3;color:#46583d;font-size:12px;font-weight:700">Menu</span></div>
+            }
+          </header>
+          @if(!publicMenuLoading() && !publicMenuError()){
+            @for(menu of publicMenus();track menu.id){
+              <section style="padding:26px 0;border-bottom:1px solid #dce2d7">
+                <h2 style="margin:0;font-size:25px;letter-spacing:-.025em">{{menu.name}}</h2>
+                @if(menu.description){<p style="margin:8px 0 18px;color:#667260;line-height:1.6">{{menu.description}}</p>}
+                @else {<div style="height:14px"></div>}
+                @for(item of menu.items || [];track item.id){
+                  <article style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:17px 0;border-top:1px solid #e5e9e1">
+                    <div style="min-width:0;flex:1">
+                      <h3 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h3>
+                      @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
+                      @if(item.dietaryLabels?.length){<p style="margin:8px 0 0;color:#456a3e;font-size:12px;font-weight:700">{{item.dietaryLabels.join(' · ')}}</p>}
+                      @if(item.allergens?.length){<p style="margin:5px 0 0;color:#8b5b2c;font-size:12px">Contains: {{item.allergens.join(', ')}}</p>}
+                      @for(group of item.modifierGroups || [];track group.id){<p style="margin:7px 0 0;color:#667260;font-size:12px"><b>{{group.name}}:</b> @for(option of group.options;track option.id){<span>{{option.name}}@if(option.priceDeltaMinor>0){ ( +{{money(option.priceDeltaMinor,item.currency)}})}@if(!$last){ · }</span>}</p>}
+                    </div>
+                    <strong style="flex-shrink:0;padding-top:2px;font-size:16px;white-space:nowrap">{{money(item.priceAmountMinor,item.currency)}}</strong>
+                  </article>
+                } @empty {<p style="padding:18px 0;color:#667260">No available dishes in this menu yet.</p>}
+              </section>
+            } @empty {
+              <section style="padding:36px 0;color:#667260"><h2 style="color:#172016">The menu is being prepared</h2><p>There are no published menus available right now.</p></section>
+            }
+            <footer style="padding-top:26px;color:#788272;font-size:12px">Prices and availability are provided by the restaurant. Ask staff about dietary requirements and cross-contact.</footer>
+          }
+        </div>
+      </main>
     } @else if (publicPage() === 'qr') {
       <dlr-qr-studio />
     } @else if (!authReady()) {
@@ -282,15 +322,52 @@ export class AppComponent {
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
 
-  protected readonly publicPage = signal<'home' | 'qr' | 'login' | 'signup' | 'app'>('home');
+  protected readonly publicPage = signal<'home' | 'menu' | 'qr' | 'login' | 'signup' | 'app'>('home');
+  protected readonly publicMenuStoreSlug = signal('');
+  protected readonly publicMenuStore = signal<any | null>(null);
+  protected readonly publicMenus = signal<any[]>([]);
+  protected readonly publicMenuLoading = signal(false);
+  protected readonly publicMenuError = signal('');
 
   constructor() {
     const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/';
     const authAction = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('auth') : null;
-    const page = authAction === 'verify-email' || authAction === 'reset-password' ? 'login' : path === '/qr' ? 'qr' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
+    const segments = path.split('/').filter(Boolean);
+    const isMenuRoute = path === '/menu' || (segments.length === 2 && segments[1] === 'menu');
+    const pathStoreSlug = segments.length === 2 && segments[1] === 'menu' ? segments[0] : '';
+    const hostnameLabels = typeof window !== 'undefined' ? window.location.hostname.toLowerCase().split('.') : [];
+    const hostStoreSlug = path === '/menu' && hostnameLabels.length >= 3 ? hostnameLabels[0] : '';
+    const menuSlug = pathStoreSlug || hostStoreSlug;
+    const page = authAction === 'verify-email' || authAction === 'reset-password' ? 'login' : path === '/qr' ? 'qr' : isMenuRoute ? 'menu' : path === '/login' ? 'login' : path === '/signup' ? 'signup' : path === '/app' ? 'app' : path === '/' ? 'home' : 'app';
     this.publicPage.set(page);
-    if (page === 'app' || page === 'login' || page === 'signup') void this.checkSession();
+    this.publicMenuStoreSlug.set(menuSlug);
+    if (page === 'menu') {
+      this.authReady.set(true); this.workspaceLoading.set(false);
+      void this.loadPublicMenu(menuSlug);
+    } else if (page === 'app' || page === 'login' || page === 'signup') void this.checkSession();
     else { this.authReady.set(true); this.workspaceLoading.set(false); }
+  }
+
+  private async loadPublicMenu(storeSlug: string): Promise<void> {
+    if (!storeSlug) {
+      this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
+      return;
+    }
+    this.publicMenuLoading.set(true);
+    this.publicMenuError.set('');
+    try {
+      const encodedSlug = encodeURIComponent(storeSlug);
+      const [store, menus] = await Promise.all([
+        this.apiRequest('/api/v1/public/stores/' + encodedSlug),
+        this.apiRequest('/api/v1/public/stores/' + encodedSlug + '/menus')
+      ]);
+      this.publicMenuStore.set(store);
+      this.publicMenus.set(Array.isArray(menus) ? menus : []);
+    } catch (error) {
+      this.publicMenuError.set(error instanceof Error ? error.message : 'Could not load this restaurant menu.');
+    } finally {
+      this.publicMenuLoading.set(false);
+    }
   }
 
   private async checkSession(): Promise<void> {
