@@ -1,36 +1,30 @@
 # Product media and image storage
 
-## Where images belong
-Store image bytes in object storage (Firebase Cloud Storage is a candidate once the adapter and security rules exist). Store only metadata and a stable storage key in the product JSON/document.
+## Storage provider
 
-```json
-{
-  "id": "img_01",
-  "storageKey": "organizations/org_01/products/prod_01/img_01.webp",
-  "alt": "Handmade ceramic bowl",
-  "width": 1200,
-  "height": 1200,
-  "position": 0
-}
-```
+Dollareus uses Neon S3-compatible object storage for product image bytes. Configure the following variables **only in the API server environment**; never place access keys in Angular build variables or commit real values:
 
-Do not put base64 image data in product JSON, database documents, or Git. Do not make original uploads permanently public by default. See `schemas/product.schema.json` for the canonical JSON shape.
+- `AWS_ENDPOINT_URL_S3`: Neon-provided S3 endpoint.
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`: credentials generated for the bucket.
+- `AWS_REGION`: region associated with the endpoint.
+- `AWS_S3_BUCKET`: exact bucket name.
 
-## Suggested object keys
-- `organizations/{organizationId}/products/{productId}/{assetId}/original`
-- `organizations/{organizationId}/products/{productId}/{assetId}/variants/{width}.webp`
-- `organizations/{organizationId}/stores/{storeId}/branding/{assetId}`
+The API signs S3 requests server-side with AWS Signature Version 4. Credentials never leave the server. The bucket name is required in addition to the endpoint and access keys.
 
-Generate IDs on the server. Validate membership, content type, size, dimensions, and actual file signature. Use short-lived upload authorization or authenticated uploads with restrictive storage rules. Never trust a client-provided organization ID without checking membership.
+## Browser-first image optimization
 
-## Upload lifecycle
-1. Merchant requests an upload intent for a product they can edit.
-2. API validates membership, permissions, and limits.
-3. API returns narrowly scoped upload authorization.
-4. Client uploads directly to object storage.
-5. Server verifies the asset and records metadata.
-6. Image processing generates optimized variants and thumbnails.
-7. Product JSON stores the storage key and descriptive metadata.
-8. Public storefront API exposes only deliberately published assets.
+The merchant browser decodes selected images, scales them to configurable maximum width and height, and re-encodes them as WebP before upload. It attempts quality levels from 0.82 down to 0.55 to stay under the 5 MiB optimized-upload cap. Original files are not sent to the API. The server validates the WebP signature and dimensions (maximum 2400 × 2400), checks organization membership and product ownership, writes the object to Neon storage, and records only metadata and a storage key in PostgreSQL.
 
-Use optimized WebP/AVIF derivatives where appropriate, preserve alt text and ordering, and configure quotas, lifecycle rules, monitoring, and abuse protection. A storage key is an identifier, not an authorization mechanism.
+Browser compression reduces upload bandwidth, but it is not a security boundary: server-side size/type/dimension checks still apply. Image decoding occurs locally and can use memory; the merchant UI rejects oversized originals before decoding.
+
+## Access and keys
+
+Objects use keys such as `organizations/{organizationId}/products/{productId}/{assetId}.webp`. The bucket need not be public. Authenticated content requests are proxied through the API, which signs the object-store request. Public storefront delivery should be added as a separate policy for deliberately published assets; a storage key is not authorization.
+
+## Metadata
+
+The `product_media` table stores storage provider/key, content type, byte size, alt text, dimensions, ordering, creator, and timestamp. Do not put base64 image data in product JSON, database documents, or Git.
+
+## Operational follow-ups
+
+Configure storage quotas and lifecycle rules, monitor storage errors, and test upload/download against the actual Neon bucket. The API integration is not considered production-verified until a real upload and read round-trip succeeds.
