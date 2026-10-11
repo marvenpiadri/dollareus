@@ -27,7 +27,8 @@ app.addHook('onRequest', async (request, reply) => {
     return reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This request origin is not allowed.', requestId: request.id } });
   }
 });
-await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+const configuredRateLimit = Number.parseInt(process.env.RATE_LIMIT_MAX ?? '120', 10);
+await app.register(rateLimit, { max: Number.isFinite(configuredRateLimit) && configuredRateLimit > 0 ? configuredRateLimit : 120, timeWindow: '1 minute' });
 await registerAuthRoutes(app);
 
 app.addHook('onSend', async (request, reply, payload) => {
