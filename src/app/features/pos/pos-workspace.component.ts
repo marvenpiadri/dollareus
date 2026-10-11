@@ -241,7 +241,7 @@ export class PosWorkspaceComponent {
       this.dataChanged.emit();
       this.notifyRequested.emit('POS order status updated and audited.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not update this POS order.';
+      const message = error instanceof Error ? error.message : 'Could not confirm the POS order status update.';
       const reconciled = await this.refreshPosOrders();
       this.posError.set(reconciled
         ? message + ' The latest order state was reloaded from the server; verify it before trying again.'
