@@ -4,7 +4,7 @@ Last reviewed: 2026-10-11
 
 ## Product decision
 
-Dollareus is being treated as a new application. PostgreSQL is the source of truth for all business/application records. There is no Firestore data migration and no versioned SQL migration history. Dollareus owns authentication: password credentials, sessions, OAuth account links, and token records are stored in PostgreSQL. Firebase is not part of the architecture.
+Dollareus is being treated as a new application. PostgreSQL is the source of truth for all business/application records. There is no Firestore data migration. Versioned SQL migrations now live in `apps/api/db/migrations/`, with checksummed history in `public.schema_migrations`. Dollareus owns authentication: password credentials, sessions, OAuth account links, and token records are stored in PostgreSQL. Firebase is not part of the architecture.
 
 ## Phase 1 — database foundation
 
@@ -12,9 +12,10 @@ Status: in progress.
 
 - [x] Add a clean schema at `apps/api/db/schema.sql`.
 - [x] Remove SQL `DEFAULT` clauses; the API must supply values explicitly.
-- [x] Add a one-time setup command, `pnpm db:setup`, that refuses to run if the public schema already contains tables.
+- [x] Add a checksummed SQL migration runner (`pnpm db:migrate`) with transaction-per-migration, PostgreSQL advisory locking, applied-version tracking, and fail-closed handling for untracked non-empty schemas.
+- [x] Keep `pnpm db:setup` as a backwards-compatible alias to the migration runner.
 - [x] Require `DATABASE_URL` when the API imports the PostgreSQL pool.
-- [x] Remove the old versioned migration runner and its two SQL migration files.
+- [x] Replace the removed legacy migration runner with a clean, ordered initial schema migration.
 - [x] Remove Firestore imports and Firestore configuration/rules/indexes.
 - [x] Remove Firebase Auth verification and the Firebase Admin SDK.
 - [x] Add first-party email/password registration, login, logout, and session endpoints.
@@ -23,10 +24,10 @@ Status: in progress.
 - [x] Add email verification and password recovery API flows using a Resend-compatible email API.
 - [x] Add merchant sign-in/register, social login, email verification, and password recovery screens.
 - [x] Bind OAuth state to a short-lived HttpOnly cookie to mitigate login CSRF.
-- [ ] Execute the fresh schema against the intended empty Neon database.
+- [ ] Execute the initial migration against the intended empty Neon database and verify the migration ledger.
 - [x] GitHub Actions production build, API typecheck, and PostgreSQL-backed HTTP smoke suite pass on code commit `36957f7dd9dcdc58ec6ae17976eede22ced4244e`. [Run 38168016807](https://github.com/marvenpiadri/dollareus/actions/runs/38168016807).
 - [ ] Configure and test Google/Facebook OAuth, email delivery, production API URL, and secure cookie behavior.
-- [ ] Verify the created tables directly in Neon.
+- [ ] Verify the created tables and `schema_migrations` ledger directly in Neon.
 
 ## Phase 2 — PostgreSQL API
 
