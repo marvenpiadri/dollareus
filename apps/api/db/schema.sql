@@ -538,7 +538,9 @@ CREATE TABLE entry_points (
   FOREIGN KEY (store_id, organization_id) REFERENCES stores(id, organization_id) ON DELETE CASCADE,
   UNIQUE (id, organization_id, store_id)
 );
-ALTER TABLE entry_points ADD COLUMN IF NOT EXISTS branding jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE entry_points ADD COLUMN IF NOT EXISTS branding jsonb;
+UPDATE entry_points SET branding='{}'::jsonb WHERE branding IS NULL;
+ALTER TABLE entry_points ALTER COLUMN branding SET NOT NULL;
 CREATE INDEX entry_points_store_idx ON entry_points(store_id, status, created_at DESC);
 
 CREATE TABLE store_domain_events (
