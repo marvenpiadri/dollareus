@@ -13,10 +13,10 @@ import { WorkspaceShellComponent } from '../../layout/workspace-shell/workspace-
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
 
 
 @Component({
