@@ -95,6 +95,7 @@ try {
   const apiHeaders = { Authorization: `Bearer ${rawApiToken}` };
   await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: apiHeaders });
   await request(`/api/v1/organizations/${organizationId}/products`, 403, { method: 'POST', headers: apiHeaders, body: '{}' });
+  await request(`/api/v1/organizations/${randomUUID()}/products`, 403, { headers: apiHeaders });
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
   const usageEvents = await pool.query('SELECT count(*)::int AS count FROM api_usage_events WHERE credential_id=$1', [apiCredentialId]);
   if (Number(usageEvents.rows[0]?.count ?? 0) < 3) throw new Error('API credential usage was not metered.');
@@ -120,6 +121,9 @@ try {
   const viewerHeaders = { cookie: `dollareus_session=${viewerToken}`, 'content-type': 'application/json' };
   const viewerSession = await request('/api/v1/auth/session', 200, { headers: viewerHeaders });
   if (viewerSession.payload?.data?.id !== viewerUserId) throw new Error('Viewer test account session was not valid.');
+  await request(`/api/v1/organizations/${organizationId}/api-credentials`, 403, {
+    method: 'POST', headers: viewerHeaders, body: JSON.stringify({ name: 'Viewer must not issue keys', scopes: ['read'] })
+  });
   const viewerOrganization = await request('/api/v1/organizations', 201, {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ name: 'CI Viewer Workspace', slug: `viewer-${suffix}` })
