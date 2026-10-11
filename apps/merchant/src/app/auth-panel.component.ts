@@ -15,6 +15,7 @@ export class AuthPanelComponent {
   protected readonly message = signal('');
   protected readonly error = signal('');
   protected readonly lastEmail = signal('');
+  protected readonly providers = signal({ google: false, facebook: false, emailFlows: false });
   protected readonly apiBase = ((globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string }).DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
 
   constructor() {
@@ -25,6 +26,16 @@ export class AuthPanelComponent {
       else if (action === 'reset-password') this.mode.set('reset');
       else if (window.location.pathname === '/signup' || params.get('mode') === 'register') this.mode.set('register');
     }
+    void this.loadProviders();
+  }
+
+  private async loadProviders(): Promise<void> {
+    try {
+      const response = await fetch(this.apiBase + '/api/v1/auth/providers');
+      if (!response.ok) return;
+      const payload = await response.json() as { data?: { google?: boolean; facebook?: boolean; emailFlows?: boolean } };
+      this.providers.set({ google: payload.data?.google === true, facebook: payload.data?.facebook === true, emailFlows: payload.data?.emailFlows === true });
+    } catch { /* Email/password authentication remains available when provider discovery fails. */ }
   }
 
   protected setMode(mode: AuthMode): void {
