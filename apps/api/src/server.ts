@@ -30,6 +30,13 @@ app.addHook('onRequest', async (request, reply) => {
 await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
 await registerAuthRoutes(app);
 
+app.addHook('onResponse', async (request, reply) => {
+  const credential = request.apiCredential;
+  if (!credential || !request.url.startsWith('/api/v1/')) return;
+  const routeTemplate = request.routeOptions?.url ?? request.url.split('?')[0] ?? '/unknown';
+  await pool.query('INSERT INTO api_usage_events (id,organization_id,credential_id,request_id,method,route_template,status_code,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), credential.organizationId, credential.id, request.id, request.method, routeTemplate.slice(0, 300), reply.statusCode, new Date()]).catch((error) => request.log.error({ err: error, credentialId: credential.id }, 'API usage event could not be recorded'));
+});
+
 app.setErrorHandler((error, request, reply) => {
   const normalized = error instanceof Error ? error : new Error('Unknown request error');
   request.log.error({ err: normalized }, 'Request failed');
@@ -39,6 +46,11 @@ app.setErrorHandler((error, request, reply) => {
 });
 
 async function requireMembership(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
+  if (request.apiCredential) {
+    if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
+    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
+    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+  }
   if (!request.identity) {
     await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
     return false;
@@ -220,6 +232,48 @@ app.get<{ Params: { organizationId: string; productId: string; mediaId: string }
   }
   reply.header('Content-Type', 'image/webp'); reply.header('Content-Length', String(variantBytes.length)); reply.header('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800'); reply.header('Vary', 'Accept'); reply.header('X-Content-Type-Options', 'nosniff');
   return reply.send(variantBytes);
+});
+
+const ApiCredentialInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  scopes: z.array(z.enum(['read', 'write'])).min(1).max(2).refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique.'),
+  expiresAt: z.string().datetime().optional()
+}).strict();
+
+app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organizationId/api-credentials', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (request.apiCredential) return fail(reply, request, 403, 'SESSION_REQUIRED', 'Manage API credentials using a signed-in merchant session.');
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const result = await pool.query('SELECT id,organization_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at FROM api_credentials WHERE organization_id=$1 ORDER BY created_at DESC LIMIT 100', [organizationId]);
+  return reply.send({ data: camelize(result.rows), requestId: request.id });
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/api-credentials', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (request.apiCredential) return fail(reply, request, 403, 'SESSION_REQUIRED', 'Only a signed-in merchant session can issue API credentials.');
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = ApiCredentialInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'API_CREDENTIAL_INPUT_INVALID', parsed.error.issues[0]?.message ?? 'Invalid API credential settings.');
+  const now = new Date();
+  const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+  if (expiresAt && (expiresAt.getTime() <= now.getTime() || expiresAt.getTime() > now.getTime() + 366 * 24 * 60 * 60 * 1000)) return fail(reply, request, 400, 'API_CREDENTIAL_EXPIRY_INVALID', 'Expiry must be in the future and no more than 366 days away.');
+  const token = 'dlr_live_' + randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+  const id = randomUUID();
+  const nowPrefix = token.slice(0, 16);
+  const result = await pool.query('INSERT INTO api_credentials (id,organization_id,created_by,name,token_prefix,token_hash,scopes,expires_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING id,organization_id,name,token_prefix,scopes,expires_at,last_used_at,revoked_at,created_at', [id, organizationId, request.identity!.uid, parsed.data.name, nowPrefix, sha256(token), parsed.data.scopes, expiresAt, now]);
+  await pool.query('INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)', [randomUUID(), organizationId, request.identity!.uid, 'api_credential.created', 'api_credential', id, request.id, JSON.stringify({ name: parsed.data.name, scopes: parsed.data.scopes, expiresAt }), now]);
+  return reply.code(201).send({ data: { ...camelize(result.rows[0]) as Record<string, unknown>, token, warning: 'Copy this token now. It will not be shown again.' }, requestId: request.id });
+});
+
+app.delete<{ Params: { organizationId: string; credentialId: string } }>('/api/v1/organizations/:organizationId/api-credentials/:credentialId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, credentialId } = request.params;
+  if (request.apiCredential) return fail(reply, request, 403, 'SESSION_REQUIRED', 'Only a signed-in merchant session can revoke API credentials.');
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const now = new Date();
+  const result = await pool.query('UPDATE api_credentials SET revoked_at=$1,updated_at=$1 WHERE id=$2 AND organization_id=$3 AND revoked_at IS NULL RETURNING id,name,token_prefix,scopes,revoked_at', [now, credentialId, organizationId]);
+  if (!result.rowCount) return fail(reply, request, 404, 'API_CREDENTIAL_NOT_FOUND', 'The active API credential was not found in this organization.');
+  await pool.query('INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)', [randomUUID(), organizationId, request.identity!.uid, 'api_credential.revoked', 'api_credential', credentialId, request.id, JSON.stringify({ name: result.rows[0].name }), now]);
+  return reply.send({ data: camelize(result.rows[0]), requestId: request.id });
 });
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
