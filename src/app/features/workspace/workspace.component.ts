@@ -16,7 +16,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
-import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, EntryPointRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
+import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow, PosCartLine, MenuModifierOption, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
 
 
 @Component({
@@ -109,9 +109,6 @@ export class WorkspaceComponent {
       this.storeCurrency.set(String(store.defaultCurrency ?? 'MAD'));
       this.storeName.set(store.name);
       this.storeSlug.set(store.slug);
-      this.storePublished.set(Boolean(store.published));
-      this.storeExperience.set(store.defaultExperience === 'menu' || store.defaultExperience === 'catalog' || store.defaultExperience === 'services' ? store.defaultExperience : 'commerce');
-      this.storeEnabledExperiences.set(Array.isArray(store.enabledExperiences) && store.enabledExperiences.length ? store.enabledExperiences : ['commerce']);
       this.onboardingStage.set('ready');
       const rows = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(organization.id)}/products`);
       const products = Array.isArray(rows) ? rows : [];
@@ -126,14 +123,13 @@ export class WorkspaceComponent {
           tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
         };
       }));
-      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, entryPointRows, categoryRows] = await Promise.all([
+      const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, categoryRows] = await Promise.all([
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/orders'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/customers'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/inventory'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/sessions'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/pos/orders'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/menus'),
-        this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/entry-points'),
         this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/stores/' + encodeURIComponent(store.id) + '/categories')
       ]);
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
@@ -150,14 +146,6 @@ export class WorkspaceComponent {
       const loadedMenus = Array.isArray(menuRows) ? menuRows as MenuRow[] : [];
       this.menus.set(loadedMenus);
       const itemGroups = await Promise.all(loadedMenus.map((menu) => this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organization.id) + '/menus/' + encodeURIComponent(menu.id) + '/items')));
-      const savedEntryPoints = Array.isArray(entryPointRows) ? entryPointRows as EntryPointRow[] : [];
-      this.entryPoints.set(await Promise.all(savedEntryPoints.map(async (point) => {
-        try {
-          const publicPoint = await this.apiClient.request('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
-          return { ...point, targetUrl: typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : null, targetUrlPath: String(publicPoint?.targetUrlPath ?? '') };
-        } catch { return { ...point, targetUrl: null, targetUrlPath: '/' + this.storeSlug() + point.targetPath }; }
-      })));
-      if (!this.entryPoints().some(point => point.id === this.selectedQrId())) this.selectedQrId.set('');
       this.menuItems.set(itemGroups.flatMap((group, index) => (Array.isArray(group) ? group : []).map((item: any): MenuItemRow => ({
         id: String(item.id), menuId: String(item.menuId ?? loadedMenus[index].id), slug: String(item.slug ?? ''), name: String(item.name ?? ''),
         description: typeof item.description === 'string' ? item.description : null, priceAmountMinor: Number(item.priceAmountMinor ?? 0), currency: String(item.currency ?? store.defaultCurrency ?? 'MAD'),
@@ -234,21 +222,6 @@ export class WorkspaceComponent {
   protected readonly categories = signal<CategoryRow[]>([]);
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
-  protected readonly entryPoints = signal<EntryPointRow[]>([]);
-  protected readonly selectedQrId = signal('');
-  protected readonly qrBusy = signal(false);
-  protected readonly qrError = signal('');
-  protected readonly qrBrandName = signal('');
-  protected readonly qrForeground = signal('#123456');
-  protected readonly qrBackground = signal('#ffffff');
-  protected readonly qrAccent = signal('#238636');
-  protected readonly qrLogoUrl = signal('');
-  protected readonly qrFrame = signal<'none' | 'bottom-label' | 'top-label'>('bottom-label');
-  protected readonly qrLabel = signal('Scan to view menu');
-  protected readonly qrTargetPath = signal<'/' | '/menu' | '/catalog' | '/services'>('/menu');
-  protected readonly storePublished = signal(false);
-  protected readonly storeExperience = signal<'commerce' | 'menu' | 'catalog' | 'services'>('commerce');
-  protected readonly storeEnabledExperiences = signal<string[]>(['commerce']);
   protected readonly inventory = signal<InventoryRow[]>([]);
   protected readonly posSessions = signal<any[]>([]);
   protected readonly posOrders = signal<any[]>([]);
@@ -706,93 +679,6 @@ export class WorkspaceComponent {
     if (item === 'API & channels') return;
     if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
     if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.');
-  }
-  protected async toggleStorefrontPublishing(): Promise<void> {
-    this.qrBusy.set(true); this.qrError.set('');
-    try {
-      const enabled = Array.from(new Set([...this.storeEnabledExperiences(), this.storeExperience()]));
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/storefront', {
-        method: 'PATCH',
-        body: JSON.stringify({ published: !this.storePublished(), defaultExperience: this.storeExperience(), enabledExperiences: enabled })
-      });
-      await this.loadWorkspace();
-      this.notify(this.storePublished() ? 'Storefront published. Public menu and active QR entry points can now resolve.' : 'Storefront unpublished; public access is disabled.');
-    } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not update storefront publishing.'); }
-    finally { this.qrBusy.set(false); }
-  }
-  protected async createQrEntryPoint(event: Event): Promise<void> {
-    event.preventDefault();
-    this.qrBusy.set(true); this.qrError.set('');
-    try {
-      const result = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points', {
-        method: 'POST',
-        body: JSON.stringify({
-          storeId: this.storeId(), type: 'qr', targetPath: this.qrTargetPath(),
-          branding: {
-            brandName: this.qrBrandName().trim() || this.storeName(),
-            foregroundColor: this.qrForeground(), backgroundColor: this.qrBackground(), accentColor: this.qrAccent(),
-            logoUrl: this.qrLogoUrl().trim() || null, frame: this.qrFrame(), label: this.qrLabel().trim() || null
-          }
-        })
-      });
-      await this.loadWorkspace();
-      if (result?.id) this.selectedQrId.set(String(result.id));
-      this.notify('Branded QR entry point saved.');
-    } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not save this QR entry point.'); }
-    finally { this.qrBusy.set(false); }
-  }
-  protected qrGeneratorUrl(point: EntryPointRow): string {
-    const params = new URLSearchParams({
-      content: point.targetUrl ?? '',
-      dark: point.branding?.foregroundColor ?? '#123456',
-      light: point.branding?.backgroundColor ?? '#ffffff',
-      accent: point.branding?.accentColor ?? '#238636',
-      brand: point.branding?.brandName ?? this.storeName(),
-      frame: point.branding?.frame ?? 'bottom-label',
-      label: point.branding?.label ?? 'Scan to view menu',
-      logo: point.branding?.logoUrl ?? ''
-    });
-    return '/qr?' + params.toString();
-  }
-  protected editQrEntryPoint(point: EntryPointRow): void {
-    this.selectedQrId.set(point.id);
-    this.qrTargetPath.set(point.targetPath);
-    this.qrBrandName.set(point.branding?.brandName ?? this.storeName());
-    this.qrForeground.set(point.branding?.foregroundColor ?? '#123456');
-    this.qrBackground.set(point.branding?.backgroundColor ?? '#ffffff');
-    this.qrAccent.set(point.branding?.accentColor ?? '#238636');
-    this.qrLogoUrl.set(point.branding?.logoUrl ?? '');
-    this.qrFrame.set(point.branding?.frame ?? 'none');
-    this.qrLabel.set(point.branding?.label ?? '');
-    this.qrError.set('');
-  }
-  protected async saveQrBranding(event: Event): Promise<void> {
-    event.preventDefault();
-    const id = this.selectedQrId();
-    if (!id) return;
-    this.qrBusy.set(true); this.qrError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(id), {
-        method: 'PATCH',
-        body: JSON.stringify({ branding: {
-          brandName: this.qrBrandName().trim() || null,
-          foregroundColor: this.qrForeground(), backgroundColor: this.qrBackground(), accentColor: this.qrAccent(),
-          logoUrl: this.qrLogoUrl().trim() || null, frame: this.qrFrame(), label: this.qrLabel().trim() || null
-        } })
-      });
-      await this.loadWorkspace(); this.notify('QR branding updated.');
-    } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not update QR branding.'); }
-    finally { this.qrBusy.set(false); }
-  }
-  protected async toggleQrEntryPoint(point: EntryPointRow): Promise<void> {
-    this.qrBusy.set(true); this.qrError.set('');
-    try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/entry-points/' + encodeURIComponent(point.id), {
-        method: 'PATCH', body: JSON.stringify({ status: point.status === 'active' ? 'disabled' : 'active' })
-      });
-      await this.loadWorkspace(); this.notify(point.status === 'active' ? 'QR entry point disabled.' : 'QR entry point enabled.');
-    } catch (error) { this.qrError.set(error instanceof Error ? error.message : 'Could not change QR entry point status.'); }
-    finally { this.qrBusy.set(false); }
   }
   protected selectedPosMenuItem(): MenuItemRow | null { return this.menuItems().find(item => item.id === this.posVariantId() && item.status === 'active' && item.availability !== 'unavailable' && this.menus().some(menu => menu.id === item.menuId && menu.status === 'active')) ?? null; }
   protected togglePosModifier(groupId: string, optionId: string, checked: boolean, maxSelections: number): void {
