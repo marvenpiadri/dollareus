@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { AuthPanelComponent } from './auth-panel.component';
 import { PublicHomeComponent } from './public-home.component';
@@ -15,7 +16,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
 @Component({
   selector: 'dlr-root',
   standalone: true,
-  imports: [AuthPanelComponent, PublicHomeComponent, QrStudioComponent],
+  imports: [DatePipe, AuthPanelComponent, PublicHomeComponent, QrStudioComponent],
   template: `
     @if (publicPage() === 'home') {
       <dlr-public-home />
@@ -92,7 +93,7 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <button class="button primary small" type="submit" [disabled]="shipmentSaveBusy()">{{shipmentSaveBusy()?'Saving…':(shipmentDetails()?.fulfillments?.length?'Save shipment updates':'Create shipment record')}}</button>
                 </form>
                 @if(orderActionError()){<p role="alert" style="padding:8px 17px;color:#b91c1c;font-size:13px">{{orderActionError()}}</p>}
-                @if(shipmentDetails(); as shipmentData){<div class="table-wrap"><table><thead><tr><th>STAGE</th><th>COURIER</th><th>TRACKING</th><th>EXPECTED</th><th>NOTES</th><th>UPDATED</th></tr></thead><tbody>@for(shipment of shipmentData.fulfillments;track shipment.id){<tr><td><span class="status" [class]="statusClass(shipment.stage)">{{orderStatusLabel(shipment.stage)}}</span></td><td>{{shipment.carrier || 'Not assigned'}}</td><td>@if(shipment.trackingUrl){<a [href]="shipment.trackingUrl" target="_blank" rel="noopener noreferrer">{{shipment.trackingNumber || 'Open tracking'}}</a>} @else { {{shipment.trackingNumber || '—'}} }</td><td>{{shipment.estimatedDeliveryDate || '—'}}</td><td>{{shipment.notes || '—'}}</td><td>{{shipment.updatedAt}}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No shipment has been recorded yet.</td></tr>}</tbody></table></div>}
+                @if(shipmentDetails(); as shipmentData){<div class="table-wrap"><table><thead><tr><th>STAGE</th><th>COURIER</th><th>TRACKING</th><th>EXPECTED</th><th>NOTES</th><th>UPDATED</th></tr></thead><tbody>@for(shipment of shipmentData.fulfillments;track shipment.id){<tr><td><span class="status" [class]="statusClass(shipment.stage)">{{orderStatusLabel(shipment.stage)}}</span></td><td>{{shipment.carrier || 'Not assigned'}}</td><td>@if(shipment.trackingUrl){<a [href]="shipment.trackingUrl" target="_blank" rel="noopener noreferrer">{{shipment.trackingNumber || 'Open tracking'}}</a>} @else { {{shipment.trackingNumber || '—'}} }</td><td>{{shipment.estimatedDeliveryDate || '—'}}</td><td>{{shipment.notes || '—'}}</td><td>{{shipment.updatedAt | date:'mediumDate'}}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">No shipment has been recorded yet.</td></tr>}</tbody></table></div>}
               }
             </section>}
           }
