@@ -1,4 +1,4 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { CategoryRow, ProductRow, ProductStatus } from '../../shared/models/commerce.models';
 
@@ -16,6 +16,7 @@ export class ProductCatalogComponent {
   readonly organizationId = input.required<string>();
   readonly storeId = input.required<string>();
   readonly storeCurrency = input('MAD');
+  readonly openEditorRequest = input(0);
   readonly search = input('');
   readonly searchChangeRequested = output<string>();
   readonly selectNavRequested = output<'Products'>();
@@ -43,7 +44,18 @@ export class ProductCatalogComponent {
     );
   });
 
-  constructor(private readonly apiClient: ApiClientService) {}
+  constructor(private readonly apiClient: ApiClientService) {
+    let lastRequest = 0;
+    effect(() => {
+      const request = this.openEditorRequest();
+      if (request > lastRequest) {
+        lastRequest = request;
+        this.editingProduct.set(null);
+        this.productSaveError.set('');
+        this.productEditorOpen.set(true);
+      }
+    });
+  }
 
   protected filterCount(filter: ProductFilter): number {
     return filter === 'All' ? this.products().length : this.products().filter(product => product.status === filter).length;
