@@ -42,6 +42,7 @@ The API currently has PostgreSQL-backed endpoints for:
 - organization-scoped customer listing and creation;
 - inventory location creation, stock-level reads and guarded stock adjustments;
 - order listing and transactional, server-priced order creation with immutable line snapshots, idempotency-key support and audited status transitions;
+- manual/offline payment recording and history per order, including cash, cash on delivery, bank transfer, mobile money, card-terminal, and other methods; pending records can be manually confirmed or cancelled, balances are calculated from confirmed receipts, and changes are audit-logged. No online payment gateway or card processing is implemented;
 - restaurant menu and menu-item create/list APIs plus a public published-menu projection;
 - managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup.
 
@@ -52,11 +53,11 @@ The schema also defines categories, media metadata, inventory, customers, carts,
 In progress. The public homepage and browser-side QR Studio are available without an account; merchant routes remain session-gated. Email-provider configuration is optional for signup and sign-in, while verification and password-recovery email delivery require a configured provider. Remaining work:
 - reimplement POS, domain and media routes against PostgreSQL;
 - finish restaurant menu editing, publishing and modifier workflows;
-- complete fulfillment, payment and refund workflows around the order lifecycle;
+- add shipping/fulfillment tracking and COD collection reconciliation; add refund records and controls (offline payment tracking is now implemented, but refunds and gateway processing are not);
 - finish the remaining merchant workspace screens and operational actions;
 - extend tenant-isolation, transaction, validation, and API integration tests;
 - run and resolve CI on the new implementation before live database/provider testing;
-- complete remaining Angular merchant-dashboard integration;
+- continue Angular merchant-dashboard integration and verify the new offline-payment UI in a real build;
 - add Mageus integration authorization and production storefront hosting;
 
 
