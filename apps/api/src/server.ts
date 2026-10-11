@@ -2,13 +2,16 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { pool } from './db/pool.js';
 import { authenticate, registerAuthRoutes } from './auth.js';
 
 const app = Fastify({ logger: true, trustProxy: process.env.NODE_ENV === 'production', bodyLimit: 1_048_576, genReqId: () => randomUUID() });
 const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').split(',').map((origin) => origin.trim()).filter(Boolean);
+const IMAGE_UPLOAD_LIMIT = 5 * 1024 * 1024;
+app.addContentTypeParser('image/webp', { parseAs: 'buffer', bodyLimit: IMAGE_UPLOAD_LIMIT }, (_request, payload, done) => done(null, payload));
+
 
 await app.register(helmet, { contentSecurityPolicy: false });
 await app.register(cors, { origin: allowedOrigins, credentials: true });
@@ -52,6 +55,34 @@ function camelize(value: unknown): unknown {
   return value;
 }
 
+function sha256(value: string | Buffer): string { return createHash('sha256').update(value).digest('hex'); }
+function hmac(key: Buffer | string, value: string, encoding?: 'hex'): Buffer | string { return createHmac('sha256', key).update(value).digest(encoding); }
+function awsObjectUrl(storageKey: string): URL {
+  const endpointValue = process.env.AWS_ENDPOINT_URL_S3; const bucket = process.env.AWS_S3_BUCKET;
+  if (!endpointValue || !bucket) throw new Error('S3-compatible media storage is not configured.');
+  const endpoint = new URL(endpointValue);
+  const encodedKey = storageKey.split('/').map(encodeURIComponent).join('/');
+  endpoint.pathname = endpoint.pathname.replace(/\/+$/, '') + '/' + encodeURIComponent(bucket) + '/' + encodedKey;
+  endpoint.search = ''; endpoint.hash = ''; return endpoint;
+}
+async function s3Request(method: 'GET' | 'PUT', storageKey: string, body?: Buffer): Promise<Response> {
+  const endpoint = awsObjectUrl(storageKey); const accessKey = process.env.AWS_ACCESS_KEY_ID; const secretKey = process.env.AWS_SECRET_ACCESS_KEY; const region = process.env.AWS_REGION ?? 'us-east-2';
+  if (!accessKey || !secretKey) throw new Error('S3-compatible media credentials are not configured.');
+  const now = new Date(); const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, ''); const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256(body ?? Buffer.alloc(0));
+  const headers: Record<string, string> = { host: endpoint.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate };
+  if (method === 'PUT') headers['content-type'] = 'image/webp';
+  const signedHeaders = Object.keys(headers).sort().join(';');
+  const canonicalHeaders = Object.keys(headers).sort().map((key) => key + ':' + headers[key].trim() + '\n').join('');
+  const canonicalRequest = [method, endpoint.pathname, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = dateStamp + '/' + region + '/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256(canonicalRequest)].join('\n');
+  const dateKey = hmac('AWS4' + secretKey, dateStamp) as Buffer; const regionKey = hmac(dateKey, region) as Buffer; const serviceKey = hmac(regionKey, 's3') as Buffer; const signingKey = hmac(serviceKey, 'aws4_request') as Buffer;
+  const signature = hmac(signingKey, stringToSign, 'hex') as string;
+  headers.authorization = 'AWS4-HMAC-SHA256 Credential=' + accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  return fetch(endpoint, { method, headers, body: method === 'PUT' ? body : undefined });
+}
+
 function fail(reply: FastifyReply, request: FastifyRequest, status: number, code: string, message: string) {
   return reply.code(status).send({ error: { code, message, requestId: request.id } });
 }
@@ -89,6 +120,40 @@ const ProductPatchInput = z.object({
     amountMinor: z.number().int().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/)
   }).strict().optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one product field must be provided.' });
+
+app.post<{ Params: { organizationId: string; productId: string }; Body: Buffer }>('/api/v1/organizations/:organizationId/products/:productId/media', { preHandler: authenticate, bodyLimit: IMAGE_UPLOAD_LIMIT }, async (request, reply) => {
+  const { organizationId, productId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const membership = await pool.query('SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3', [organizationId, request.identity!.uid, 'active']);
+  if (!['owner', 'admin', 'manager', 'staff'].includes(String(membership.rows[0]?.role ?? ''))) return fail(reply, request, 403, 'MEDIA_WRITE_FORBIDDEN', 'Your organization role cannot upload product media.');
+  if (!Buffer.isBuffer(request.body) || request.body.length < 16 || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MEDIA_SIZE_INVALID', 'Upload an optimized WebP image no larger than 5 MB.');
+  const body = request.body;
+  if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MEDIA_TYPE_INVALID', 'Only WebP image uploads are accepted.');
+  const altText = String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500);
+  const rawPosition = Number.parseInt(String(request.headers['x-image-position'] ?? '0'), 10); const position = Number.isFinite(rawPosition) ? Math.max(0, Math.min(1000, rawPosition)) : 0;
+  const product = await pool.query('SELECT id FROM products WHERE id=$1 AND organization_id=$2', [productId, organizationId]);
+  if (!product.rowCount) return fail(reply, request, 404, 'PRODUCT_NOT_FOUND', 'The product does not exist in this organization.');
+  if (!process.env.AWS_S3_BUCKET || !process.env.AWS_ENDPOINT_URL_S3 || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return fail(reply, request, 503, 'MEDIA_STORAGE_NOT_CONFIGURED', 'S3-compatible media storage is not configured on the server.');
+  const mediaId = randomUUID(); const storageKey = 'organizations/' + organizationId + '/products/' + productId + '/' + mediaId + '.webp';
+  const stored = await s3Request('PUT', storageKey, body);
+  if (!stored.ok) { const detail = await stored.text().catch(() => ''); request.log.error({ status: stored.status, detail: detail.slice(0, 300) }, 'Neon object storage upload failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The image could not be saved to object storage.'); }
+  try {
+    const metadata = await pool.query('INSERT INTO product_media (id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_by,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,organization_id,product_id,storage_provider,storage_key,content_type,byte_size,alt_text,width,height,position,created_at', [mediaId, organizationId, productId, 'neon_s3', storageKey, 'image/webp', body.length, altText, null, null, position, request.identity!.uid, new Date()]);
+    return reply.code(201).send({ data: { ...camelize(metadata.rows[0]) as Record<string, unknown>, contentUrl: '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/products/' + encodeURIComponent(productId) + '/media/' + encodeURIComponent(mediaId) + '/content' }, requestId: request.id });
+  } catch (error) { await s3Request('PUT', storageKey, Buffer.alloc(0)).catch(() => undefined); throw error; }
+});
+
+app.get<{ Params: { organizationId: string; productId: string; mediaId: string } }>('/api/v1/organizations/:organizationId/products/:productId/media/:mediaId/content', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, productId, mediaId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const result = await pool.query('SELECT storage_key,content_type FROM product_media WHERE id=$1 AND organization_id=$2 AND product_id=$3', [mediaId, organizationId, productId]);
+  if (!result.rowCount) return fail(reply, request, 404, 'MEDIA_NOT_FOUND', 'The image does not exist.');
+  const stored = await s3Request('GET', String(result.rows[0].storage_key));
+  if (!stored.ok) { request.log.error({ status: stored.status }, 'Neon object storage download failed'); return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The image could not be loaded from object storage.'); }
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  reply.header('Content-Type', String(result.rows[0].content_type)); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'private, max-age=300'); reply.header('X-Content-Type-Options', 'nosniff');
+  return reply.send(bytes);
+});
 
 app.get('/health', async () => ({ status: 'ok', service: 'dollareus-api' }));
 app.get('/api/v1/health', async (request) => ({ data: { status: 'ok', service: 'dollareus-api', version: '0.2.0' }, requestId: request.id }));
