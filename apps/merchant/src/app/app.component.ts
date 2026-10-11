@@ -150,8 +150,8 @@ export class AppComponent {
   protected readonly imageUploadError = signal('');
   protected readonly imageUploadNote = signal('');
   protected readonly imageAltText = signal('');
-  protected readonly imageMaxWidth = signal(1600);
-  protected readonly imageMaxHeight = signal(1600);
+  protected readonly imageMaxWidth = signal(1200);
+  protected readonly imageMaxHeight = signal(1200);
   protected readonly storeCurrency = signal('MAD');
   protected readonly onboardingStage = signal<'organization' | 'store' | 'ready'>('organization');
   protected readonly organizationId = signal('');
@@ -259,7 +259,7 @@ export class AppComponent {
           id: String(p.id), name, slug: String(p.slug ?? ''), description: typeof p.description === 'string' ? p.description : null, category: 'Uncategorized', sku: variant?.sku ? String(variant.sku) : '—', variantId: String(variant?.id ?? ''),
           priceMinor: Number(variant?.amountMinor ?? 0), currency: String(variant?.currency ?? store.defaultCurrency ?? 'MAD'),
           stock: null, status, initials: name.split(/\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
-          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiBase() + String(p.media[0].contentUrl) : null
+          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiBase() + String(p.media[0].contentUrl) + '?width=300' : null
         };
       }));
       const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows] = await Promise.all([
