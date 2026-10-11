@@ -81,4 +81,4 @@ Long-term delivery integrations (including third-party food delivery services) s
 
 ## Verification note
 
-The shipment endpoints and UI and the visual readability/palette changes are committed to main, but this development session has not run the repository build or exercised the endpoints against Neon. Treat those checks as pending until CI and database smoke tests confirm them.
+GitHub Actions passes on commit `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77`: Angular production build, API TypeScript check, and the PostgreSQL-backed HTTP smoke suite all succeeded. The CI suite uses a disposable PostgreSQL service and does not verify the user's live Neon database. The live Neon schema/setup and browser-level visual/responsive checks remain pending. The merchant UI readability pass is committed; inspect it in a browser before considering the visual QA checklist complete.
