@@ -1,8 +1,6 @@
--- Dollareus PostgreSQL schema
--- Fresh-install schema for a new application. No data migration and no column defaults.
--- IDs and timestamps are supplied explicitly by the API. Run only against an empty database.
-
-BEGIN;
+-- Dollareus initial PostgreSQL schema migration.
+-- Applied migrations are immutable; create a new numbered migration for future changes.
+-- IDs and timestamps are supplied explicitly by the API.
 
 CREATE TABLE users (
   id text PRIMARY KEY,
