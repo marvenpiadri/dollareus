@@ -126,7 +126,7 @@ export class WorkspaceComponent {
           id: String(p.id), name, slug: String(p.slug ?? ''), description: typeof p.description === 'string' ? p.description : null, category: 'Uncategorized', categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : [], sku: variant?.sku ? String(variant.sku) : '—', variantId: String(variant?.id ?? ''),
           priceMinor: Number(variant?.amountMinor ?? 0), currency: String(variant?.currency ?? store.defaultCurrency ?? 'MAD'),
           stock: null, status, initials: name.split(/\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
-          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url( String(p.media[0].contentUrl) + '?width=300' : null
+          tone: 'sage', imageUrl: Array.isArray(p.media) && p.media[0]?.contentUrl ? this.apiClient.url(String(p.media[0].contentUrl)) + '?width=300' : null
         };
       }));
       const [orderRows, customerRows, inventoryRows, sessionRows, posOrderRows, menuRows, entryPointRows, categoryRows] = await Promise.all([
@@ -1103,7 +1103,7 @@ export class WorkspaceComponent {
         if (optimized && optimized.size <= 1024 * 1024) { canvas.width = scaledCanvas.width; canvas.height = scaledCanvas.height; }
       }
       if (!optimized || optimized.size > 4096 * 1024) throw new Error('This image is still larger than 4096 KB after compression. Reduce its dimensions and try again.');
-      const response = await fetch(this.apiClient.url( '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
+      const response = await fetch(this.apiClient.url('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products/' + encodeURIComponent(product.id) + '/media'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': this.imageAltText().trim(), 'X-Image-Position': '0' }, body: optimized });
       const payload = await response.json().catch(() => ({})) as { data?: { contentUrl?: string }; error?: { message?: string } };
       if (!response.ok) throw new Error(payload.error?.message ?? 'The image could not be uploaded.');
       this.imageUploadNote.set('Uploaded ' + canvas.width + ' × ' + canvas.height + ' WebP · ' + (optimized.size / 1024).toFixed(0) + ' KB. Original: ' + (file.size / 1024).toFixed(0) + ' KB.');
