@@ -45,7 +45,8 @@ The API currently has PostgreSQL-backed endpoints for:
 - manual/offline payment recording and history per order, including cash, cash on delivery, bank transfer, mobile money, card-terminal, and other methods; pending records can be manually confirmed or cancelled, balances are calculated from confirmed receipts, and changes are audit-logged. No online payment gateway or card processing is implemented;
 - restaurant menu and menu-item create/list APIs plus a public published-menu projection;
 - managed QR/direct-link entry-point create/list/disable APIs and published-entry-point lookup;
-- order-scoped fulfillment create/list/update APIs with carrier, tracking number/URL, expected delivery, notes, validated delivery-stage transitions, and audit events.
+- order-scoped fulfillment create/list/update APIs with carrier, tracking number/URL, expected delivery, notes, validated delivery-stage transitions, and audit events;
+- order-scoped refund history and refund-recording APIs for successful offline/manual payments, with transaction locks, per-payment refundable-balance checks, idempotency keys, audit events, and derived partial/full refund status. This records a refund operationally; it does not initiate a bank, card, or payment-provider transfer.
 
 The schema also defines categories, media metadata, inventory, customers, carts, orders, payments, fulfillments, restaurant menus, POS, entry points, domains, and audit events. Not all of those tables have their API routes reimplemented yet. The former Firestore route implementations were removed rather than retained as fallback paths.
 
@@ -56,7 +57,8 @@ In progress. The public homepage and browser-side QR Studio are available withou
 - finish restaurant menu editing, publishing and modifier workflows;
 - [x] add audited manual shipping/fulfillment tracking APIs and merchant UI for carrier, tracking number/URL, expected delivery, notes, and delivery stages; delivery progress is kept separate from payment collection.
 - [ ] verify the shipping UI/API in CI and against the intended Neon schema; COD collection is recorded through the existing manual/offline payment workflow.
-- [ ] add refund records and controls (online payment gateway processing remains intentionally deferred);
+- [x] add refund records and API controls for manually recorded refunds against successful payments; online payment gateway processing remains intentionally deferred.
+- [ ] add merchant UI for refund history and refund recording; verify refund flows in CI and against the intended Neon schema.
 - improve merchant workspace readability and align its palette with X-Facture's midnight/navy and money-green design tokens (implemented; build verification pending);
 - finish the remaining merchant workspace screens and operational actions;
 - extend tenant-isolation, transaction, validation, and API integration tests;
@@ -81,4 +83,4 @@ Long-term delivery integrations (including third-party food delivery services) s
 
 ## Verification note
 
-GitHub Actions passes on commit `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77`: Angular production build, API TypeScript check, and the PostgreSQL-backed HTTP smoke suite all succeeded. The CI suite uses a disposable PostgreSQL service and does not verify the user's live Neon database. The live Neon schema/setup and browser-level visual/responsive checks remain pending. The merchant UI readability pass is committed; inspect it in a browser before considering the visual QA checklist complete.
+GitHub Actions previously passed on commit `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77`: Angular production build, API TypeScript check, and the PostgreSQL-backed HTTP smoke suite succeeded at that commit. Refund API and smoke-test changes were added afterward and still require a fresh CI run. The CI suite uses a disposable PostgreSQL service and does not verify the user's live Neon database. The live Neon schema/setup and browser-level visual/responsive checks remain pending. The merchant UI readability pass is committed; inspect it in a browser before considering the visual QA checklist complete.
