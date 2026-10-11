@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
 
@@ -54,7 +54,7 @@ try {
         pending += 1;
         continue;
       }
-      const checksum = createHash('sha256').update(await (await import('node:fs/promises')).readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8')).digest('hex');
+      const checksum = createHash('sha256').update(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8')).digest('hex');
       if (existing.checksum.trim() !== checksum) {
         console.error(`[checksum mismatch] ${name} — applied migration was edited; create a new migration instead.`);
         drift += 1;
