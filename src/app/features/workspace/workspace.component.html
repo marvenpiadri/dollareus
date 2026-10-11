@@ -193,12 +193,8 @@
           }
           @if (activeNav() === 'Customers') {
             <dlr-customer-management
-              [customers]="customers()"
-              [customerFormOpen]="customerFormOpen()"
-              [customerSaveBusy]="customerSaveBusy()"
-              [customerSaveError]="customerSaveError()"
-              (toggleRequested)="toggleCustomerForm()"
-              (createRequested)="createCustomer($event)"
+              [organizationId]="organizationId()"
+              (notifyRequested)="notify($event)"
             />
           }
           @if (activeNav() === 'Menus') {
@@ -214,12 +210,10 @@
             <dlr-inventory-management
               [inventory]="inventory()"
               [products]="products()"
-              [locationOptions]="locationOptions()"
-              [inventoryError]="inventoryError()"
-              [inventoryBusy]="inventoryBusy()"
-              (createLocationRequested)="createInventoryLocation($event)"
-              (createLevelRequested)="createInventoryLevel($event)"
-              (adjustRequested)="adjustInventory($event.event, $event.item)"
+              [organizationId]="organizationId()"
+              [storeId]="storeId()"
+              (notifyRequested)="notify($event)"
+              (dataChanged)="refreshWorkspace()"
             />
           }
           @if (activeNav() === 'API & channels') {
