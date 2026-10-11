@@ -1488,7 +1488,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
   if (!await requirePosOperator(request, reply, organizationId)) return;
   const parsed = PosOrderInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid POS session, fulfillment type, and at least one valid item.');
-  const duplicateKeys = parsed.data.items.map((item) => [item.sourceType, item.sourceItemId, item.sourceVariantId ?? ''].join(':'));
+  const duplicateKeys = parsed.data.items.map((item) => [item.sourceType, item.sourceItemId, item.sourceVariantId ?? '', item.sourceType === 'menu_item' ? JSON.stringify(item.metadata?.modifiers ?? []) : ''].join(':'));
   if (new Set(duplicateKeys).size !== duplicateKeys.length) return fail(reply, request, 400, 'DUPLICATE_POS_ITEMS', 'Combine duplicate items into a single line with a quantity.');
   const client = await pool.connect();
   const now = new Date();
