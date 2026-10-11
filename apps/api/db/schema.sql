@@ -359,6 +359,7 @@ CREATE TABLE orders (
   UNIQUE (organization_id, idempotency_key)
 );
 CREATE INDEX orders_org_created_idx ON orders(organization_id, created_at DESC);
+CREATE INDEX orders_store_created_idx ON orders(store_id, created_at DESC);
 CREATE INDEX orders_org_status_idx ON orders(organization_id, status, created_at DESC);
 
 CREATE TABLE order_items (
