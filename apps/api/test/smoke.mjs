@@ -222,8 +222,20 @@ try {
   if (!Array.isArray(refundHistory.payload?.data) || refundHistory.payload.data.length !== 2) throw new Error('Refund history did not return both refund records.');
   checks.push('audited partial/full manual refunds, over-refund guard, idempotency and history');
 
+  const shipmentOrderPayload = {
+    storeId,
+    customerId: customer.payload?.data?.id,
+    notes: 'Smoke test shipment order',
+    idempotencyKey: `smoke-shipment-order-${suffix}`,
+    items: [{ variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantity: 1 }]
+  };
+  const shipmentOrder = await request(`/api/v1/organizations/${organizationId}/orders`, 201, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify(shipmentOrderPayload)
+  });
+  if (!shipmentOrder.payload?.data?.id) throw new Error('Shipment test order did not return an id.');
+
   const expectedDeliveryDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const fulfillmentPath = `/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}/fulfillments`;
+  const fulfillmentPath = `/api/v1/organizations/${organizationId}/orders/${shipmentOrder.payload?.data?.id}/fulfillments`;
   const shipment = await request(fulfillmentPath, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ stage: 'preparing', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Leave at reception' })
