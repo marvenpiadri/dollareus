@@ -316,6 +316,21 @@ try {
   if (Number(posOrder.payload?.data?.totalMinor) !== 2598 || posOrder.payload?.data?.status !== 'confirmed' || posOrder.payload?.data?.items?.length !== 1) {
     throw new Error('POS order pricing, initial status, or line snapshots are incorrect.');
   }
+  const posMenuOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
+      idempotencyKey: `smoke-pos-menu-order-${suffix}`,
+      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1 }]
+    })
+  });
+  if (Number(posMenuOrder.payload?.data?.totalMinor) !== 4500 || posMenuOrder.payload?.data?.items?.[0]?.sourceType !== 'menu_item') {
+    throw new Error('POS could not price and snapshot an active restaurant menu item.');
+  }
+  await request(`${posBase}/orders/${posMenuOrder.payload?.data?.id}/status`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' })
+  });
+  checks.push('restaurant menu items can be sold through POS');
   const posReplay = await request(`${posBase}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
   if (posReplay.payload?.data?.id !== posOrder.payload?.data?.id) throw new Error('POS idempotency did not return the original order.');
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
