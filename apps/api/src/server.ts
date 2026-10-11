@@ -787,7 +787,7 @@ const MenuModifierGroupInput = z.object({
   minSelections: z.number().int().min(0).max(20).default(0),
   maxSelections: z.number().int().min(1).max(20).default(1),
   options: z.array(MenuModifierOptionInput).min(1).max(30)
-}).strict().refine((group) => group.minSelections <= group.maxSelections && (!group.required || group.minSelections >= 1), { message: 'Modifier selection limits are inconsistent.' });
+}).strict().refine((group) => group.minSelections <= group.maxSelections && group.maxSelections <= group.options.length && (!group.required || group.minSelections >= 1), { message: 'Modifier selection limits are inconsistent or exceed the available options.' });
 
 const MenuItemInput = z.object({
   slug: Slug, name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable().optional(),
