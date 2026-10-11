@@ -898,8 +898,10 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
     ? 'https://' + primaryDomain.rows[0].hostname + (row.target_path === '/' ? '' : row.target_path)
     : configuredBase
       ? configuredBase + targetUrlPath
-      : subdomainBase + (row.target_path === '/' ? '' : row.target_path);
-  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath, targetUrl: targetUrl || null, branding: row.branding ?? {} }, requestId: request.id };
+      : subdomainBase
+        ? subdomainBase + (row.target_path === '/' ? '' : row.target_path)
+        : null;
+  return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeName: row.store_name, targetUrlPath, targetUrl, branding: row.branding ?? {} }, requestId: request.id };
 });
 
 
