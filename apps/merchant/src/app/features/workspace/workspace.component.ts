@@ -5,6 +5,7 @@ import { CustomerManagementComponent } from '../customers/customer-management.co
 import { InventoryManagementComponent } from '../inventory/inventory-management.component';
 import { OverviewDashboardComponent } from '../overview/overview-dashboard.component';
 import { OrderManagementComponent } from '../orders/order-management.component';
+import { ProductCatalogComponent } from '../products/product-catalog.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -17,7 +18,7 @@ import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow,
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
@@ -301,11 +302,6 @@ export class WorkspaceComponent {
   protected readonly shipmentTrackingUrl = signal('');
   protected readonly shipmentEstimatedDate = signal('');
   protected readonly shipmentNotes = signal('');
-  protected productCategoryName(product: ProductRow): string {
-    const names = (product.categoryIds ?? []).map(id => this.categories().find(category => category.id === id)?.name).filter((name): name is string => Boolean(name));
-    return names.length ? names.join(', ') : 'Uncategorized';
-  }
-  protected hasActiveCategories(): boolean { return this.categories().some(category => category.status === 'active'); }
 
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -314,7 +310,6 @@ export class WorkspaceComponent {
   });
   protected activeCount(): number { return this.products().filter(p => p.status === 'Active').length; }
   protected lowStockCount(): number { return this.inventory().filter((item) => item.quantityOnHand !== null && item.reorderPoint !== null && item.quantityOnHand <= item.reorderPoint).length; }
-  protected filterCount(filter: 'All' | ProductStatus): number { return filter === 'All' ? this.products().length : this.products().filter(p => p.status === filter).length; }
   protected money(minor: number, currency: string): string { return new Intl.NumberFormat('en', {style:'currency',currency,maximumFractionDigits:2}).format(minor / 100); }
   protected categoryName(categoryId?: string | null): string { return this.categories().find(category => category.id === categoryId)?.name ?? '—'; }
   protected statusClass(status: string): string { const value = status.toLowerCase(); return value === 'confirmed' || value === 'processing' ? 'processing' : value === 'completed' || value === 'paid' ? 'paid' : value === 'cancelled' || value === 'refunded' ? 'draft' : 'pending'; }
