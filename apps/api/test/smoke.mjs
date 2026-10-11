@@ -188,6 +188,32 @@ try {
   const completed = await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
   if (completed.payload?.data?.status !== 'completed') throw new Error('Valid order status transitions did not persist.');
   await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'pending' }) });
+
+  const expectedDeliveryDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const fulfillmentPath = `/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}/fulfillments`;
+  const shipment = await request(fulfillmentPath, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ stage: 'preparing', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Leave at reception' })
+  });
+  if (shipment.payload?.data?.stage !== 'preparing' || shipment.payload?.data?.carrier !== 'Smoke Courier') throw new Error('Shipment creation did not return the saved carrier and stage.');
+  const shipped = await request(`${fulfillmentPath}/${shipment.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ stage: 'shipped', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Parcel handed to courier' })
+  });
+  if (shipped.payload?.data?.stage !== 'shipped' || !shipped.payload?.data?.shippedAt) throw new Error('Shipment did not transition to shipped.');
+  const outForDelivery = await request(`${fulfillmentPath}/${shipment.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ stage: 'out_for_delivery', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Courier is on the way' })
+  });
+  if (outForDelivery.payload?.data?.stage !== 'out_for_delivery') throw new Error('Shipment did not transition to out for delivery.');
+  const delivered = await request(`${fulfillmentPath}/${shipment.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ stage: 'delivered', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Delivered to customer' })
+  });
+  if (delivered.payload?.data?.stage !== 'delivered' || !delivered.payload?.data?.deliveredAt) throw new Error('Shipment did not transition to delivered.');
+  const shipmentHistory = await request(fulfillmentPath, 200, { headers: authHeaders });
+  if (shipmentHistory.payload?.data?.fulfillments?.[0]?.id !== shipment.payload?.data?.id) throw new Error('Shipment history did not return the created shipment.');
+  checks.push('audited shipment creation, carrier tracking, delivery stages and history');
   const orders = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { headers: authHeaders });
   if (!orders.payload?.data?.some((item) => item.id === order.payload?.data?.id)) throw new Error('Created order did not appear in order listing.');
   checks.push('server-priced orders, snapshots, idempotency, audited status transitions and listing');
@@ -219,6 +245,8 @@ try {
 } finally {
   if (organizationId) {
     await pool.query('DELETE FROM order_items WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM fulfillments WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM payments WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM orders WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM customers WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM organizations WHERE id=$1', [organizationId]).catch(() => undefined);
