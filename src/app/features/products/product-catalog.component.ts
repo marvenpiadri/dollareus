@@ -32,6 +32,7 @@ export class ProductCatalogComponent {
   protected readonly imageUploadError = signal('');
   protected readonly imageUploadNote = signal('');
   protected readonly imageAltText = signal('');
+  protected readonly pendingProductImage = signal<File | null>(null);
   protected readonly imageMaxWidth = signal(1200);
   protected readonly imageMaxHeight = signal(1200);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
@@ -80,6 +81,7 @@ export class ProductCatalogComponent {
     this.productSaveError.set('');
     this.imageUploadError.set('');
     this.imageUploadNote.set('');
+    this.pendingProductImage.set(null);
     this.productEditorOpen.set(true);
   }
   protected editProduct(product: ProductRow): void {
@@ -88,6 +90,7 @@ export class ProductCatalogComponent {
     this.imageUploadError.set('');
     this.imageUploadNote.set('');
     this.imageAltText.set('');
+    this.pendingProductImage.set(null);
     this.productEditorOpen.set(true);
   }
   protected closeProductEditor(): void {
@@ -95,6 +98,21 @@ export class ProductCatalogComponent {
       this.productEditorOpen.set(false);
       this.editingProduct.set(null);
     }
+  }
+
+  protected selectProductImage(event: Event): void {
+    const inputElement = event.currentTarget as HTMLInputElement;
+    const file = inputElement.files?.[0] ?? null;
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      this.imageUploadError.set('Choose a JPEG, PNG or WebP image.'); inputElement.value = ''; return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      this.imageUploadError.set('The original image must be 25 MB or smaller.'); inputElement.value = ''; return;
+    }
+    this.imageUploadError.set('');
+    this.imageUploadNote.set('');
+    this.pendingProductImage.set(file);
   }
 
   protected async uploadProductImage(event: Event): Promise<void> {
@@ -187,16 +205,35 @@ export class ProductCatalogComponent {
           })
         });
       } else {
-        await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products', {
+        const variantId = crypto.randomUUID();
+        const created = await this.apiClient.request<{ id: string }>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products', {
           method: 'POST',
           body: JSON.stringify({
             storeId: this.storeId(), slug, name, description, status: 'draft', kind: 'physical',
             availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: values.getAll('categoryIds').map(String),
-            variants: [{ id: crypto.randomUUID(), sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
+            variants: [{ id: variantId, sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
           })
         });
+        const image = this.pendingProductImage();
+        if (image) {
+          const createdProduct: ProductRow = {
+            id: created.id, name, slug, description, category: '', categoryIds: values.getAll('categoryIds').map(String),
+            sku: sku || '—', variantId, priceMinor: Math.round(price * 100), currency: this.storeCurrency(),
+            stock: null, status: 'Draft', initials: name.slice(0, 2).toUpperCase(), tone: 'tone-1', imageUrl: null
+          };
+          this.editingProduct.set(createdProduct);
+          await this.uploadProductImage({ currentTarget: { files: [image], value: '' } } as unknown as Event);
+          if (this.imageUploadError()) {
+            this.productSaveError.set('Product saved, but its image could not be uploaded: ' + this.imageUploadError());
+            this.dataChanged.emit();
+            this.notifyRequested.emit('Draft product saved. Image upload needs attention.');
+            return;
+          }
+          this.pendingProductImage.set(null);
+        }
       }
       this.productEditorOpen.set(false); this.editingProduct.set(null);
+      this.pendingProductImage.set(null);
       this.dataChanged.emit();
       this.notifyRequested.emit(editing ? 'Product changes saved.' : 'Draft product saved to your catalog.');
     } catch (error) {
