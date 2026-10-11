@@ -31,7 +31,7 @@ export class PosWorkspaceComponent {
   readonly posCartTotalMinor = input(0);
   readonly posCartError = input('');
   readonly paymentMethod = input('cash');
-  readonly posOrders = input<OrderRow[]>([]);
+  readonly posOrders = input<any[]>([]);
 
   readonly createPosSessionRequested = output<Event>();
   readonly posSessionLabelChangeRequested = output<string>();
