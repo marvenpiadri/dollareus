@@ -232,7 +232,7 @@ export class AppComponent {
       this.orders.set((Array.isArray(orderRows) ? orderRows : []).map((order: any): OrderRow => ({
         id: '#' + String(order.orderNumber), resourceId: String(order.id), customer: String(order.customerEmail ?? 'Guest checkout'),
         channel: 'Online store', totalMinor: Number(order.totalMinor ?? 0), currency: String(order.currency ?? store.defaultCurrency ?? 'MAD'),
-        status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.paymentStatus ?? 'unpaid')
+        status: String(order.status ?? 'pending') as OrderRow['status'], paymentStatus: String(order.effectivePaymentStatus ?? order.paymentStatus ?? 'unpaid')
       })));
       this.customers.set((Array.isArray(customerRows) ? customerRows : []).map((customer: any): CustomerRow => ({
         id: String(customer.id), displayName: String(customer.displayName ?? [customer.firstName, customer.lastName].filter(Boolean).join(' ')),
