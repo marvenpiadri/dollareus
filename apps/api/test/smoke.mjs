@@ -583,8 +583,18 @@ try {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
   });
   if (storefront.payload?.data?.published !== true || storefront.payload?.data?.defaultExperience !== 'menu') throw new Error('Storefront publishing settings did not persist.');
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'unavailable' })
+  });
+  const hiddenUnavailableMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  if (hiddenUnavailableMenu.payload?.data?.some((item) => item.items?.some((dish) => dish.id === menuItem.payload?.data?.id))) throw new Error('Unavailable restaurant dishes must not appear on the public menu.');
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'limited' })
+  });
   const publicMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
-  if (!publicMenu.payload?.data?.some((item) => item.id === menu.payload?.data?.id && item.items?.some((dish) => dish.id === menuItem.payload?.data?.id && dish.modifierGroups?.some((group) => group.id === 'size')))) throw new Error('Published restaurant menu, item, or modifier groups were not publicly accessible.');
+  const publicDish = publicMenu.payload?.data?.flatMap((item) => item.items ?? []).find((dish) => dish.id === menuItem.payload?.data?.id);
+  if (!publicDish || publicDish.availability !== 'limited' || !publicDish.modifierGroups?.some((group) => group.id === 'size')) throw new Error('Published restaurant menu must expose limited-availability dishes and modifier groups, while excluding unavailable dishes.');
+  checks.push('public restaurant menu excludes unavailable dishes and preserves limited-availability status');
   const publicEntryPoint = await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 200);
   if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
   checks.push('storefront publishing, public restaurant menu access, and branded public QR destinations');
