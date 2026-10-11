@@ -196,6 +196,8 @@ try {
     body: JSON.stringify({ stage: 'preparing', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Leave at reception' })
   });
   if (shipment.payload?.data?.stage !== 'preparing' || shipment.payload?.data?.carrier !== 'Smoke Courier') throw new Error('Shipment creation did not return the saved carrier and stage.');
+  await request(`${fulfillmentPath}/${shipment.payload?.data?.id}`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ stage: 'delivered', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Invalid skipped stage' }) });
+  await request(fulfillmentPath, 400, { method: 'POST', headers: authHeaders, body: JSON.stringify({ stage: 'preparing', trackingUrl: 'javascript:alert(1)' }) });
   const shipped = await request(`${fulfillmentPath}/${shipment.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({ stage: 'shipped', carrier: 'Smoke Courier', trackingNumber: `TRACK-${suffix}`, trackingUrl: `https://example.test/track/${suffix}`, estimatedDeliveryDate: expectedDeliveryDate, notes: 'Parcel handed to courier' })
