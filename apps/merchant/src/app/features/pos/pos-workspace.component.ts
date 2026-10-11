@@ -15,7 +15,7 @@ export class PosWorkspaceComponent {
   readonly posBusy = input(false);
   readonly selectedPosSessionId = input('');
   readonly posSessions = input<any[]>([]);
-  readonly posSourceType = input('product');
+  readonly posSourceType = input<'product' | 'menu_item'>('product');
   readonly posVariantId = input('');
   readonly products = input<ProductRow[]>([]);
   readonly availablePosMenuItems = input<MenuItemRow[]>([]);
@@ -39,7 +39,7 @@ export class PosWorkspaceComponent {
   readonly selectedPosSessionIdChangeRequested = output<string>();
   readonly closePosSessionRequested = output<void>();
   readonly addPosCartItemRequested = output<Event>();
-  readonly posSourceTypeChangeRequested = output<string>();
+  readonly posSourceTypeChangeRequested = output<'product' | 'menu_item'>();
   readonly posVariantIdChangeRequested = output<string>();
   readonly togglePosModifierRequested = output<{ groupId: string; optionId: string; checked: boolean; maxSelections: number }>();
   readonly posQuantityChangeRequested = output<string>();
