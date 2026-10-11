@@ -1325,6 +1325,10 @@ app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string
     if (!paymentResult.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'PAYMENT_NOT_FOUND', 'The offline payment record does not exist for this order.'); }
     const previous = String(paymentResult.rows[0].status);
     const next = parsed.data.status;
+    if (next === 'succeeded' && ['cancelled', 'refunded'].includes(String(orderResult.rows[0].status))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_PAYABLE', 'A pending payment cannot be confirmed after its order has been cancelled or refunded.');
+    }
     if (previous !== 'pending') {
       await client.query('ROLLBACK');
       return fail(reply, request, 409, 'PAYMENT_ALREADY_FINAL', 'Only a pending offline payment can be confirmed or cancelled.');
