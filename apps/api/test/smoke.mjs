@@ -155,11 +155,18 @@ try {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ storeId, slug: `smoke-menu-${suffix}`, name: 'Smoke Menu', description: null, servicePeriods: ['lunch', 'dinner'], status: 'draft', position: 0 })
   });
+  const renamedMenu = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ name: 'Smoke Menu Updated', description: 'Updated menu description', servicePeriods: ['lunch', 'dinner'] })
+  });
+  if (renamedMenu.payload?.data?.name !== 'Smoke Menu Updated' || renamedMenu.payload?.data?.description !== 'Updated menu description' || !renamedMenu.payload?.data?.servicePeriods?.includes('dinner')) throw new Error('Restaurant menu edits did not persist.');
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}`, 403, {
+    method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ name: 'Unauthorized menu edit' })
+  });
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 403, {
     method: 'PATCH', headers: viewerHeaders,
     body: JSON.stringify({ status: 'active' })
   });
-  checks.push('viewer role cannot publish restaurant menus');
+  checks.push('manager-only restaurant menu editing and publishing');
   const menuItem = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, modifierGroups: [{ id: 'size', name: 'Size', required: true, minSelections: 1, maxSelections: 1, options: [{ id: 'small', name: 'Small', priceDeltaMinor: 0 }, { id: 'large', name: 'Large', priceDeltaMinor: 500 }] }], metadata: {} })
