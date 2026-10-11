@@ -64,6 +64,11 @@ async function requireMembership(request: FastifyRequest, reply: FastifyReply, o
 }
 
 async function requireManagerRole(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
+  if (request.apiCredential) {
+    if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
+    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
+    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+  }
   if (!request.identity) {
     await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
     return false;
