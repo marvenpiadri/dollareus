@@ -925,6 +925,238 @@ app.patch<{ Params: { organizationId: string; orderId: string; fulfillmentId: st
 });
 
 
+const PosSessionInput = z.object({
+  label: z.string().trim().min(1).max(120),
+  terminalType: z.enum(['retail', 'restaurant', 'service', 'general']),
+  locationId: z.string().min(1).max(100).nullable().optional()
+}).strict();
+
+const PosOrderInput = z.object({
+  sessionId: z.string().min(1).max(100),
+  channel: z.enum(['pos', 'qr']).default('pos'),
+  fulfillment: z.enum(['counter', 'takeaway', 'dine_in', 'delivery', 'service']),
+  tableLabel: z.string().trim().max(120).nullable().optional(),
+  customerNote: z.string().trim().max(1000).nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
+  items: z.array(z.object({
+    sourceType: z.enum(['product', 'menu_item', 'service']),
+    sourceItemId: z.string().min(1).max(100),
+    sourceVariantId: z.string().min(1).max(100).nullable().optional(),
+    quantity: z.number().int().min(1).max(10000),
+    metadata: z.record(z.string(), z.unknown()).optional()
+  }).strict()).min(1).max(100)
+}).strict();
+
+const PosOrderStatusInput = z.object({
+  status: z.enum(['confirmed', 'preparing', 'ready', 'completed', 'cancelled'])
+}).strict();
+
+async function requirePosOperator(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
+  if (!await requireMembership(request, reply, organizationId)) return false;
+  const membership = await pool.query(
+    'SELECT role FROM organization_memberships WHERE organization_id=$1 AND user_id=$2 AND status=$3',
+    [organizationId, request.identity!.uid, 'active']
+  );
+  if (!['owner', 'admin', 'manager', 'staff'].includes(String(membership.rows[0]?.role ?? ''))) {
+    fail(reply, request, 403, 'POS_PERMISSION_DENIED', 'Only organization owners, admins, managers, or staff can operate POS.');
+    return false;
+  }
+  return true;
+}
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist in this organization.');
+  const result = await pool.query(
+    'SELECT * FROM pos_sessions WHERE organization_id=$1 AND store_id=$2 ORDER BY created_at DESC LIMIT 100',
+    [organizationId, storeId]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requirePosOperator(request, reply, organizationId)) return;
+  const parsed = PosSessionInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a terminal label and supported terminal type.');
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist in this organization.');
+  if (parsed.data.locationId) {
+    const location = await pool.query('SELECT id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND (store_id=$3 OR store_id IS NULL) AND status=$4', [parsed.data.locationId, organizationId, storeId, 'active']);
+    if (!location.rowCount) return fail(reply, request, 400, 'INVALID_POS_LOCATION', 'The selected inventory location is not active in this store.');
+  }
+  const now = new Date();
+  const result = await pool.query(
+    'INSERT INTO pos_sessions (id,organization_id,store_id,label,terminal_type,location_id,status,opened_by,closed_by,opened_at,closed_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,NULL,$9,$9) RETURNING *',
+    [randomUUID(), organizationId, storeId, parsed.data.label, parsed.data.terminalType, parsed.data.locationId ?? null, 'open', request.identity!.uid, now]
+  );
+  await pool.query(
+    'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+    [randomUUID(), organizationId, request.identity!.uid, 'pos.session_opened', 'pos_session', result.rows[0].id, request.id, JSON.stringify({ storeId, terminalType: parsed.data.terminalType }), now]
+  );
+  return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+});
+
+app.patch<{ Params: { organizationId: string; storeId: string; sessionId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/sessions/:sessionId/close', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId, sessionId } = request.params;
+  if (!await requirePosOperator(request, reply, organizationId)) return;
+  const now = new Date();
+  const result = await pool.query(
+    "UPDATE pos_sessions SET status='closed',closed_by=$1,closed_at=$2,updated_at=$2 WHERE id=$3 AND organization_id=$4 AND store_id=$5 AND status='open' RETURNING *",
+    [request.identity!.uid, now, sessionId, organizationId, storeId]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'OPEN_POS_SESSION_NOT_FOUND', 'The open POS session does not exist in this store.');
+  await pool.query(
+    'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+    [randomUUID(), organizationId, request.identity!.uid, 'pos.session_closed', 'pos_session', sessionId, request.id, JSON.stringify({ storeId }), now]
+  );
+  return { data: camelize(result.rows[0]), requestId: request.id };
+});
+
+const posOrderProjection = `SELECT o.*,
+  COALESCE((SELECT jsonb_agg(jsonb_build_object(
+    'id',l.id,'sourceType',l.source_type,'sourceItemId',l.source_item_id,
+    'sourceVariantId',l.source_variant_id,'sourceMenuId',l.source_menu_id,
+    'name',l.name_snapshot,'quantity',l.quantity,'unitAmountMinor',l.unit_amount_minor,
+    'lineTotalMinor',l.line_total_minor,'currency',l.currency,'metadata',l.metadata_snapshot
+  ) ORDER BY l.created_at,l.id) FROM pos_order_lines l WHERE l.order_id=o.id AND l.organization_id=o.organization_id), '[]'::jsonb) AS items
+  FROM pos_orders o`;
+
+app.get<{ Params: { organizationId: string; storeId: string } }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/orders', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const store = await pool.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist in this organization.');
+  const result = await pool.query(posOrderProjection + ' WHERE o.organization_id=$1 AND o.store_id=$2 ORDER BY o.created_at DESC LIMIT 100', [organizationId, storeId]);
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/orders', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requirePosOperator(request, reply, organizationId)) return;
+  const parsed = PosOrderInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid POS session, fulfillment type, and at least one valid item.');
+  const duplicateKeys = parsed.data.items.map((item) => [item.sourceType, item.sourceItemId, item.sourceVariantId ?? ''].join(':'));
+  if (new Set(duplicateKeys).size !== duplicateKeys.length) return fail(reply, request, 400, 'DUPLICATE_POS_ITEMS', 'Combine duplicate items into a single line with a quantity.');
+  const client = await pool.connect();
+  const now = new Date();
+  const orderId = randomUUID();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [storeId]);
+    const store = await client.query('SELECT id,default_currency,business_type FROM stores WHERE id=$1 AND organization_id=$2 AND status IN ($3,$4) FOR SHARE', [storeId, organizationId, 'active', 'setup']);
+    if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist or is unavailable.'); }
+    const session = await client.query("SELECT id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3 AND status='open' FOR SHARE", [parsed.data.sessionId, organizationId, storeId]);
+    if (!session.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'POS_SESSION_CLOSED', 'Open a POS session for this store before creating an order.'); }
+    if (parsed.data.idempotencyKey) {
+      const existing = await client.query('SELECT id FROM pos_orders WHERE store_id=$1 AND idempotency_key=$2', [storeId, parsed.data.idempotencyKey]);
+      if (existing.rowCount) {
+        await client.query('COMMIT');
+        const prior = await pool.query(posOrderProjection + ' WHERE o.id=$1 AND o.organization_id=$2 AND o.store_id=$3', [existing.rows[0].id, organizationId, storeId]);
+        return { data: camelize(prior.rows[0]), requestId: request.id };
+      }
+    }
+    const currency = String(store.rows[0].default_currency).trim();
+    const lines: Array<{ sourceType: string; sourceItemId: string; sourceVariantId: string | null; sourceMenuId: string | null; name: string; quantity: number; unitAmount: number; total: number; metadata: Record<string, unknown> }> = [];
+    let subtotal = 0;
+    for (const item of parsed.data.items) {
+      let source: any;
+      if (item.sourceType === 'menu_item') {
+        source = (await client.query(
+          "SELECT i.id,i.menu_id,i.name,i.price_amount_minor AS amount_minor,i.currency,i.status,i.availability,m.status AS menu_status FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id WHERE i.id=$1 AND i.organization_id=$2 AND i.store_id=$3 FOR SHARE OF i,m",
+          [item.sourceItemId, organizationId, storeId]
+        )).rows[0];
+        if (!source || source.status !== 'active' || source.availability === 'unavailable' || source.menu_status !== 'active') {
+          await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_ITEM', 'Every menu item must belong to this store and be active and available.');
+        }
+      } else {
+        if (!item.sourceVariantId) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_VARIANT_REQUIRED', 'Product and service lines require an active variant.'); }
+        source = (await client.query(
+          "SELECT p.id,p.name,p.kind,p.status AS product_status,p.store_id,v.id AS variant_id,v.title AS variant_title,v.price_amount_minor AS amount_minor,v.currency,v.status AS variant_status,v.options FROM products p JOIN product_variants v ON v.product_id=p.id AND v.organization_id=p.organization_id WHERE p.id=$1 AND v.id=$2 AND p.organization_id=$3 AND p.store_id=$4 FOR SHARE OF p,v",
+          [item.sourceItemId, item.sourceVariantId, organizationId, storeId]
+        )).rows[0];
+        const expectedKind = item.sourceType === 'service' ? 'service' : undefined;
+        if (!source || source.product_status !== 'active' || source.variant_status !== 'active' || (expectedKind ? source.kind !== expectedKind : source.kind === 'service')) {
+          await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_POS_ITEM', 'Every product or service line must reference an active variant of the expected type in this store.');
+        }
+      }
+      const unitAmount = Number(source.amount_minor);
+      const lineTotal = unitAmount * item.quantity;
+      if (!Number.isSafeInteger(unitAmount) || !Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(subtotal + lineTotal)) {
+        await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_AMOUNT_TOO_LARGE', 'The POS order exceeds the supported amount.');
+      }
+      if (String(source.currency).trim() !== currency) {
+        await client.query('ROLLBACK'); return fail(reply, request, 400, 'POS_CURRENCY_MISMATCH', 'Every POS item must use the store currency.');
+      }
+      subtotal += lineTotal;
+      lines.push({
+        sourceType: item.sourceType, sourceItemId: item.sourceItemId,
+        sourceVariantId: item.sourceVariantId ?? null,
+        sourceMenuId: item.sourceType === 'menu_item' ? String(source.menu_id) : null,
+        name: item.sourceType === 'menu_item' ? String(source.name) : String(source.name) + (source.variant_title ? ' · ' + source.variant_title : ''),
+        quantity: item.quantity, unitAmount, total: lineTotal, metadata: item.metadata ?? {}
+      });
+    }
+    const numberResult = await client.query('SELECT COALESCE(MAX(order_number),0)+1 AS order_number FROM pos_orders WHERE store_id=$1', [storeId]);
+    const orderNumber = Number(numberResult.rows[0].order_number);
+    const history = [{ status: 'confirmed', actorUserId: request.identity!.uid, at: now.toISOString() }];
+    await client.query(
+      'INSERT INTO pos_orders (id,organization_id,store_id,session_id,order_number,status,channel,fulfillment,table_label,customer_note,currency,subtotal_minor,tax_minor,discount_minor,total_minor,created_by,status_history,idempotency_key,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,$12,$13,$14::jsonb,$15,$16,$16)',
+      [orderId, organizationId, storeId, parsed.data.sessionId, orderNumber, 'confirmed', parsed.data.channel, parsed.data.fulfillment, parsed.data.tableLabel ?? null, parsed.data.customerNote ?? null, currency, subtotal, request.identity!.uid, JSON.stringify(history), parsed.data.idempotencyKey ?? null, now]
+    );
+    for (const line of lines) {
+      await client.query(
+        'INSERT INTO pos_order_lines (id,organization_id,order_id,source_type,source_item_id,source_variant_id,source_menu_id,name_snapshot,quantity,unit_amount_minor,line_total_minor,currency,metadata_snapshot,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14)',
+        [randomUUID(), organizationId, orderId, line.sourceType, line.sourceItemId, line.sourceVariantId, line.sourceMenuId, line.name, line.quantity, line.unitAmount, line.total, currency, JSON.stringify(line.metadata), now]
+      );
+    }
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'pos.order_created', 'pos_order', orderId, request.id, JSON.stringify({ storeId, sessionId: parsed.data.sessionId, channel: parsed.data.channel, fulfillment: parsed.data.fulfillment, totalMinor: subtotal }), now]
+    );
+    await client.query('COMMIT');
+    const result = await pool.query(posOrderProjection + ' WHERE o.id=$1 AND o.organization_id=$2 AND o.store_id=$3', [orderId, organizationId, storeId]);
+    return reply.code(201).send({ data: camelize(result.rows[0]), requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'POS_ORDER_CONFLICT', 'The POS order or idempotency key already exists.');
+    throw error;
+  } finally { client.release(); }
+});
+
+app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/pos/orders/:orderId/status', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, storeId, orderId } = request.params;
+  if (!await requirePosOperator(request, reply, organizationId)) return;
+  const parsed = PosOrderStatusInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a supported POS order status.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query('SELECT * FROM pos_orders WHERE id=$1 AND organization_id=$2 AND store_id=$3 FOR UPDATE', [orderId, organizationId, storeId]);
+    if (!result.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'POS_ORDER_NOT_FOUND', 'The POS order does not exist in this store.'); }
+    const current = String(result.rows[0].status);
+    const next = parsed.data.status;
+    const allowed: Record<string, string[]> = { confirmed: ['preparing', 'cancelled'], preparing: ['ready', 'cancelled'], ready: ['completed', 'cancelled'], completed: [], cancelled: [] };
+    if (!allowed[current]?.includes(next)) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'INVALID_POS_STATUS_TRANSITION', 'The requested POS order status transition is not allowed.'); }
+    const history = Array.isArray(result.rows[0].status_history) ? result.rows[0].status_history : [];
+    history.push({ status: next, actorUserId: request.identity!.uid, at: now.toISOString() });
+    const updated = await client.query('UPDATE pos_orders SET status=$1,status_history=$2::jsonb,updated_at=$3 WHERE id=$4 AND organization_id=$5 AND store_id=$6 RETURNING id', [next, JSON.stringify(history), now, orderId, organizationId, storeId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'pos.order_status_changed', 'pos_order', orderId, request.id, JSON.stringify({ from: current, to: next }), now]
+    );
+    await client.query('COMMIT');
+    const order = await pool.query(posOrderProjection + ' WHERE o.id=$1 AND o.organization_id=$2 AND o.store_id=$3', [updated.rows[0].id, organizationId, storeId]);
+    return { data: camelize(order.rows[0]), requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
 const RefundInput = z.object({
   paymentId: z.string().trim().min(1).max(100),
   amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
