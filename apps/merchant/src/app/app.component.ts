@@ -11,7 +11,7 @@ interface OrderRow { id: string; resourceId: string; customer: string; channel: 
 interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
 interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; }
+interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; metadata?: Record<string, unknown>; }
 interface EntryPointRow { id: string; storeId: string; type: 'direct-link' | 'qr' | 'embed'; targetPath: '/' | '/menu' | '/catalog' | '/services'; targetUrl?: string | null; targetUrlPath?: string; status: 'active' | 'disabled'; branding: { brandName?: string | null; foregroundColor?: string; backgroundColor?: string; accentColor?: string; logoUrl?: string | null; frame?: 'none' | 'bottom-label' | 'top-label'; label?: string | null }; }
 interface InventoryRow { locationId: string; locationName: string; storeId: string | null; variantId: string | null; variantTitle: string | null; productName: string | null; quantityOnHand: number | null; quantityReserved: number | null; reorderPoint: number | null; }
 type FulfillmentStage = 'preparing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'delivery_failed' | 'returned' | 'cancelled';
@@ -195,9 +195,18 @@ interface ShipmentDetails { id: string; orderId: string; stage: FulfillmentStage
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Add item'}}</button>
                 </form>
                 <div class="table-wrap"><table><thead><tr><th>ITEM</th><th>PRICE</th><th>CATEGORY</th><th>DIETARY / ALLERGENS</th><th>AVAILABILITY</th><th>STATUS</th></tr></thead><tbody>
-                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td>{{categoryName(item.categoryId)}}</td><td><div>{{(item.dietaryLabels || []).join(', ') || '—'}}</div><small class="muted">{{(item.allergens || []).length ? 'Contains: ' + (item.allergens || []).join(', ') : 'No allergens listed'}}</small></td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></td></tr>}
+                  @for(item of selectedMenuItems();track item.id){<tr><td><b>{{item.name}}</b><div class="muted">{{item.slug}}</div></td><td>{{money(item.priceAmountMinor,item.currency)}}</td><td>{{categoryName(item.categoryId)}}</td><td><div>{{(item.dietaryLabels || []).join(', ') || '—'}}</div><small class="muted">{{(item.allergens || []).length ? 'Contains: ' + (item.allergens || []).join(', ') : 'No allergens listed'}}</small></td><td><select [value]="item.availability" [attr.aria-label]="'Availability for '+item.name" (change)="setMenuItemAvailability(item,$any($event.target).value)"><option value="available">Available</option><option value="limited">Limited</option><option value="unavailable">Unavailable</option></select></td><td><div class="product-actions"><button class="button secondary small" type="button" (click)="editingMenuItem.set(item)">Edit details</button><button class="button small" type="button" (click)="setMenuItemStatus(item,item.status === 'active' ? 'draft' : 'active')">{{item.status === 'active' ? 'Unpublish' : 'Publish'}}</button></div></td></tr>}
                   @if(selectedMenuItems().length === 0){<tr><td colspan="6" class="empty-state">No items yet. Add an item using the form above.</td></tr>}
                 </tbody></table></div>
+                @if(editingMenuItem()){
+                  <div class="panel-heading"><div><h2>Edit menu item details</h2><p>{{editingMenuItem()?.name}} · allergens and dietary labels should reflect the recipe and preparation process.</p></div><button type="button" (click)="editingMenuItem.set(null)">Cancel</button></div>
+                  <form class="customer-form" (submit)="saveMenuItemDetails($event)">
+                    <label>Category<select name="categoryId" [value]="editingMenuItem()?.categoryId || ''"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
+                    <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" [value]="(editingMenuItem()?.allergens || []).join(', ')" placeholder="milk, sesame, nuts"></label>
+                    <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" [value]="(editingMenuItem()?.dietaryLabels || []).join(', ')" placeholder="vegetarian, vegan, gluten-free"></label>
+                    <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save item details'}}</button>
+                  </form>
+                }
               }
             </section>
           }
@@ -483,6 +492,7 @@ export class AppComponent {
   protected readonly menus = signal<MenuRow[]>([]);
   protected readonly menuItems = signal<MenuItemRow[]>([]);
   protected readonly selectedMenuId = signal('');
+  protected readonly editingMenuItem = signal<MenuItemRow | null>(null);
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
   protected readonly entryPoints = signal<EntryPointRow[]>([]);
@@ -1080,6 +1090,25 @@ export class AppComponent {
       });
       await this.loadWorkspace(); form.reset(); this.notify('Menu item saved as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
+    finally { this.menuBusy.set(false); }
+  }
+  protected async saveMenuItemDetails(event: Event): Promise<void> {
+    event.preventDefault();
+    const item = this.editingMenuItem();
+    if (!item) return;
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const categoryId = String(values.get('categoryId') ?? '').trim() || null;
+    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    this.menuBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiRequest('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id), {
+        method: 'PATCH', body: JSON.stringify({ categoryId, allergens, dietaryLabels })
+      });
+      this.editingMenuItem.set(null);
+      await this.loadWorkspace();
+      this.notify('Menu item details updated.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu item details.'); }
     finally { this.menuBusy.set(false); }
   }
   protected async setMenuStatus(menu: MenuRow, status: 'draft' | 'active'): Promise<void> {
