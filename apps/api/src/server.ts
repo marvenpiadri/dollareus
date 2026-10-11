@@ -892,7 +892,8 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
   const row = result.rows[0];
   const targetUrlPath = row.target_path === '/' ? '/' + row.store_slug : '/' + row.store_slug + row.target_path;
   const primaryDomain = await pool.query("SELECT hostname FROM store_domains WHERE store_id=(SELECT store_id FROM entry_points WHERE id=$1) AND status='active' AND is_primary=true LIMIT 1", [row.id]);
-  const configuredBase = (process.env.PUBLIC_STOREFRONT_BASE_URL ?? '').trim().replace(/\/$/, '');
+  const configuredBaseValue = (process.env.PUBLIC_STOREFRONT_BASE_URL ?? '').trim();
+  const configuredBase = configuredBaseValue.endsWith('/') ? configuredBaseValue.slice(0, -1) : configuredBaseValue;
   const subdomainBase = process.env.PUBLIC_STORE_DOMAIN ? 'https://' + row.store_slug + '.' + process.env.PUBLIC_STORE_DOMAIN : '';
   const targetUrl = primaryDomain.rows[0]?.hostname
     ? 'https://' + primaryDomain.rows[0].hostname + (row.target_path === '/' ? '' : row.target_path)
