@@ -29,6 +29,7 @@ export class PosWorkspaceComponent {
   protected readonly posCart = signal<PosCartLine[]>([]);
   protected readonly posQuantity = signal('1');
   protected readonly posFulfillment = signal('counter');
+  protected readonly posTableLabel = signal('');
   protected readonly posCustomerNote = signal('');
   protected readonly posBusy = signal(false);
   protected readonly posSaveBusy = signal(false);
@@ -181,6 +182,7 @@ export class PosWorkspaceComponent {
         method: 'POST',
         body: JSON.stringify({
           sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
+          tableLabel: this.posFulfillment() === 'dine_in' ? this.posTableLabel().trim() || null : null,
           customerNote: this.posCustomerNote().trim() || null,
           idempotencyKey: this.posOrderIdempotencyKey,
           items: this.posCart().map(line => ({
@@ -194,7 +196,7 @@ export class PosWorkspaceComponent {
       this.posOrders.set(Array.isArray(rows) ? rows : []);
       this.dataChanged.emit();
       this.posOrderIdempotencyKey = '';
-      this.posQuantity.set('1'); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
+      this.posQuantity.set('1'); this.posTableLabel.set(''); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
       this.notifyRequested.emit('POS order created with server-calculated pricing.');
     } catch (error) {
       this.posError.set(error instanceof Error ? error.message : 'Could not create this POS order.');
