@@ -367,6 +367,21 @@ try {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' })
   });
   checks.push('restaurant menu items can be sold through POS');
+  const posMultiModifierOrder = await request(`${posBase}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
+      idempotencyKey: `smoke-pos-multi-modifier-${suffix}`,
+      items: [
+        { sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1, metadata: { modifiers: [{ groupId: 'size', optionIds: ['small'] }] } },
+        { sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1, metadata: { modifiers: [{ groupId: 'size', optionIds: ['large'] }] } }
+      ]
+    })
+  });
+  if (Number(posMultiModifierOrder.payload?.data?.totalMinor) !== 9500 || posMultiModifierOrder.payload?.data?.items?.length !== 2) throw new Error('POS could not create a multi-line ticket with different modifier selections for the same menu item.');
+  await request(`${posBase}/orders/${posMultiModifierOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
+  checks.push('POS supports multi-line tickets and separate modifier selections');
+
   const posReplay = await request(`${posBase}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
   if (posReplay.payload?.data?.id !== posOrder.payload?.data?.id) throw new Error('POS idempotency did not return the original order.');
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
