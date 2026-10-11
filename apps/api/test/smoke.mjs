@@ -432,12 +432,15 @@ try {
   const posRaceOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({
-      ...posPayload,
-      idempotencyKey: `smoke-pos-race-${suffix}`
+      sessionId: posSession.payload?.data?.id, channel: 'pos', fulfillment: 'takeaway',
+      idempotencyKey: `smoke-pos-race-${suffix}`,
+      items: [{ sourceType: 'menu_item', sourceItemId: menuItem.payload?.data?.id, quantity: 1, metadata: { modifiers: [{ groupId: 'size', optionIds: ['large'] }] } }]
     })
   });
   const racePath = `${posBase}/orders/${posRaceOrder.payload?.data?.id}/status`;
-  const competingTransitions = await Promise.all(['preparing', 'cancelled'].map(async (status) => {
+  await request(racePath, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'preparing' }) });
+  await request(racePath, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
+  const competingTransitions = await Promise.all(['completed', 'cancelled'].map(async (status) => {
     const response = await fetch(new URL(racePath, baseUrl), {
       method: 'PATCH',
       headers: authHeaders,
@@ -450,15 +453,15 @@ try {
   }));
   const transitionCodes = competingTransitions.map((result) => result.statusCode).sort((a, b) => a - b);
   if (transitionCodes[0] !== 200 || transitionCodes[1] !== 409) {
-    throw new Error(`Concurrent POS status changes should accept one transition and reject the stale one; received HTTP ${transitionCodes.join(', ')}.`);
+    throw new Error(`Concurrent POS terminal status changes should accept one transition and reject the stale one; received HTTP ${transitionCodes.join(', ')}.`);
   }
   const winningTransition = competingTransitions.find((result) => result.statusCode === 200)?.requestedStatus;
-  const reconciledRaceOrder = await request(`${posBase}/orders`, 200, { headers: authHeaders });
-  const raceOrderSnapshot = reconciledRaceOrder.payload?.data?.find((order) => order.id === posRaceOrder.payload?.data?.id);
-  if (raceOrderSnapshot?.status !== winningTransition || !Array.isArray(raceOrderSnapshot?.statusHistory) || raceOrderSnapshot.statusHistory.length !== 2) {
-    throw new Error('Concurrent POS status changes did not preserve one winning transition and one status-history entry.');
+  const reconciledRaceOrders = await request(`${posBase}/orders`, 200, { headers: authHeaders });
+  const raceOrderSnapshot = reconciledRaceOrders.payload?.data?.find((order) => order.id === posRaceOrder.payload?.data?.id);
+  if (raceOrderSnapshot?.status !== winningTransition || !Array.isArray(raceOrderSnapshot?.statusHistory) || raceOrderSnapshot.statusHistory.length !== 4) {
+    throw new Error('Concurrent POS terminal status changes did not preserve one winning transition and a single appended history entry.');
   }
-  checks.push('concurrent POS status changes serialize and reject stale transitions');
+  checks.push('concurrent POS terminal status changes serialize and reject stale transitions');
 
   const posOversellOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
