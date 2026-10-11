@@ -1048,8 +1048,6 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
     const store = await client.query('SELECT id,default_currency,business_type FROM stores WHERE id=$1 AND organization_id=$2 AND status IN ($3,$4) FOR SHARE', [storeId, organizationId, 'active', 'setup']);
     if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist or is unavailable.'); }
-    const session = await client.query("SELECT id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3 AND status='open' FOR SHARE", [parsed.data.sessionId, organizationId, storeId]);
-    if (!session.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'POS_SESSION_CLOSED', 'Open a POS session for this store before creating an order.'); }
     if (parsed.data.idempotencyKey) {
       const existing = await client.query('SELECT id FROM pos_orders WHERE store_id=$1 AND idempotency_key=$2', [storeId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
@@ -1058,6 +1056,8 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
         return { data: camelize(prior.rows[0]), requestId: request.id };
       }
     }
+    const session = await client.query("SELECT id FROM pos_sessions WHERE id=$1 AND organization_id=$2 AND store_id=$3 AND status='open' FOR SHARE", [parsed.data.sessionId, organizationId, storeId]);
+    if (!session.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'POS_SESSION_CLOSED', 'Open a POS session for this store before creating an order.'); }
     const currency = String(store.rows[0].default_currency).trim();
     const lines: Array<{ sourceType: string; sourceItemId: string; sourceVariantId: string | null; sourceMenuId: string | null; productId: string | null; sku: string | null; variantTitle: string; options: Record<string, unknown>; name: string; quantity: number; unitAmount: number; total: number; metadata: Record<string, unknown> }> = [];
     let subtotal = 0;
