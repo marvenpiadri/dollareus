@@ -613,7 +613,8 @@ try {
   const publicMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
   const publicDish = publicMenu.payload?.data?.flatMap((item) => item.items ?? []).find((dish) => dish.id === menuItem.payload?.data?.id);
   if (!publicDish || publicDish.availability !== 'limited' || !publicDish.modifierGroups?.some((group) => group.id === 'size')) throw new Error('Published restaurant menu must expose limited-availability dishes and modifier groups, while excluding unavailable dishes.');
-  checks.push('public restaurant menu excludes unavailable dishes and preserves limited-availability status');
+  if (publicDish.categoryName !== category.payload?.data?.name || !publicDish.allergens?.includes('milk') || !publicDish.dietaryLabels?.includes('vegetarian')) throw new Error('Public restaurant menu must include the assigned category name, allergen information, and dietary labels for customer display.');
+  checks.push('public restaurant menu exposes dish category, allergens, dietary labels, modifiers, and availability');
   const publicEntryPoint = await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 200);
   if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
   checks.push('storefront publishing, public restaurant menu access, and branded public QR destinations');
