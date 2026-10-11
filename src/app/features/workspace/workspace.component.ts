@@ -9,6 +9,7 @@ import { ProductCatalogComponent } from '../products/product-catalog.component';
 import { PosWorkspaceComponent } from '../pos/pos-workspace.component';
 import { QrManagementComponent } from '../qr-studio/qr-management.component';
 import { ApiCredentialsComponent } from '../developer-api/api-credentials.component';
+import { WorkspaceShellComponent } from '../../layout/workspace-shell/workspace-shell.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -21,7 +22,7 @@ import { ProductStatus, ProductRow, OrderRow, CustomerRow, CategoryRow, MenuRow,
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent, WorkspaceShellComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
