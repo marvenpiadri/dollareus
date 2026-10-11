@@ -296,6 +296,14 @@ try {
       variants: [{ id: `order-variant-${suffix}`, sku: `ORDER-${suffix}`, title: 'Standard', options: {}, amountMinor: 1299, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }]
     })
   });
+  await request(`/api/v1/organizations/${organizationId}/products/${activeProduct.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ categoryIds: [category.payload?.data?.id] })
+  });
+  const categorizedProducts = await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: authHeaders });
+  const categorizedProduct = categorizedProducts.payload?.data?.find((item) => item.id === activeProduct.payload?.data?.id);
+  if (!categorizedProduct?.categoryIds?.includes(category.payload?.data?.id)) throw new Error('Product category assignment did not persist.');
+  checks.push('product category assignment and tenant/store validation');
   const posBase = `/api/v1/organizations/${organizationId}/stores/${storeId}/pos`;
   const posSession = await request(`${posBase}/sessions`, 201, {
     method: 'POST', headers: authHeaders,
