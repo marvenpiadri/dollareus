@@ -171,6 +171,39 @@ try {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ slug: `smoke-dish-${suffix}`, name: 'Smoke Dish', description: null, priceAmountMinor: 4500, currency: 'MAD', status: 'active', categoryId: null, allergens: [], dietaryLabels: ['vegetarian'], availability: 'available', position: 0, modifierGroups: [{ id: 'size', name: 'Size', required: true, minSelections: 1, maxSelections: 1, options: [{ id: 'small', name: 'Small', priceDeltaMinor: 0 }, { id: 'large', name: 'Large', priceDeltaMinor: 500 }] }], metadata: {} })
   });
+  const menuItemPath = `/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`;
+  const invalidModifierCases = [
+    {
+      name: 'required modifier with zero minimum',
+      modifierGroups: [{ id: 'required-zero', name: 'Required', required: true, minSelections: 0, maxSelections: 1, options: [{ id: 'one', name: 'One', priceDeltaMinor: 0 }] }]
+    },
+    {
+      name: 'minimum modifier selection above maximum',
+      modifierGroups: [{ id: 'invalid-bounds', name: 'Invalid bounds', required: false, minSelections: 2, maxSelections: 1, options: [{ id: 'one', name: 'One', priceDeltaMinor: 0 }, { id: 'two', name: 'Two', priceDeltaMinor: 0 }] }]
+    },
+    {
+      name: 'duplicate modifier group IDs',
+      modifierGroups: [
+        { id: 'duplicate', name: 'First group', required: false, minSelections: 0, maxSelections: 1, options: [{ id: 'one', name: 'One', priceDeltaMinor: 0 }] },
+        { id: 'duplicate', name: 'Second group', required: false, minSelections: 0, maxSelections: 1, options: [{ id: 'two', name: 'Two', priceDeltaMinor: 0 }] }
+      ]
+    },
+    {
+      name: 'duplicate option IDs within a group',
+      modifierGroups: [{ id: 'duplicate-options', name: 'Duplicate options', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'same', name: 'First', priceDeltaMinor: 0 }, { id: 'same', name: 'Second', priceDeltaMinor: 100 }] }]
+    }
+  ];
+  for (const [index, invalidCase] of invalidModifierCases.entries()) {
+    await request(menuItemPath, 400, {
+      method: 'POST', headers: authHeaders,
+      body: JSON.stringify({
+        slug: `invalid-modifier-${index}-${suffix}`, name: `Invalid modifier test ${index}`,
+        priceAmountMinor: 100, currency: 'MAD', status: 'draft', categoryId: null,
+        allergens: [], dietaryLabels: [], availability: 'available', modifierGroups: invalidCase.modifierGroups
+      })
+    });
+  }
+  checks.push('restaurant modifier validation rejects inconsistent selection bounds and duplicate IDs');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 403, {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ slug: `viewer-dish-${suffix}`, name: 'Viewer Dish', description: null, priceAmountMinor: 100, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 0, metadata: {} })
@@ -183,8 +216,15 @@ try {
   });
   const secondDish = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items`, 201, {
     method: 'POST', headers: authHeaders,
-    body: JSON.stringify({ slug: `smoke-dish-second-${suffix}`, name: 'Second Smoke Dish', description: null, priceAmountMinor: 3000, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 1, metadata: {} })
+    body: JSON.stringify({ slug: `smoke-dish-second-${suffix}`, name: 'Second Smoke Dish', description: null, priceAmountMinor: 3000, currency: 'MAD', status: 'draft', categoryId: null, allergens: [], dietaryLabels: [], availability: 'available', position: 1, modifierGroups: [{ id: 'extras', name: 'Optional extras', required: false, minSelections: 0, maxSelections: 2, options: [{ id: 'extra-sauce', name: 'Extra sauce', priceDeltaMinor: 200 }, { id: 'extra-cheese', name: 'Extra cheese', priceDeltaMinor: 350 }] }], metadata: {} })
   });
+  if (secondDish.payload?.data?.modifierGroups?.[0]?.required !== false
+      || secondDish.payload?.data?.modifierGroups?.[0]?.minSelections !== 0
+      || secondDish.payload?.data?.modifierGroups?.[0]?.maxSelections !== 2
+      || Number(secondDish.payload?.data?.modifierGroups?.[0]?.options?.[1]?.priceDeltaMinor) !== 350) {
+    throw new Error('Optional modifier bounds and price deltas did not persist.');
+  }
+  checks.push('optional restaurant modifiers preserve selection bounds and option price deltas');
   const reorderedItems = await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/reorder`, 200, {
     method: 'PUT', headers: authHeaders,
     body: JSON.stringify({ itemIds: [secondDish.payload?.data?.id, menuItem.payload?.data?.id] })
