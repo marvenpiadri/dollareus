@@ -37,10 +37,11 @@ Run these commands from the repository root:
 
 ```bash
 pnpm install
+pnpm db:status
 pnpm db:migrate
 ```
 
-The migration runner applies files in `apps/api/db/migrations/` in filename order and records each applied migration and SHA-256 checksum in `public.schema_migrations`. Each migration and its history record are committed in the same transaction. A PostgreSQL advisory lock prevents two deployments from applying migrations concurrently. `pnpm db:setup` is retained as an alias for `pnpm db:migrate`.
+`pnpm db:status` is read-only: it reports whether migration history exists, which migrations are pending, and whether applied migration checksums match the repository. It does not print connection credentials. The migration runner applies files in `apps/api/db/migrations/` in filename order and records each applied migration and SHA-256 checksum in `public.schema_migrations`. Each migration and its history record are committed in the same transaction. A PostgreSQL advisory lock prevents two deployments from applying migrations concurrently. `pnpm db:setup` is retained as an alias for `pnpm db:migrate`.
 
 ## 4. Verify the tables in Neon
 
