@@ -124,7 +124,7 @@ export class WorkspaceDataService {
         categoryId: typeof item.categoryId === 'string' ? item.categoryId : null,
         allergens: Array.isArray(item.allergens) ? item.allergens.map(String) : [],
         dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
-        modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
+        modifierGroups: Array.isArray(item.metadata?.['modifierGroups']) ? item.metadata?.['modifierGroups'] as MenuModifierGroup[] : []
       }))
     );
 
