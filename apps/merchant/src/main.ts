@@ -1,3 +1,5 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app.component';
-bootstrapApplication(AppComponent).catch((error: unknown) => console.error('Dollareus failed to start', error));
+import { appConfig } from './app/app.config';
+
+bootstrapApplication(AppComponent, appConfig).catch((error: unknown) => console.error('Dollareus failed to start', error));
