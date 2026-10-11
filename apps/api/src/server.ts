@@ -325,6 +325,7 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>
 app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/products', { preHandler: authenticate }, async (request, reply) => {
   const organizationId = request.params.organizationId;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = ProductInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The product payload is invalid.');
   const client = await pool.connect();
@@ -334,6 +335,12 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     await client.query('BEGIN');
     const store = await client.query('SELECT id FROM stores WHERE id=$1 AND organization_id=$2 FOR SHARE', [parsed.data.storeId, organizationId]);
     if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.'); }
+    if (parsed.data.categoryIds.length) {
+      const uniqueCategoryIds = [...new Set(parsed.data.categoryIds)];
+      if (uniqueCategoryIds.length !== parsed.data.categoryIds.length) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'DUPLICATE_CATEGORY', 'A product category may only be selected once.'); }
+      const validCategories = await client.query('SELECT id FROM categories WHERE organization_id=$1 AND store_id=$2 AND id=ANY($3::text[])', [organizationId, parsed.data.storeId, uniqueCategoryIds]);
+      if (validCategories.rowCount !== uniqueCategoryIds.length) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'INVALID_CATEGORY', 'Every product category must belong to the selected store.'); }
+    }
     await client.query('INSERT INTO products (id,organization_id,store_id,slug,name,description,status,kind,availability_status,availability_note,attributes,created_by,updated_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$12,$13,$13)', [productId, organizationId, parsed.data.storeId, parsed.data.slug, parsed.data.name, parsed.data.description, parsed.data.status, parsed.data.kind, parsed.data.availabilityStatus, parsed.data.availabilityNote, JSON.stringify(parsed.data.attributes), request.identity!.uid, now]);
     for (const variant of parsed.data.variants) {
       await client.query('INSERT INTO product_variants (id,organization_id,product_id,sku,title,options,price_amount_minor,currency,status,barcode,weight_grams,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12::jsonb,$13,$13)', [variant.id, organizationId, productId, variant.sku, variant.title, JSON.stringify(variant.options), variant.amountMinor, variant.currency, variant.status, variant.barcode, variant.weightGrams, JSON.stringify(variant.metadata), now]);
@@ -355,6 +362,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
 app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/products/:productId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, productId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = ProductPatchInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide at least one valid product field.');
   const client = await pool.connect();
