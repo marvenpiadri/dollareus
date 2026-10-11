@@ -138,9 +138,14 @@
             </section>
           }
           @if (activeNav() === 'Customers') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
-              @if(customerFormOpen()){<form class="customer-form" (submit)="createCustomer($event)"><label>Display name<input name="displayName" maxlength="180" placeholder="Customer name"></label><label>Email<input name="email" type="email" maxlength="254" placeholder="customer@example.com"></label><label>Phone<input name="phone" maxlength="80" placeholder="+212…"></label>@if(customerSaveError()){<p role="alert">{{customerSaveError()}}</p>}<button class="button primary" type="submit" [disabled]="customerSaveBusy()">{{customerSaveBusy()?'Saving…':'Save customer'}}</button></form>}
-              <div class="table-wrap"><table><thead><tr><th>CUSTOMER</th><th>EMAIL</th><th>PHONE</th></tr></thead><tbody>@for(customer of customers();track customer.id){<tr><td>{{customer.displayName || 'Unnamed customer'}}</td><td>{{customer.email || '—'}}</td><td>{{customer.phone || '—'}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No customer records yet. Add a customer to get started.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{customers().length}} customers</div></section>
+            <dlr-customer-management
+              [customers]="customers()"
+              [customerFormOpen]="customerFormOpen()"
+              [customerSaveBusy]="customerSaveBusy()"
+              [customerSaveError]="customerSaveError()"
+              (toggleRequested)="toggleCustomerForm()"
+              (createRequested)="createCustomer($event)"
+            />
           }
           @if (activeNav() === 'Menus') {
             <dlr-restaurant-menu-manager
@@ -152,11 +157,16 @@
             />
           }
           @if (activeNav() === 'Inventory') {
-            <section class="panel product-panel"><div class="panel-heading"><div><h2>Inventory</h2><p>Adjust stock by variant and location. Reserved quantities are protected.</p></div></div>
-              <form class="customer-form" (submit)="createInventoryLocation($event)"><label>New location<input name="name" required maxlength="180" placeholder="e.g. Main stockroom"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Add location'}}</button></form>
-              @if(inventoryError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{inventoryError()}}</p>}
-              <form class="customer-form" (submit)="createInventoryLevel($event)"><label>Location<select name="locationId" required><option value="">Choose a location</option>@for(location of locationOptions();track location.id){<option [value]="location.id">{{location.name}}</option>}</select></label><label>Product variant<select name="variantId" required><option value="">Choose a product</option>@for(product of products();track product.variantId){@if(product.variantId){<option [value]="product.variantId">{{product.name}} · {{product.sku}}</option>}}</select></label><label>Quantity on hand<input name="quantityOnHand" type="number" min="0" required value="0"></label><label>Reorder point<input name="reorderPoint" type="number" min="0" placeholder="Optional"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Set stock level'}}</button></form>
-              <div class="table-wrap"><table><thead><tr><th>LOCATION</th><th>PRODUCT</th><th>ON HAND</th><th>RESERVED</th><th>REORDER</th><th>ADJUST STOCK</th></tr></thead><tbody>@for(item of inventory();track item.locationId + ':' + (item.variantId || 'empty')){<tr><td>{{item.locationName}}</td><td>{{item.productName || 'No stock assigned'}}</td><td>{{item.quantityOnHand ?? '—'}}</td><td>{{item.quantityReserved ?? '—'}}</td><td>{{item.reorderPoint ?? '—'}}</td><td>@if(item.variantId){<form class="inline-adjust" (submit)="adjustInventory($event,item)"><input name="quantityOnHand" type="number" min="0" required [value]="item.quantityOnHand ?? 0" aria-label="New on-hand quantity"><input name="reorderPoint" type="number" min="0" [value]="item.reorderPoint ?? ''" aria-label="Reorder point" placeholder="Reorder"><button type="submit" aria-label="Save stock adjustment">Save</button></form>} @else {<span class="muted">Add a variant first</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">Create a stock location to start tracking inventory.</td></tr>}</tbody></table></div><div class="panel-footer">Stock levels are persisted in PostgreSQL</div></section>
+            <dlr-inventory-management
+              [inventory]="inventory()"
+              [products]="products()"
+              [locationOptions]="locationOptions()"
+              [inventoryError]="inventoryError()"
+              [inventoryBusy]="inventoryBusy()"
+              (createLocationRequested)="createInventoryLocation($event)"
+              (createLevelRequested)="createInventoryLevel($event)"
+              (adjustRequested)="adjustInventory($event.event, $event.item)"
+            />
           }
           @if (activeNav() === 'API & channels') {
             <section class="panel product-panel">
