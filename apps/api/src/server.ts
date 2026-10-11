@@ -401,6 +401,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const orderId = randomUUID();
   try {
     await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
     if (parsed.data.idempotencyKey) {
       const existing = await client.query('SELECT id FROM orders WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
@@ -435,7 +436,6 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
       if (variant.currency.trim() !== store.rows[0].default_currency.trim()) throw new Error('All order items must use the store currency.');
       return { ...item, variant, unitAmount, lineTotal };
     });
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
     const numberResult = await client.query('SELECT COALESCE(MAX(order_number),0)+1 AS order_number FROM orders WHERE organization_id=$1', [organizationId]);
     const orderNumber = Number(numberResult.rows[0].order_number);
     await client.query(
