@@ -593,6 +593,146 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
 });
 
 
+const ManualPaymentInput = z.object({
+  method: z.enum(['cash', 'cash_on_delivery', 'bank_transfer', 'mobile_money', 'card_terminal', 'other']),
+  status: z.enum(['pending', 'succeeded']).default('succeeded'),
+  amountMinor: z.number().int().positive(),
+  reference: z.string().trim().max(200).nullable().optional(),
+  note: z.string().trim().max(1000).nullable().optional(),
+  idempotencyKey: z.string().trim().min(1).max(200).optional()
+}).strict();
+
+app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organizations/:organizationId/orders/:orderId/payments', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const order = await pool.query('SELECT id,total_minor,currency,payment_status FROM orders WHERE id=$1 AND organization_id=$2', [orderId, organizationId]);
+  if (!order.rowCount) return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.');
+  const payments = await pool.query(
+    "SELECT id,order_id,provider,status,amount_minor,currency,provider_payload,created_at,updated_at FROM payments WHERE order_id=$1 AND organization_id=$2 ORDER BY created_at DESC",
+    [orderId, organizationId]
+  );
+  const paid = await pool.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
+  const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0);
+  const totalMinor = Number(order.rows[0].total_minor);
+  return { data: { orderId, currency: String(order.rows[0].currency).trim(), paymentStatus: order.rows[0].payment_status, totalMinor, paidAmountMinor, balanceMinor: Math.max(0, totalMinor - paidAmountMinor), payments: camelize(payments.rows) }, requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/payments', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = ManualPaymentInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid offline payment method, amount, and status.');
+  const client = await pool.connect();
+  const now = new Date();
+  const paymentId = randomUUID();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query(
+      'SELECT id,total_minor,currency,status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE',
+      [orderId, organizationId]
+    );
+    if (!orderResult.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    const order = orderResult.rows[0];
+    if (['cancelled', 'refunded'].includes(String(order.status))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_PAYABLE', 'Payments cannot be recorded against a cancelled or refunded order.');
+    }
+    if (parsed.data.idempotencyKey) {
+      const existing = await client.query('SELECT id FROM payments WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
+      if (existing.rowCount) {
+        await client.query('COMMIT');
+        const existingPayment = await pool.query('SELECT id,order_id,provider,status,amount_minor,currency,provider_payload,created_at,updated_at FROM payments WHERE id=$1 AND organization_id=$2', [existing.rows[0].id, organizationId]);
+        return { data: camelize(existingPayment.rows[0]), requestId: request.id };
+      }
+    }
+    const paidResult = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
+    const paidBefore = Number(paidResult.rows[0]?.amount ?? 0);
+    const total = Number(order.total_minor);
+    if (parsed.data.amountMinor > Math.max(0, total - paidBefore)) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'PAYMENT_EXCEEDS_BALANCE', 'The recorded amount cannot exceed the order’s remaining balance.');
+    }
+    const payload = {
+      method: parsed.data.method,
+      reference: parsed.data.reference ?? null,
+      note: parsed.data.note ?? null,
+      recordedBy: request.identity!.uid,
+      recordedAt: now.toISOString(),
+      confirmation: parsed.data.status === 'succeeded' ? 'manually_confirmed' : 'awaiting_manual_confirmation'
+    };
+    await client.query(
+      'INSERT INTO payments (id,organization_id,order_id,provider,provider_payment_id,status,amount_minor,currency,idempotency_key,provider_payload,created_at,updated_at) VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,$8,$9::jsonb,$10,$10)',
+      [paymentId, organizationId, orderId, 'manual', parsed.data.status, parsed.data.amountMinor, String(order.currency).trim(), parsed.data.idempotencyKey ?? null, JSON.stringify(payload), now]
+    );
+    const paidAfter = paidBefore + (parsed.data.status === 'succeeded' ? parsed.data.amountMinor : 0);
+    const nextPaymentStatus = paidAfter >= total ? 'paid' : 'unpaid';
+    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [nextPaymentStatus, now, orderId, organizationId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.manual_payment_recorded', 'payment', paymentId, request.id, JSON.stringify({ orderId, method: parsed.data.method, status: parsed.data.status, amountMinor: parsed.data.amountMinor, currency: String(order.currency).trim() }), now]
+    );
+    await client.query('COMMIT');
+    return reply.code(201).send({
+      data: {
+        id: paymentId, orderId, provider: 'manual', status: parsed.data.status,
+        amountMinor: parsed.data.amountMinor, currency: String(order.currency).trim(),
+        providerPayload: payload, createdAt: now, updatedAt: now,
+        paymentStatus: nextPaymentStatus, paidAmountMinor: paidAfter, balanceMinor: Math.max(0, total - paidAfter)
+      },
+      requestId: request.id
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'PAYMENT_CONFLICT', 'This payment or idempotency key has already been recorded.');
+    throw error;
+  } finally { client.release(); }
+});
+
+app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/payments/:paymentId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId, paymentId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsed = z.object({ status: z.enum(['succeeded', 'failed', 'cancelled']) }).strict().safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Choose succeeded, failed, or cancelled for the offline payment record.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const orderResult = await client.query('SELECT id,total_minor,currency,status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE', [orderId, organizationId]);
+    if (!orderResult.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    const paymentResult = await client.query('SELECT id,status,amount_minor,provider_payload FROM payments WHERE id=$1 AND order_id=$2 AND organization_id=$3 AND provider=$4 FOR UPDATE', [paymentId, orderId, organizationId, 'manual']);
+    if (!paymentResult.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'PAYMENT_NOT_FOUND', 'The offline payment record does not exist for this order.'); }
+    const previous = String(paymentResult.rows[0].status);
+    const next = parsed.data.status;
+    if (previous !== 'pending') {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'PAYMENT_ALREADY_FINAL', 'Only a pending offline payment can be confirmed or cancelled.');
+    }
+    if (next === 'succeeded') {
+      const paid = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
+      const paidBefore = Number(paid.rows[0]?.amount ?? 0);
+      if (paidBefore + Number(paymentResult.rows[0].amount_minor) > Number(orderResult.rows[0].total_minor)) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'PAYMENT_EXCEEDS_BALANCE', 'Confirming this payment would exceed the order’s remaining balance.');
+      }
+    }
+    const payload = { ...(paymentResult.rows[0].provider_payload ?? {}), confirmation: next === 'succeeded' ? 'manually_confirmed' : 'manually_closed', confirmedBy: request.identity!.uid, confirmedAt: now.toISOString() };
+    await client.query('UPDATE payments SET status=$1,provider_payload=$2::jsonb,updated_at=$3 WHERE id=$4', [next, JSON.stringify(payload), now, paymentId]);
+    const paid = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
+    const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0) + (next === 'succeeded' ? Number(paymentResult.rows[0].amount_minor) : 0);
+    const paymentStatus = paidAmountMinor >= Number(orderResult.rows[0].total_minor) ? 'paid' : 'unpaid';
+    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [paymentStatus, now, orderId, organizationId]);
+    await client.query(
+      'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
+      [randomUUID(), organizationId, request.identity!.uid, 'order.manual_payment_status_changed', 'payment', paymentId, request.id, JSON.stringify({ orderId, from: previous, to: next }), now]
+    );
+    await client.query('COMMIT');
+    return { data: { id: paymentId, orderId, status: next, paymentStatus, paidAmountMinor, balanceMinor: Math.max(0, Number(orderResult.rows[0].total_minor) - paidAmountMinor), updatedAt: now }, requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally { client.release(); }
+});
+
 const OrderStatusUpdateInput = z.object({ status: z.enum(['pending', 'confirmed', 'processing', 'completed', 'cancelled']) }).strict();
 
 app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId', { preHandler: authenticate }, async (request, reply) => {
