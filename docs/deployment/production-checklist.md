@@ -34,10 +34,12 @@ Do not enable an OAuth provider until its redirect URI, consent configuration, a
 ## 3. Deploy and verify the merchant app and API
 
 - [ ] Deploy the API and merchant frontend to staging; configure the frontend API base URL or a same-origin reverse proxy.
+- [ ] Configure SPA history fallback/rewrites for `/app`, `/qr`, `/menu`, and `/{storeSlug}/menu`, plus wildcard subdomain routing if using `PUBLIC_STORE_DOMAIN`.
 - [ ] Verify HTTPS, secure session cookies, proxy configuration, request limits, and allowed origins.
 - [ ] Run registration, email verification, login/logout, password reset, session expiry/revocation, and enabled OAuth-provider tests.
 - [ ] Create a test organization, store, category, product/variant, inventory location, restaurant menu, and menu item.
 - [ ] Publish/unpublish the storefront and verify public endpoints expose only published and available data.
+- [ ] Open the public restaurant menu from a QR link and confirm active menus, categories, allergens, dietary labels, and modifier choices render without a merchant login. This page is menu browsing only; online customer ordering is not available yet.
 - [ ] Exercise the POS with both a retail product and a restaurant menu item; record a cash/offline payment and verify the canonical order/payment history.
 - [ ] Verify refunds are described as manual records unless a real payment provider is integrated; no card charge or money transfer is performed by the current manual-payment workflow.
 - [ ] Verify branded QR destinations, custom-domain DNS instructions, public URLs, TLS, and routing from a real browser.
