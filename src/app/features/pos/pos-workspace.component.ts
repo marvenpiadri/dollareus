@@ -204,7 +204,7 @@ export class PosWorkspaceComponent {
   }
 
   protected async recordPosPayment(order: any): Promise<void> {
-    if (!order?.id || order.status === 'cancelled') return;
+    if (!order?.id || order.status === 'cancelled' || order.status === 'refunded') return;
     this.posSaveBusy.set(true); this.posError.set('');
     try {
       const endpoint = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.id) + '/payments';
