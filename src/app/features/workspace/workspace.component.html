@@ -250,30 +250,24 @@
             />
           }
           @if (activeNav() === 'API & channels') {
-            <section class="panel product-panel">
-              <div class="panel-heading"><div><h2>Developer API access</h2><p>Create organization-scoped credentials for websites, apps, and approved integrations.</p></div><span class="status-pill">Metered</span></div>
-              <div style="padding:0 17px 15px;color:#64748b;font-size:13px;line-height:1.6">Tokens are shown once and stored as hashes. Read credentials can retrieve data; write credentials can change data. Keep tokens server-side and never place them in public browser code.</div>
-              <form class="customer-form" (submit)="createApiCredential($event)">
-                <label>Credential name<input name="name" required maxlength="120" [value]="apiCredentialName()" (input)="apiCredentialName.set($any($event.target).value)" placeholder="Mageus integration"></label>
-                <label>Permissions<select name="scopes" [value]="apiCredentialScopes()" (change)="apiCredentialScopes.set($any($event.target).value)"><option value="read">Read only</option><option value="write">Write only</option><option value="read,write">Read and write</option></select></label>
-                <label>Expiry<select name="expiry" [value]="apiCredentialExpiry()" (change)="apiCredentialExpiry.set($any($event.target).value)"><option value="30">30 days</option><option value="90">90 days</option><option value="180">180 days</option><option value="365">365 days</option><option value="never">No expiry</option></select></label>
-                <button class="button primary" type="submit" [disabled]="apiCredentialBusy() || !organizationId()">{{apiCredentialBusy()?'Creating…':'＋ Create API credential'}}</button>
-              </form>
-              @if(apiCredentialError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{apiCredentialError()}}</p>}
-              @if(apiCredentialToken()){
-                <section style="margin:0 17px 16px;padding:14px;border:1px solid #bbf7d0;border-radius:9px;background:#f0fdf4">
-                  <b style="font-size:14px;color:#1f6f2c">Copy your new token now</b>
-                  <p style="margin:5px 0 10px;color:#64748b;font-size:13px">This is the only time the full token will be displayed.</p>
-                  <code style="display:block;overflow-wrap:anywhere;padding:10px;border:1px solid #d1fae5;border-radius:7px;background:white;color:#0f172a;font-size:13px">{{apiCredentialToken()}}</code>
-                  <div style="display:flex;gap:8px;margin-top:10px"><button class="button secondary small" type="button" (click)="copyApiCredentialToken()">Copy token</button><button class="button secondary small" type="button" (click)="apiCredentialToken.set('')">Hide token</button></div>
-                </section>
-              }
-              <div class="table-wrap"><table><thead><tr><th>CREDENTIAL</th><th>PERMISSIONS</th><th>CREATED</th><th>LAST USED</th><th>REQUESTS</th><th>EXPIRY / STATUS</th><th></th></tr></thead><tbody>
-                @for(credential of apiCredentials();track credential.id){<tr><td><b>{{credential.name}}</b><div class="muted">{{credential.tokenPrefix}}…</div></td><td>{{credential.scopes.join(', ')}}</td><td>{{credential.createdAt || '—'}}</td><td>{{credential.lastUsedAt || 'Not used yet'}}</td><td>{{credential.requestCount ?? 0}}</td><td>@if(credential.revokedAt){<span class="status draft">Revoked</span>} @else if(credential.expiresAt){ {{credential.expiresAt}} } @else {No expiry}</td><td>@if(!credential.revokedAt){<button class="button secondary small" type="button" [disabled]="apiCredentialBusy()" (click)="revokeApiCredential(credential)">Revoke</button>}</td></tr>}
-                @empty {<tr><td colspan="7" class="empty-state">No API credentials yet. Create one for a trusted server-side integration.</td></tr>}
-              </tbody></table></div>
-              <div class="panel-footer"><span>Requests are metered per credential. Billing quotas, webhooks, and public developer docs are still in progress.</span><button type="button" (click)="loadApiCredentials()">Refresh credentials ↻</button></div>
-            </section>
+            <dlr-api-credentials
+              [organizationId]="organizationId()"
+              [apiCredentialName]="apiCredentialName()"
+              [apiCredentialScopes]="apiCredentialScopes()"
+              [apiCredentialExpiry]="apiCredentialExpiry()"
+              [apiCredentialBusy]="apiCredentialBusy()"
+              [apiCredentialError]="apiCredentialError()"
+              [apiCredentialToken]="apiCredentialToken()"
+              [apiCredentials]="apiCredentials()"
+              (createApiCredentialRequested)="createApiCredential($event)"
+              (apiCredentialNameChangeRequested)="apiCredentialName.set($event)"
+              (apiCredentialScopesChangeRequested)="apiCredentialScopes.set($event)"
+              (apiCredentialExpiryChangeRequested)="apiCredentialExpiry.set($event)"
+              (copyApiCredentialTokenRequested)="copyApiCredentialToken()"
+              (clearApiCredentialTokenRequested)="apiCredentialToken.set('')"
+              (revokeApiCredentialRequested)="revokeApiCredential($event)"
+              (refreshApiCredentialsRequested)="loadApiCredentials()"
+            />
           }
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
         </div>
