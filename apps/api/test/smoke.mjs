@@ -205,7 +205,7 @@ try {
   const posCompleted = await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
   if (posCompleted.payload?.data?.status !== 'completed' || posCompleted.payload?.data?.items?.length !== 1) throw new Error('POS status transition or order history projection failed.');
   await request(`${posBase}/orders/${posOrder.payload?.data?.id}/status`, 409, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'ready' }) });
-  const posClosed = await request(`${posBase}/sessions/${posSession.payload?.data?.id}/close`, 200, { method: 'PATCH', headers: authHeaders });
+  const posClosed = await request(`${posBase}/sessions/${posSession.payload?.data?.id}/close`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({}) });
   if (posClosed.payload?.data?.status !== 'closed') throw new Error('POS session did not close.');
   await request(`${posBase}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...posPayload, idempotencyKey: `smoke-pos-closed-${suffix}` }) });
   checks.push('POS sessions, server-priced product orders, idempotency, audited status transitions and close guards');
