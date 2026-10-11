@@ -117,8 +117,8 @@ async function issueEmailToken(userId: string, purpose: 'verify_email' | 'reset_
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/auth/providers', async (request) => ({
     data: {
-      google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CALLBACK_URL),
-      facebook: Boolean(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CALLBACK_URL),
+      google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL),
+      facebook: Boolean(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET && process.env.FACEBOOK_CALLBACK_URL),
       emailFlows: Boolean(process.env.AUTH_EMAIL_API_KEY && process.env.AUTH_EMAIL_FROM && process.env.AUTH_PUBLIC_URL)
     },
     requestId: request.id
