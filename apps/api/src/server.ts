@@ -526,6 +526,10 @@ app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>(
   const menu = await pool.query('SELECT m.id,m.store_id,s.default_currency FROM restaurant_menus m JOIN stores s ON s.id=m.store_id WHERE m.id=$1 AND m.organization_id=$2 AND s.organization_id=$2', [menuId, organizationId]);
   if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
   if (parsed.data.currency !== String(menu.rows[0].default_currency).trim()) return fail(reply, request, 400, 'MENU_CURRENCY_MISMATCH', 'Menu items must use the selected store currency.');
+  if (parsed.data.categoryId) {
+    const category = await pool.query('SELECT id FROM categories WHERE id=$1 AND organization_id=$2 AND store_id=$3', [parsed.data.categoryId, organizationId, menu.rows[0].store_id]);
+    if (!category.rowCount) return fail(reply, request, 404, 'CATEGORY_NOT_FOUND', 'The selected category does not exist in this menu’s store.');
+  }
   const now = new Date();
   try {
     const result = await pool.query(
@@ -543,7 +547,7 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/men
   const store = await pool.query('SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   const result = await pool.query(
-    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'availability',i.availability,'position',i.position,'metadata',i.metadata) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
+    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'availability',i.availability ,'position',i.position) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
     [store.rows[0].id, store.rows[0].organization_id]
   );
   return { data: camelize(result.rows), requestId: request.id };
