@@ -32,6 +32,7 @@ export class PosWorkspaceComponent {
   protected readonly posCustomerNote = signal('');
   protected readonly posBusy = signal(false);
   protected readonly posSaveBusy = signal(false);
+  private posOrderIdempotencyKey = '';
   protected readonly posError = signal('');
   protected readonly posCartError = signal('');
   protected readonly paymentMethod = signal('cash');
@@ -157,13 +158,14 @@ export class PosWorkspaceComponent {
       return;
     }
     this.posSaveBusy.set(true); this.posError.set('');
+    if (!this.posOrderIdempotencyKey) this.posOrderIdempotencyKey = 'merchant-pos-' + crypto.randomUUID();
     try {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders', {
         method: 'POST',
         body: JSON.stringify({
           sessionId, channel: 'pos', fulfillment: this.posFulfillment(),
           customerNote: this.posCustomerNote().trim() || null,
-          idempotencyKey: 'merchant-pos-' + crypto.randomUUID(),
+          idempotencyKey: this.posOrderIdempotencyKey,
           items: this.posCart().map(line => ({
             sourceType: line.sourceType, sourceItemId: line.sourceItemId,
             ...(line.sourceVariantId ? { sourceVariantId: line.sourceVariantId } : {}),
@@ -174,6 +176,7 @@ export class PosWorkspaceComponent {
       const rows = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/orders');
       this.posOrders.set(Array.isArray(rows) ? rows : []);
       this.dataChanged.emit();
+      this.posOrderIdempotencyKey = '';
       this.posQuantity.set('1'); this.posCustomerNote.set(''); this.posCart.set([]); this.posCartError.set('');
       this.notifyRequested.emit('POS order created with server-calculated pricing.');
     } catch (error) {
@@ -200,7 +203,7 @@ export class PosWorkspaceComponent {
           status: 'succeeded',
           amountMinor: balance,
           note: 'Recorded from merchant POS',
-          idempotencyKey: 'pos-payment-' + order.id + '-' + crypto.randomUUID()
+          idempotencyKey: 'pos-payment-' + order.id + '-' + balance + '-' + this.paymentMethod()
         })
       });
       await this.loadPosData();
