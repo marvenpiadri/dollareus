@@ -36,6 +36,7 @@ Do not enable an OAuth provider until its redirect URI, consent configuration, a
 - [ ] Deploy the API and merchant frontend to staging; configure the frontend API base URL or a same-origin reverse proxy.
 - [ ] Configure SPA history fallback/rewrites for `/app`, `/qr`, `/menu`, and `/{storeSlug}/menu`, plus wildcard subdomain routing if using `PUBLIC_STORE_DOMAIN`.
 - [ ] Verify HTTPS, secure session cookies, proxy configuration, request limits, and allowed origins.
+- [ ] Confirm `/health` responds for process liveness and `/api/v1/health` reports `checks.database=ok` for PostgreSQL readiness; monitor both after deployment.
 - [ ] Run registration, email verification, login/logout, password reset, session expiry/revocation, and enabled OAuth-provider tests.
 - [ ] Create a test organization, store, category, product/variant, inventory location, restaurant menu, and menu item.
 - [ ] Publish/unpublish the storefront and verify public endpoints expose only published and available data.
