@@ -752,6 +752,19 @@ try {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
   });
   if (storefront.payload?.data?.published !== true || storefront.payload?.data?.defaultExperience !== 'menu') throw new Error('Storefront publishing settings did not persist.');
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
+  });
+  await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
+  });
+  const publishedMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  const publishedModifierDish = publishedMenu.payload?.data?.flatMap((entry) => entry.items ?? []).find((dish) => dish.id === secondDish.payload?.data?.id);
+  if (publishedModifierDish?.modifierGroups?.[0]?.id !== 'extras'
+      || Number(publishedModifierDish?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 250) {
+    throw new Error('Published restaurant menu did not expose the latest modifier configuration.');
+  }
+  checks.push('published restaurant menu exposes the saved modifier groups and option prices');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'unavailable' })
   });
