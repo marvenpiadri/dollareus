@@ -66,7 +66,9 @@ export class QrManagementComponent {
       const enriched = await Promise.all(saved.map(async point => {
         try {
           const publicPoint = await this.apiClient.request('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
-          return { ...point, targetUrl: typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : null, targetUrlPath: String(publicPoint?.targetUrlPath ?? '') };
+          const targetUrlPath = String(publicPoint?.targetUrlPath ?? ('/' + encodeURIComponent(String(store?.publicHandle ?? this.storeSlug())) + '/' + encodeURIComponent(String(store?.locationSlug ?? store?.slug ?? '')) + (point.targetPath === '/' ? '' : point.targetPath)));
+          const targetUrl = typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : typeof window !== 'undefined' ? window.location.origin + targetUrlPath : null;
+          return { ...point, targetUrl, targetUrlPath };
         } catch {
           const handle = String(store?.publicHandle ?? this.storeSlug());
           const locationSlug = String(store?.locationSlug ?? store?.slug ?? '');
