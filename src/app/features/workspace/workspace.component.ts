@@ -10,6 +10,7 @@ import { PosWorkspaceComponent } from '../pos/pos-workspace.component';
 import { QrManagementComponent } from '../qr-studio/qr-management.component';
 import { ApiCredentialsComponent } from '../developer-api/api-credentials.component';
 import { WorkspaceShellComponent } from '../../layout/workspace-shell/workspace-shell.component';
+import { StorefrontSettingsComponent } from './storefront-settings.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -23,7 +24,7 @@ import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, MenuModifier
 @Component({
   selector: 'dlr-workspace',
   standalone: true,
-  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent, WorkspaceShellComponent],
+  imports: [DatePipe, AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent, WorkspaceShellComponent, StorefrontSettingsComponent],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })
@@ -139,7 +140,7 @@ export class WorkspaceComponent {
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
     {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Menus',symbol:'☷'},{label:'QR Studio',symbol:'▦'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
   ];
-  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
+  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'},{label:'Settings',symbol:'⚙'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly openProductEditorRequest = signal(0);
@@ -162,7 +163,7 @@ export class WorkspaceComponent {
     this.activeNav.set(item);
     if (item === 'API & channels') return;
     if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
-    if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory'].includes(item)) this.notify(item + ' is planned for a future milestone.');
+    if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory','Settings'].includes(item)) this.notify(item + ' is planned for a future milestone.');
   }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
   protected addProduct(): void { this.selectNav('Products'); this.openProductEditorRequest.update(value => value + 1); }
