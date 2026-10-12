@@ -757,11 +757,11 @@ try {
     method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ published: true })
   });
   const storefront = await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
-    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, publicHandle: `smoke-${suffix}`, locationSlug: `smoke-store-${suffix}`, wifiSsid: 'Smoke Guest WiFi', wifiPassword: 'smoke-password-123', wifiSecurity: 'WPA2', seoTitle: 'Smoke Store Menu', seoDescription: 'A published menu used by API smoke tests.', defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, publicHandle: `smoke-${suffix}`, locationSlug: `smoke-store-${suffix}`, wifiSsid: 'Smoke Guest WiFi', wifiPassword: 'smoke-password-123', wifiSecurity: 'WPA2', locationName: 'Smoke branch', addressLine: '1 Test Street', city: 'Casablanca', countryCode: 'MA', phone: '+212600000000', websiteUrl: 'https://example.com', googleMapsUrl: 'https://maps.google.com/?q=smoke', seoTitle: 'Smoke Store Menu', seoDescription: 'A published menu used by API smoke tests.', defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
   });
   if (storefront.payload?.data?.published !== true || storefront.payload?.data?.defaultExperience !== 'menu') throw new Error('Storefront publishing settings did not persist.');
   const publicStorefront = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}`, 200);
-  if (publicStorefront.payload?.data?.publicHandle !== `smoke-${suffix}` || publicStorefront.payload?.data?.locationSlug !== `smoke-store-${suffix}` || publicStorefront.payload?.data?.wifiSsid !== 'Smoke Guest WiFi' || publicStorefront.payload?.data?.wifiPassword !== 'smoke-password-123') throw new Error('Username/location public identity or guest Wi-Fi settings did not persist.');
+  if (publicStorefront.payload?.data?.publicHandle !== `smoke-${suffix}` || publicStorefront.payload?.data?.locationSlug !== `smoke-store-${suffix}` || publicStorefront.payload?.data?.wifiSsid !== 'Smoke Guest WiFi' || publicStorefront.payload?.data?.wifiPassword !== 'smoke-password-123' || publicStorefront.payload?.data?.city !== 'Casablanca' || publicStorefront.payload?.data?.countryCode !== 'MA') throw new Error('Username/location public identity or guest Wi-Fi settings did not persist.');
   await request(`/api/v1/public/storefronts/smoke-${suffix}/missing-location`, 404);
   checks.push('published storefront username/location routes, SEO fields, and guest Wi-Fi settings');
   const publicMenusByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
