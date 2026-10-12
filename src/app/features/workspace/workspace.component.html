@@ -130,7 +130,7 @@
             />
           }
           @if (activeNav() === 'Settings') {
-            <dlr-storefront-settings [organizationId]="organizationId()" [storeId]="storeId()" />
+            <dlr-storefront-settings [organizationId]="organizationId()" [storeId]="storeId()" (locationCreated)="switchStore($event)" />
           }
           <footer class="page-footer"><span>© 2026 Dollareus</span><span>● Preview environment</span><a href="https://github.com/marvenpiadri/dollareus" target="_blank" rel="noreferrer">Developer docs ↗</a></footer>
     </dlr-workspace-shell>
