@@ -74,7 +74,7 @@ export class PublicStorefrontComponent {
       ...(store?.websiteUrl ? { url: String(store.websiteUrl) } : {}),
       ...(store?.googleMapsUrl ? { hasMap: String(store.googleMapsUrl) } : {})
     };
-    if (store?.defaultExperience === 'menu') data['hasMenu'] = '/' + handle + '/' + location + '/menu';
+    if ((store?.enabledExperiences ?? []).includes('menu')) data['hasMenu'] = '/' + handle + '/' + location + '/menu';
     const existing = this.document.getElementById('dollareus-store-jsonld');
     existing?.parentNode?.removeChild(existing);
     const script = this.document.createElement('script');
