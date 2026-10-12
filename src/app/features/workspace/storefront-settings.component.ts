@@ -97,7 +97,8 @@ export class StorefrontSettingsComponent {
     this.locationCreateError.set('');
     this.notice.set('');
     try {
-      const handle = String(current.publicHandle ?? '');
+      const handle = String(values.get('publicHandle') ?? current.publicHandle ?? '').trim().toLowerCase();
+      if (!/^[a-z0-9]+([_-][a-z0-9]+)*$/.test(handle)) throw new Error('Save a valid public username before creating another location.');
       const created = await this.api.request<any>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores', {
         method: 'POST',
         body: JSON.stringify({
