@@ -37,7 +37,7 @@ export class ProductCatalogComponent {
   protected readonly categoryNameDraft = signal('');
   protected readonly categoryCreateBusy = signal(false);
   protected readonly categoryCreateError = signal('');
-  protected readonly newlySelectedCategoryIds = signal<string[]>([]);
+  protected readonly selectedCategoryIds = signal<string[]>([]);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -71,6 +71,13 @@ export class ProductCatalogComponent {
   protected hasActiveCategories(): boolean {
     return this.categories().some(category => category.status === 'active');
   }
+
+  protected toggleCategory(categoryId: string, event: Event): void {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    this.selectedCategoryIds.update(ids => checked
+      ? [...new Set([...ids, categoryId])]
+      : ids.filter(id => id !== categoryId));
+  }
   protected money(minor: number, currency: string): string {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
@@ -88,7 +95,7 @@ export class ProductCatalogComponent {
     this.categoryCreatorOpen.set(false);
     this.categoryNameDraft.set('');
     this.categoryCreateError.set('');
-    this.newlySelectedCategoryIds.set([]);
+    this.selectedCategoryIds.set([]);
     this.productEditorOpen.set(true);
   }
   protected editProduct(product: ProductRow): void {
@@ -101,7 +108,7 @@ export class ProductCatalogComponent {
     this.categoryCreatorOpen.set(false);
     this.categoryNameDraft.set('');
     this.categoryCreateError.set('');
-    this.newlySelectedCategoryIds.set([]);
+    this.selectedCategoryIds.set(product.categoryIds ?? []);
     this.productEditorOpen.set(true);
   }
   protected closeProductEditor(): void {
@@ -109,7 +116,7 @@ export class ProductCatalogComponent {
       this.productEditorOpen.set(false);
       this.editingProduct.set(null);
       this.categoryCreatorOpen.set(false);
-      this.newlySelectedCategoryIds.set([]);
+      this.selectedCategoryIds.set([]);
     }
   }
 
@@ -227,7 +234,7 @@ export class ProductCatalogComponent {
         body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
       });
       if (!created?.id) throw new Error('Category was saved, but its details could not be loaded. Refresh categories and try again.');
-      this.newlySelectedCategoryIds.set([...new Set([...this.newlySelectedCategoryIds(), created.id])]);
+      this.selectedCategoryIds.set([...new Set([...this.selectedCategoryIds(), created.id])]);
       this.categoryNameDraft.set('');
       this.categoryCreatorOpen.set(false);
       this.dataChanged.emit();
@@ -257,7 +264,7 @@ export class ProductCatalogComponent {
           method: 'PATCH',
           body: JSON.stringify({
             name, slug, description, status: String(values.get('status') ?? 'draft'),
-            categoryIds: values.getAll('categoryIds').map(String),
+            categoryIds: this.selectedCategoryIds(),
             variant: { id: editing.variantId, sku, title: name, amountMinor: Math.round(price * 100), currency: editing.currency }
           })
         });
@@ -267,14 +274,14 @@ export class ProductCatalogComponent {
           method: 'POST',
           body: JSON.stringify({
             storeId: this.storeId(), slug, name, description, status: 'draft', kind: 'physical',
-            availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: values.getAll('categoryIds').map(String),
+            availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: this.selectedCategoryIds(),
             variants: [{ id: variantId, sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
           })
         });
         const image = this.pendingProductImage();
         if (image) {
           const createdProduct: ProductRow = {
-            id: created.id, name, slug, description, category: '', categoryIds: values.getAll('categoryIds').map(String),
+            id: created.id, name, slug, description, category: '', categoryIds: this.selectedCategoryIds(),
             sku: sku || '—', variantId, priceMinor: Math.round(price * 100), currency: this.storeCurrency(),
             stock: null, status: 'Draft', initials: name.slice(0, 2).toUpperCase(), tone: 'tone-1', imageUrl: null
           };
