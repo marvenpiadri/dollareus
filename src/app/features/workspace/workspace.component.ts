@@ -14,7 +14,7 @@ import { StorefrontSettingsComponent } from './storefront-settings.component';
 import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
-import { WorkspaceDataService } from '../../core/workspace-data.service';
+import { WorkspaceDataService, StoreSummary } from '../../core/workspace-data.service';
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 
 type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
@@ -41,6 +41,7 @@ export class WorkspaceComponent {
   protected readonly storeId = signal('');
   protected readonly storeName = signal('');
   protected readonly storeSlug = signal('');
+  protected readonly stores = signal<StoreSummary[]>([]);
 
   constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService, private readonly workspaceData: WorkspaceDataService) { void this.checkSession(); }
 
@@ -73,20 +74,22 @@ export class WorkspaceComponent {
       this.storeId.set('');
       this.storeName.set('');
       this.storeSlug.set('');
+      this.stores.set([]);
       this.onboardingStage.set('organization');
     }
   }
-  private async loadWorkspace(): Promise<void> {
+  private async loadWorkspace(selectedStoreId = this.storeId()): Promise<void> {
     this.workspaceLoading.set(true);
     this.workspaceError.set('');
     this.onboardingError.set('');
     try {
-      const snapshot = await this.workspaceData.load();
+      const snapshot = await this.workspaceData.load(selectedStoreId);
       this.organizationId.set(snapshot.organizationId);
       this.storeId.set(snapshot.storeId);
       this.storeCurrency.set(snapshot.storeCurrency);
       this.storeName.set(snapshot.storeName);
       this.storeSlug.set(snapshot.storeSlug);
+      this.stores.set(snapshot.stores);
       this.onboardingStage.set(snapshot.stage);
       this.products.set(snapshot.products);
       this.orders.set(snapshot.orders);
@@ -166,6 +169,7 @@ export class WorkspaceComponent {
     if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory','Settings'].includes(item)) this.notify(item + ' is planned for a future milestone.');
   }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
+  protected switchStore(storeId: string): void { if (storeId && storeId !== this.storeId()) void this.loadWorkspace(storeId); }
   protected async previewStore(): Promise<void> {
     try {
       const stores = await this.apiClient.request<any[]>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores');
