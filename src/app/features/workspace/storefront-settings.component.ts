@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 
 @Component({
@@ -19,9 +19,15 @@ export class StorefrontSettingsComponent {
   protected readonly locationCreateError = signal('');
   readonly locationCreated = output<string>();
 
-  constructor(private readonly api: ApiClientService) {}
+  private loadVersion = 0;
 
-  ngOnInit(): void { void this.load(); }
+  constructor(private readonly api: ApiClientService) {
+    effect(() => {
+      const organizationId = this.organizationId();
+      const storeId = this.storeId();
+      if (organizationId && storeId) void this.load(organizationId, storeId);
+    });
+  }
 
   protected enabled(experience: string): boolean {
     return (this.settings()?.enabledExperiences ?? []).includes(experience);
@@ -83,7 +89,6 @@ export class StorefrontSettingsComponent {
 
   protected async createLocation(event: Event): Promise<void> {
     event.preventDefault();
-    event.preventDefault();
     const form = (event.currentTarget as HTMLElement).closest('form');
     if (!(form instanceof HTMLFormElement)) return;
     const values = new FormData(form);
@@ -131,16 +136,21 @@ export class StorefrontSettingsComponent {
     } finally { this.creatingLocation.set(false); }
   }
 
-  private async load(): Promise<void> {
+  private async load(organizationId: string, storeId: string): Promise<void> {
+    const version = ++this.loadVersion;
     this.loading.set(true);
     this.error.set('');
     try {
-      const stores = await this.api.request<any[]>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores');
-      const store = (Array.isArray(stores) ? stores : []).find((item: any) => item.id === this.storeId());
+      const stores = await this.api.request<any[]>('/api/v1/organizations/' + encodeURIComponent(organizationId) + '/stores');
+      if (version !== this.loadVersion) return;
+      const store = (Array.isArray(stores) ? stores : []).find((item: any) => item.id === storeId);
       if (!store) throw new Error('The selected store could not be found.');
       this.settings.set(store);
     } catch (error) {
+      if (version !== this.loadVersion) return;
       this.error.set(error instanceof Error ? error.message : 'Could not load storefront settings.');
-    } finally { this.loading.set(false); }
+    } finally {
+      if (version === this.loadVersion) this.loading.set(false);
+    }
   }
 }
