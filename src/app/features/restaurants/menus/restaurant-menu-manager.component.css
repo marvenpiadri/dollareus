@@ -42,3 +42,12 @@ th:first-child,td:first-child{padding-left:17px}
 .modifier-option .button{height:38px}
 .modifier-group>.product-actions{padding:10px 10px 0}
 @media(max-width:720px){.modifier-option{grid-template-columns:1fr 1fr}.modifier-option .button{width:100%}}
+
+.menu-choice-field{flex:1 1 100%;min-width:0;margin:0;padding:12px;border:1px solid #e2e8f0;border-radius:9px;background:#fff}
+.menu-choice-field legend{padding:0 6px;color:#334155;font-size:13px;font-weight:750}
+.menu-choice-field>p{margin:0 0 10px;font-size:12px}
+.menu-choice-options{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.menu-choice-options label{display:flex;flex:0 0 auto;align-items:center;gap:7px;min-width:0;padding:8px 10px;border:1px solid #dbe3ed;border-radius:999px;background:#f8fafc;color:#334155;font-size:13px;font-weight:600;cursor:pointer}
+.menu-choice-options input[type=checkbox]{width:16px;height:16px;flex:0 0 auto;margin:0;padding:0;accent-color:#238636}
+.menu-choice-field>label{display:grid;gap:6px;max-width:100%;color:#64748b;font-size:12px;font-weight:650}
+.menu-choice-field>label input{width:100%;height:40px;box-sizing:border-box}
