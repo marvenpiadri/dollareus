@@ -55,12 +55,11 @@
                     <label>Allergens (comma-separated)<input name="allergens" maxlength="1000" [value]="(editingMenuItem()?.allergens || []).join(', ')" placeholder="milk, sesame, nuts"></label>
                     <label>Dietary labels (comma-separated)<input name="dietaryLabels" maxlength="1000" [value]="(editingMenuItem()?.dietaryLabels || []).join(', ')" placeholder="vegetarian, vegan, gluten-free"></label>
                     <div class="modifier-editor">
-                      <div class="panel-heading"><div><h3>Dish options</h3><p>Set choices such as size, extras, or cooking preference. Extra prices use minor currency units (500 = 5.00 {{currency()}}).</p></div><button class="button secondary small" type="button" (click)="addModifierGroup()" [disabled]="modifierDraft().length >= 20">＋ Add group</button></div>
+                      <div class="panel-heading"><div><h3>Dish options</h3><p>Set choices such as size, extras, or cooking preference. Add an optional extra charge for each choice.</p></div><button class="button secondary small" type="button" (click)="addModifierGroup()" [disabled]="modifierDraft().length >= 20">＋ Add group</button></div>
                       @for(group of modifierDraft(); track $index; let groupIndex = $index){
                         <fieldset class="modifier-group">
                           <legend>Choice group {{groupIndex + 1}}</legend>
                           <div class="customer-form">
-                            <label>Group ID<input [value]="group.id" (input)="updateModifierGroup(groupIndex,'id',$any($event.target).value)" required maxlength="100" pattern="[a-z0-9]+(-[a-z0-9]+)*"></label>
                             <label>Group name<input [value]="group.name" (input)="updateModifierGroup(groupIndex,'name',$any($event.target).value)" required maxlength="100" placeholder="e.g. Size"></label>
                             <label class="modifier-required"><input type="checkbox" [checked]="group.required" (change)="updateModifierGroup(groupIndex,'required',$any($event.target).checked)"> Customer must choose</label>
                             <label>Minimum choices<input type="number" min="0" max="20" [value]="group.minSelections" (input)="updateModifierGroup(groupIndex,'minSelections',+$any($event.target).value)" required></label>
@@ -69,9 +68,8 @@
                           <div class="modifier-options">
                             @for(option of group.options; track $index; let optionIndex = $index){
                               <div class="modifier-option">
-                                <label>Option ID<input [value]="option.id" (input)="updateModifierOption(groupIndex,optionIndex,'id',$any($event.target).value)" required maxlength="100" pattern="[a-z0-9]+(-[a-z0-9]+)*"></label>
                                 <label>Option name<input [value]="option.name" (input)="updateModifierOption(groupIndex,optionIndex,'name',$any($event.target).value)" required maxlength="100" placeholder="e.g. Large"></label>
-                                <label>Extra price (minor units)<input type="number" min="0" step="1" [value]="option.priceDeltaMinor" (input)="updateModifierOption(groupIndex,optionIndex,'priceDeltaMinor',+$any($event.target).value)" required></label>
+                                <label>Extra price ({{currency()}})<input type="number" min="0" step="0.01" [value]="option.priceDeltaMinor / 100" (input)="updateModifierOption(groupIndex,optionIndex,'priceDeltaMinor',Math.round(+$any($event.target).value * 100))" required></label>
                                 <button class="button small" type="button" (click)="removeModifierOption(groupIndex,optionIndex)" [disabled]="group.options.length <= 1" [attr.aria-label]="'Remove '+option.name">Remove option</button>
                               </div>
                             }
