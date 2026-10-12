@@ -3,6 +3,7 @@ import { ApiClientService } from '../../core/api/api-client.service';
 import { CategoryRow, ProductRow, ProductStatus } from '../../shared/models/commerce.models';
 
 type ProductFilter = 'All' | ProductStatus;
+type VariantDraft = { id: string; title: string; sku: string; price: string; currency: string; status: 'draft' | 'active' | 'archived'; optionsText: string };
 
 @Component({
   selector: 'dlr-product-catalog',
@@ -38,6 +39,7 @@ export class ProductCatalogComponent {
   protected readonly categoryCreateBusy = signal(false);
   protected readonly categoryCreateError = signal('');
   protected readonly selectedCategoryIds = signal<string[]>([]);
+  protected readonly variantDrafts = signal<VariantDraft[]>([]);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -56,6 +58,7 @@ export class ProductCatalogComponent {
         lastRequest = request;
         this.editingProduct.set(null);
         this.selectedCategoryIds.set([]);
+        this.variantDrafts.set([this.newVariantDraft('Default')]);
         this.productSaveError.set('');
         this.productEditorOpen.set(true);
       }
@@ -86,6 +89,26 @@ export class ProductCatalogComponent {
     this.searchChangeRequested.emit('');
     this.productFilter.set('All');
   }
+  private newVariantDraft(title = 'Default'): VariantDraft {
+    return { id: crypto.randomUUID(), title, sku: '', price: '0.00', currency: this.storeCurrency(), status: 'active', optionsText: '' };
+  }
+
+  protected addVariant(): void {
+    this.variantDrafts.update(variants => [...variants, this.newVariantDraft('Variant ' + (variants.length + 1))]);
+  }
+
+  protected updateVariant(index: number, field: 'title' | 'sku' | 'price' | 'status' | 'optionsText', value: string): void {
+    this.variantDrafts.update(variants => variants.map((variant, i) => i === index ? { ...variant, [field]: value } as VariantDraft : variant));
+  }
+
+  protected archiveVariant(index: number): void {
+    this.variantDrafts.update(variants => variants.map((variant, i) => i === index ? { ...variant, status: 'archived' } : variant));
+  }
+
+  protected restoreVariant(index: number): void {
+    this.variantDrafts.update(variants => variants.map((variant, i) => i === index ? { ...variant, status: 'active' } : variant));
+  }
+
   protected addProduct(): void {
     this.selectNavRequested.emit('Products');
     this.editingProduct.set(null);
@@ -97,6 +120,7 @@ export class ProductCatalogComponent {
     this.categoryNameDraft.set('');
     this.categoryCreateError.set('');
     this.selectedCategoryIds.set([]);
+    this.variantDrafts.set([this.newVariantDraft('Default')]);
     this.productEditorOpen.set(true);
   }
   protected editProduct(product: ProductRow): void {
@@ -110,6 +134,15 @@ export class ProductCatalogComponent {
     this.categoryNameDraft.set('');
     this.categoryCreateError.set('');
     this.selectedCategoryIds.set(product.categoryIds ?? []);
+    this.variantDrafts.set((product.variants ?? []).map(variant => ({
+      id: variant.id,
+      title: variant.title,
+      sku: variant.sku === '—' ? '' : variant.sku,
+      price: (variant.priceMinor / 100).toFixed(2),
+      currency: variant.currency || product.currency,
+      status: variant.status ?? 'active',
+      optionsText: Object.entries(variant.options ?? {}).map(([key, value]) => key + '=' + value).join(', ')
+    })).concat((product.variants?.length ?? 0) ? [] : [this.newVariantDraft(product.name)]));
     this.productEditorOpen.set(true);
   }
   protected closeProductEditor(): void {
@@ -118,6 +151,7 @@ export class ProductCatalogComponent {
       this.editingProduct.set(null);
       this.categoryCreatorOpen.set(false);
       this.selectedCategoryIds.set([]);
+      this.variantDrafts.set([]);
     }
   }
 
@@ -255,9 +289,28 @@ export class ProductCatalogComponent {
     let imageUploadTriggeredRefresh = false;
     const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.products().map(product => product.slug));
     const description = String(values.get('description') ?? '').trim() || null;
-    const price = Number(values.get('price'));
-    if (!Number.isFinite(price) || price < 0) { this.productSaveError.set('Enter a valid non-negative price.'); return; }
-    const sku = String(values.get('sku') ?? '').trim() || null;
+    const drafts = this.variantDrafts();
+    if (!drafts.length) { this.productSaveError.set('Add at least one variant before saving.'); return; }
+    const variants = [];
+    for (const draft of drafts) {
+      const price = Number(draft.price);
+      if (!draft.title.trim() || !Number.isFinite(price) || price < 0) {
+        this.productSaveError.set('Every variant needs a title and a valid non-negative price.');
+        return;
+      }
+      const options: Record<string, string> = {};
+      for (const pair of draft.optionsText.split(',').map(part => part.trim()).filter(Boolean)) {
+        const split = pair.indexOf('=');
+        if (split < 1 || !pair.slice(0, split).trim() || !pair.slice(split + 1).trim()) {
+          this.productSaveError.set('Variant options must use Name=value pairs separated by commas, e.g. Size=M, Color=Blue.');
+          return;
+        }
+        const key = pair.slice(0, split).trim();
+        if (Object.hasOwn(options, key)) { this.productSaveError.set('Each option name may appear only once per variant.'); return; }
+        options[key] = pair.slice(split + 1).trim();
+      }
+      variants.push({ id: draft.id, sku: draft.sku.trim() || null, title: draft.title.trim(), options, amountMinor: Math.round(price * 100), currency: draft.currency || (editing?.currency ?? this.storeCurrency()), status: draft.status, barcode: null, weightGrams: null, metadata: {} });
+    }
     this.productSaveBusy.set(true); this.productSaveError.set('');
     try {
       if (editing) {
@@ -265,25 +318,24 @@ export class ProductCatalogComponent {
           method: 'PATCH',
           body: JSON.stringify({
             name, slug, description, status: String(values.get('status') ?? 'draft'),
-            categoryIds: this.selectedCategoryIds(),
-            variant: { id: editing.variantId, sku, title: name, amountMinor: Math.round(price * 100), currency: editing.currency }
+            categoryIds: this.selectedCategoryIds(), variants
           })
         });
       } else {
-        const variantId = crypto.randomUUID();
+        const variantId = variants[0].id;
         const created = await this.apiClient.request<{ id: string }>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/products', {
           method: 'POST',
           body: JSON.stringify({
             storeId: this.storeId(), slug, name, description, status: 'draft', kind: 'physical',
             availabilityStatus: 'available', availabilityNote: null, attributes: {}, categoryIds: this.selectedCategoryIds(),
-            variants: [{ id: variantId, sku, title: name, options: {}, amountMinor: Math.round(price * 100), currency: this.storeCurrency(), status: 'active', barcode: null, weightGrams: null, metadata: {} }]
+            variants
           })
         });
         const image = this.pendingProductImage();
         if (image) {
           const createdProduct: ProductRow = {
             id: created.id, name, slug, description, category: '', categoryIds: this.selectedCategoryIds(),
-            sku: sku || '—', variantId, priceMinor: Math.round(price * 100), currency: this.storeCurrency(),
+            sku: variants[0].sku || '—', variantId, priceMinor: variants[0].amountMinor, currency: variants[0].currency,
             stock: null, status: 'Draft', initials: name.slice(0, 2).toUpperCase(), tone: 'tone-1', imageUrl: null
           };
           this.editingProduct.set(createdProduct);
