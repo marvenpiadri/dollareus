@@ -131,6 +131,14 @@ export class PosWorkspaceComponent {
     } finally { this.posBusy.set(false); }
   }
 
+  protected changePosSourceType(value: string): void {
+    if (value !== 'product' && value !== 'service' && value !== 'menu_item') return;
+    this.posSourceType.set(value);
+    this.posVariantId.set('');
+    this.posModifiers.set({});
+    if (value === 'service') this.posFulfillment.set('service');
+  }
+
   protected addPosCartItem(event: Event): void {
     event.preventDefault();
     const variantId = this.posVariantId();
