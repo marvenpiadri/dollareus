@@ -1,7 +1,7 @@
 <div class="shell">
       <aside class="sidebar">
         <a class="brand" href="#" (click)="$event.preventDefault(); navRequested.emit('Overview')"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
-        <button class="store-switch" type="button" (click)="notifyRequested.emit('Multiple-store switching is not available yet.')"><span class="store-avatar">{{ storeName().slice(0,1).toUpperCase() }}</span><span><b>{{ storeName() }}</b><small>{{ storeSlug() }}</small></span><span class="chevron">⌄</span></button>
+        <label class="store-switch"><span class="store-avatar">{{ storeName().slice(0,1).toUpperCase() }}</span><span class="store-switch-fields"><b>{{ storeName() }}</b><select aria-label="Switch store location" [value]="selectedStoreId()" (change)="storeChangeRequested.emit($any($event.target).value)">@for (store of stores(); track store.id) { <option [value]="store.id">{{ store.locationName || store.city || store.locationSlug || store.slug || store.name }}</option> }</select></span><span class="chevron" aria-hidden="true">⌄</span></label>
         <p class="nav-heading">WORKSPACE</p>
         @for (item of primaryNav(); track item.label) {
           <button class="nav-item" [class.active]="activeNav() === item.label" (click)="navRequested.emit(item.label)" type="button"><span class="nav-symbol">{{ item.symbol }}</span>{{ item.label }}@if(item.label === 'Orders' && ordersCount() > 0){<span class="count">{{ ordersCount() }}</span>}</button>
