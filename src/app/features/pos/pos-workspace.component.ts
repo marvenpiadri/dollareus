@@ -40,6 +40,7 @@ export class PosWorkspaceComponent {
   protected readonly posCartError = signal('');
   protected readonly paymentMethod = signal('cash');
   protected readonly paymentTarget = signal<any | null>(null);
+  protected readonly paymentRecords = signal<any[]>([]);
   protected readonly paymentAmount = signal('');
   protected readonly paymentRecordStatus = signal<'pending' | 'succeeded'>('succeeded');
   protected readonly paymentReference = signal('');
@@ -57,7 +58,7 @@ export class PosWorkspaceComponent {
       if (sourceType !== 'product' && sourceType !== 'service') return;
       const products = this.products();
       const selected = this.posVariantId();
-      const activeVariants = products.filter(product => product.status === 'Active').flatMap(product =>
+      const activeVariants = products.filter(product => product.status === 'Active' && (sourceType === 'service' ? product.kind === 'service' : product.kind !== 'service')).flatMap(product =>
         (product.variants?.length ? product.variants : product.variantId ? [{ id: product.variantId }] : []).filter(variant => !!variant.id)
       );
       if (!selected || !activeVariants.some(variant => variant.id === selected)) {
@@ -310,6 +311,7 @@ export class PosWorkspaceComponent {
         return;
       }
       this.paymentTarget.set(order);
+      this.paymentRecords.set(Array.isArray(details?.payments) ? details.payments : []);
       this.paymentAmount.set((balance / 100).toFixed(2));
       this.paymentRecordStatus.set('succeeded');
       this.paymentReference.set('');
@@ -323,9 +325,34 @@ export class PosWorkspaceComponent {
 
   protected closePosPaymentForm(): void {
     this.paymentTarget.set(null);
+    this.paymentRecords.set([]);
     this.paymentAmount.set('');
     this.paymentReference.set('');
     this.paymentNote.set('');
+  }
+
+  protected async updatePosPaymentStatus(order: any, payment: any, status: 'succeeded' | 'cancelled'): Promise<void> {
+    if (!order?.id || !payment?.id || payment.status !== 'pending') return;
+    this.posSaveBusy.set(true); this.posError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) +
+        '/orders/' + encodeURIComponent(order.id) + '/payments/' + encodeURIComponent(payment.id), {
+          method: 'PATCH', body: JSON.stringify({ status })
+        });
+      const details = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) +
+        '/orders/' + encodeURIComponent(order.id) + '/payments');
+      this.paymentRecords.set(Array.isArray(details?.payments) ? details.payments : []);
+      this.paymentAmount.set((Math.max(0, Number(details?.balanceMinor) || 0) / 100).toFixed(2));
+      await this.loadPosData();
+      this.dataChanged.emit();
+      this.notifyRequested.emit(status === 'succeeded'
+        ? 'Payment manually confirmed as received. Dollareus did not process money.'
+        : 'Pending payment record cancelled. No money was moved.');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not update the payment record.');
+    } finally {
+      this.posSaveBusy.set(false);
+    }
   }
 
   protected async recordPosPayment(event: Event): Promise<void> {
