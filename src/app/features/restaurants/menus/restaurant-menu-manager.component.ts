@@ -99,8 +99,13 @@ export class RestaurantMenuManagerComponent {
 
   private readServicePeriods(values: FormData): string[] {
     const selected = values.getAll('servicePeriod').map(value => String(value).trim().toLowerCase());
-    const other = String(values.get('otherServicePeriods') ?? '').split(',').map(value => value.trim().toLowerCase());
-    return [...new Set([...selected, ...other].filter(Boolean))].slice(0, 20);
+    const other = String(values.get('otherServicePeriods') ?? '').split(',').map(value => value.trim());
+    const unique = new Map<string, string>();
+    for (const period of [...selected, ...other]) {
+      const label = period.trim();
+      if (label && !unique.has(label.toLowerCase())) unique.set(label.toLowerCase(), label);
+    }
+    return [...unique.values()].slice(0, 20);
   }
 
   private readMenuLabels(values: FormData, presetField: string, otherField: string, commonLabels: string[]): string[] {
