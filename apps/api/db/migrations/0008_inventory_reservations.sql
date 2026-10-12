@@ -32,5 +32,5 @@ CREATE UNIQUE INDEX inventory_reservations_one_active_line_idx
   WHERE status = 'reserved';
 CREATE INDEX inventory_reservations_order_idx
   ON inventory_reservations (organization_id, order_id, status);
-CREATE INDEX inventory_reservations_expiry_work_idx
+CREATE INDEX inventory_reservations_active_work_idx
   ON inventory_reservations (status, updated_at) WHERE status = 'reserved';
