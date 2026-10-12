@@ -22,6 +22,10 @@ export class PublicCatalogComponent {
     void this.load(handle, location);
   }
 
+  protected initialLetter(product: any): string { return String(product?.name ?? 'P').slice(0, 1).toUpperCase(); }
+
+  protected locationLabel(): string { return String(this.store()?.locationSlug ?? '').replace(/-/g, ' '); }
+
   protected storePath(suffix = ''): string {
     const store = this.store();
     return '/' + encodeURIComponent(String(store?.publicHandle ?? '')) + '/' + encodeURIComponent(String(store?.locationSlug ?? '')) + suffix;
