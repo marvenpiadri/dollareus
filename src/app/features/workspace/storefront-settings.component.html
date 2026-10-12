@@ -1,0 +1,40 @@
+<section class="settings-page">
+  <div class="settings-intro"><p class="eyebrow">PUBLIC STORE EXPERIENCE</p><h2>Your store, discoverable online</h2><p>Choose a stable public username, give each physical location its own address, and prepare search-friendly information for customers and search engines.</p></div>
+  @if(loading()){<div class="settings-state">Loading storefront settings…</div>}
+  @else if(!settings()){<div class="settings-error" role="alert">{{error()}}</div>}
+  @else {
+    <form class="settings-form" (submit)="save($event)">
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">01</span><div><h3>Public address</h3><p>Your store name can be shared by many businesses. The username plus location keeps each public page distinct.</p></div></div>
+        <div class="fields two-col">
+          <label>Store username <span class="hint">Unique business identity</span><input name="publicHandle" required minlength="2" maxlength="60" pattern="[a-z0-9]+([_-][a-z0-9]+)*" [value]="settings()?.publicHandle || ''" autocomplete="off"><small>Example: <strong>kfcLLCC</strong> becomes <strong>kfcllcc</strong>. Use lowercase letters, numbers, hyphens or underscores.</small></label>
+          <label>Location address <span class="hint">One per branch</span><input name="locationSlug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="settings()?.locationSlug || settings()?.slug || ''" autocomplete="off"><small>Example: <strong>kfc-casablanca-maarif</strong></small></label>
+        </div>
+        <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-username'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">02</span><div><h3>Search engine details</h3><p>These fields help customers understand the page before they visit it from search results.</p></div></div>
+        <div class="fields"><label>SEO title <span class="hint">Optional · up to 180 characters</span><input name="seoTitle" maxlength="180" [value]="settings()?.seoTitle || ''" placeholder="KFC Maarif — Menu, opening details and location"></label><label>Search description <span class="hint">Optional · up to 320 characters</span><textarea name="seoDescription" rows="3" maxlength="320" [value]="settings()?.seoDescription || ''" placeholder="Discover this location's menu, prices and customer information."></textarea></label></div>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">03</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
+        <div class="experience-options">
+          <label><input type="checkbox" name="experiences" value="catalog" [checked]="enabled('catalog') || enabled('commerce')"> <span><strong>Products and categories</strong><small>Public product catalog with categories and prices.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="commerce" [checked]="enabled('commerce')"> <span><strong>Shop</strong><small>Commerce-oriented product browsing.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="menu" [checked]="enabled('menu')"> <span><strong>Restaurant menu</strong><small>Menus, dish descriptions, dietary information and prices.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="services" [checked]="enabled('services')"> <span><strong>Services</strong><small>For freelancers and service businesses.</small></span></label>
+        </div>
+        <label class="default-experience">Main button on your store page<select name="defaultExperience" [value]="settings()?.defaultExperience || 'catalog'"><option value="catalog">Browse products</option><option value="commerce">Shop products</option><option value="menu">See menu</option><option value="services">Explore services</option></select></label>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">04</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
+        <div class="fields two-col"><label>Network name (SSID)<input name="wifiSsid" maxlength="120" [value]="settings()?.wifiSsid || ''" placeholder="Cafe Guest Wi-Fi"></label><label>Network password<input name="wifiPassword" maxlength="120" [value]="settings()?.wifiPassword || ''" placeholder="Guest network password" autocomplete="new-password"></label><label>Security<select name="wifiSecurity" [value]="settings()?.wifiSecurity || 'WPA2'"><option value="none">Open network (no password)</option><option value="WPA">WPA</option><option value="WPA2">WPA2</option><option value="WPA3">WPA3</option><option value="WEP">WEP</option></select></label></div>
+        <p class="privacy-note">Wi-Fi details are public to anyone who can access your published menu. Use a guest network, not your private business network.</p>
+      </section>
+      <section class="publish-card"><div><h3>Publish your public store page</h3><p>Anyone with the link can visit a published page. Public pages are separate from POS and internal business data.</p></div><label class="publish-toggle"><input type="checkbox" name="published" [checked]="settings()?.published === true"><span>Published and publicly accessible</span></label></section>
+      @if(error()){<p class="settings-error" role="alert">{{error()}}</p>}
+      @if(notice()){<p class="settings-notice" role="status">{{notice()}}</p>}
+      <div class="save-row"><span>Changes are saved to your store settings.</span><button type="submit" [disabled]="saving()">{{saving() ? 'Saving…' : 'Save storefront settings'}}</button></div>
+    </form>
+  }
+</section>
