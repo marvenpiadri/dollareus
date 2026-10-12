@@ -33,6 +33,7 @@ export class RestaurantMenuManagerComponent {
   protected readonly menuImageBusy = signal(false);
   protected readonly commonAllergens = ['Milk', 'Eggs', 'Fish', 'Crustaceans', 'Peanuts', 'Tree nuts', 'Soy', 'Wheat', 'Sesame', 'Mustard', 'Celery', 'Sulphites', 'Lupin', 'Molluscs'];
   protected readonly commonDietaryLabels = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Halal', 'Kosher', 'Spicy'];
+  protected readonly commonServicePeriods = [{ value: 'all-day', label: 'All day' }, { value: 'breakfast', label: 'Breakfast' }, { value: 'brunch', label: 'Brunch' }, { value: 'lunch', label: 'Lunch' }, { value: 'dinner', label: 'Dinner' }, { value: 'late-night', label: 'Late night' }];
 
   private loadSequence = 0;
 
@@ -94,6 +95,12 @@ export class RestaurantMenuManagerComponent {
     } finally {
       if (sequence === this.loadSequence) this.menuBusy.set(false);
     }
+  }
+
+  private readServicePeriods(values: FormData): string[] {
+    const selected = values.getAll('servicePeriod').map(value => String(value).trim().toLowerCase());
+    const other = String(values.get('otherServicePeriods') ?? '').split(',').map(value => value.trim().toLowerCase());
+    return [...new Set([...selected, ...other].filter(Boolean))].slice(0, 20);
   }
 
   private readMenuLabels(values: FormData, presetField: string, otherField: string, commonLabels: string[]): string[] {
@@ -263,7 +270,7 @@ export class RestaurantMenuManagerComponent {
     const name = String(values.get('name') ?? '').trim();
     const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.menus().map(menu => menu.slug));
     const description = String(values.get('description') ?? '').trim();
-    const servicePeriods = String(values.get('servicePeriods') ?? 'all-day').split(',').map(value => value.trim()).filter(Boolean);
+    const servicePeriods = this.readServicePeriods(values);
     if (!name || servicePeriods.length === 0) return;
     this.menuBusy.set(true); this.menuError.set('');
     try {
@@ -283,7 +290,7 @@ export class RestaurantMenuManagerComponent {
     const name = String(values.get('name') ?? '').trim();
     const slug = String(values.get('slug') ?? '').trim();
     const description = String(values.get('description') ?? '').trim();
-    const servicePeriods = String(values.get('servicePeriods') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const servicePeriods = this.readServicePeriods(values);
     if (!name || !slug || servicePeriods.length === 0) {
       this.menuError.set('Provide a name, slug, and at least one service period.');
       return;
