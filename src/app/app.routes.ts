@@ -5,6 +5,7 @@ import { QrStudioComponent } from './features/qr-studio/qr-studio.component';
 import { PublicMenuComponent } from './features/restaurants/public-menu/public-menu.component';
 import { WorkspaceComponent } from './features/workspace/workspace.component';
 import { PublicStorefrontComponent } from './features/storefront/public-storefront.component';
+import { PublicCatalogComponent } from './features/storefront/public-catalog.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: PublicHomeComponent },
@@ -13,8 +14,8 @@ export const routes: Routes = [
   { path: 'signup', component: AuthPageComponent },
   { path: 'menu', component: PublicMenuComponent },
   { path: ':storeHandle/:locationSlug/menu', component: PublicMenuComponent },
-  { path: ':storeHandle/:locationSlug/catalog', component: PublicStorefrontComponent },
-  { path: ':storeHandle/:locationSlug/products', component: PublicStorefrontComponent },
+  { path: ':storeHandle/:locationSlug/catalog', component: PublicCatalogComponent },
+  { path: ':storeHandle/:locationSlug/products', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/services', component: PublicStorefrontComponent },
   { path: ':storeHandle/:locationSlug', component: PublicStorefrontComponent },
   { path: ':storeSlug/menu', component: PublicMenuComponent },
