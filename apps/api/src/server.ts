@@ -373,7 +373,7 @@ app.post<{ Body: unknown }>('/api/v1/organizations', { preHandler: authenticate 
   const now = new Date();
   try {
     await client.query('BEGIN');
-    await client.query('INSERT INTO organizations (id, name, slug, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [id, parsed.data.name, parsed.data.slug, 'active', now]);
+    await client.query('INSERT INTO organizations (id, name, slug, public_handle, status, created_at, updated_at) VALUES ($1,$2,$3,$3,$4,$5,$5)', [id, parsed.data.name, parsed.data.slug, 'active', now]);
     await client.query('INSERT INTO organization_memberships (organization_id, user_id, role, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [id, request.identity!.uid, 'owner', 'active', now]);
     await client.query('COMMIT');
     return reply.code(201).send({ data: { id, ...parsed.data, status: 'active', createdAt: now, updatedAt: now }, requestId: request.id });
@@ -519,9 +519,13 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const organization = await client.query('SELECT slug FROM organizations WHERE id=$1', [organizationId]);
-    const publicHandle = parsed.data.publicHandle ?? String(organization.rows[0]?.slug ?? parsed.data.slug);
+    const organization = await client.query('SELECT slug,public_handle FROM organizations WHERE id=$1 FOR UPDATE', [organizationId]);
+    const publicHandle = parsed.data.publicHandle ?? String(organization.rows[0]?.public_handle ?? organization.rows[0]?.slug ?? parsed.data.slug);
     const locationSlug = parsed.data.locationSlug ?? parsed.data.slug;
+    if (publicHandle !== organization.rows[0]?.public_handle) {
+      await client.query('UPDATE organizations SET public_handle=$1,updated_at=$2 WHERE id=$3', [publicHandle, now, organizationId]);
+      await client.query('UPDATE stores SET public_handle=$1,updated_at=$2 WHERE organization_id=$3', [publicHandle, now, organizationId]);
+    }
     await client.query('INSERT INTO stores (id,organization_id,name,description,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,wifi_ssid,wifi_password,wifi_security,location_name,address_line,city,country_code,phone,website_url,google_maps_url,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23)', [id, organizationId, parsed.data.name, parsed.data.description, locationSlug, publicHandle, locationSlug, parsed.data.businessType, parsed.data.status, parsed.data.currency, parsed.data.locale, parsed.data.timeZone, parsed.data.wifiSsid ?? null, parsed.data.wifiPassword ?? null, parsed.data.wifiSecurity ?? 'WPA2', parsed.data.locationName ?? null, parsed.data.addressLine ?? null, parsed.data.city ?? null, parsed.data.countryCode ?? null, parsed.data.phone ?? null, parsed.data.websiteUrl ?? null, parsed.data.googleMapsUrl ?? null, now]);
     await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$7)', [id, organizationId, parsed.data.defaultExperience, parsed.data.enabledExperiences, parsed.data.published, JSON.stringify(parsed.data.theme), now]);
     await client.query('COMMIT');
@@ -558,6 +562,10 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
     const description = parsed.data.description === undefined ? row.description : parsed.data.description;
     const publicHandle = parsed.data.publicHandle ?? row.public_handle;
     const locationSlug = parsed.data.locationSlug ?? row.location_slug;
+    if (parsed.data.publicHandle !== undefined) {
+      await client.query('UPDATE organizations SET public_handle=$1,updated_at=$2 WHERE id=$3', [publicHandle, new Date(), organizationId]);
+      await client.query('UPDATE stores SET public_handle=$1,updated_at=$2 WHERE organization_id=$3', [publicHandle, new Date(), organizationId]);
+    }
     const wifiSsid = parsed.data.wifiSsid === undefined ? row.wifi_ssid : parsed.data.wifiSsid;
     const wifiPassword = parsed.data.wifiPassword === undefined ? row.wifi_password : parsed.data.wifiPassword;
     const wifiSecurity = parsed.data.wifiSecurity ?? row.wifi_security;
