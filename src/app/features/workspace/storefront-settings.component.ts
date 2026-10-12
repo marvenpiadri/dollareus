@@ -18,6 +18,7 @@ export class StorefrontSettingsComponent {
   protected readonly creatingLocation = signal(false);
   protected readonly locationCreateError = signal('');
   readonly locationCreated = output<string>();
+  readonly settingsSaved = output<void>();
 
   private loadVersion = 0;
 
@@ -60,6 +61,12 @@ export class StorefrontSettingsComponent {
       const result = await this.api.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/storefront', {
         method: 'PATCH',
         body: JSON.stringify({
+          name: String(values.get('storeName') ?? '').trim(),
+          businessType: String(values.get('businessType') ?? 'general'),
+          status: String(values.get('storeStatus') ?? 'active'),
+          currency: String(values.get('currency') ?? 'MAD').trim().toUpperCase(),
+          locale: String(values.get('locale') ?? 'en'),
+          timeZone: String(values.get('timeZone') ?? 'Africa/Casablanca').trim(),
           publicHandle,
           locationSlug,
           published: values.get('published') === 'on',
@@ -81,7 +88,8 @@ export class StorefrontSettingsComponent {
         })
       });
       this.settings.set({ ...(this.settings() ?? {}), ...result });
-      this.notice.set('Storefront settings saved. Your public page uses the updated address and metadata.');
+      this.notice.set('Store and storefront settings saved. Public access follows the selected store status and publish setting.');
+      this.settingsSaved.emit();
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Could not save storefront settings.');
     } finally { this.saving.set(false); }
