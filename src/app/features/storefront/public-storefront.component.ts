@@ -55,6 +55,7 @@ export class PublicStorefrontComponent {
 
   private updateStructuredData(store: any, handle: string, location: string): void {
     const type = store?.businessType === 'restaurant' ? 'Restaurant'
+      : store?.businessType === 'cafe' ? 'CafeOrCoffeeShop'
       : store?.businessType === 'freelancer' || store?.businessType === 'services' ? 'ProfessionalService'
       : 'Store';
     const address: Record<string, unknown> = { '@type': 'PostalAddress' };
