@@ -184,13 +184,22 @@ export class ProductCatalogComponent {
     }
   }
 
+  private uniqueSlug(name: string, existingSlugs: string[]): string {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 150) || 'product-' + crypto.randomUUID().slice(0, 8);
+    const used = new Set(existingSlugs);
+    let slug = base;
+    let suffix = 2;
+    while (used.has(slug)) slug = base + '-' + suffix++;
+    return slug;
+  }
+
   protected async saveProduct(event: Event): Promise<void> {
     event.preventDefault();
     const values = new FormData(event.currentTarget as HTMLFormElement);
     const name = String(values.get('name') ?? '').trim();
     const editing = this.editingProduct();
     let imageUploadTriggeredRefresh = false;
-    const slug = String(values.get('slug') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.products().map(product => product.slug));
     const description = String(values.get('description') ?? '').trim() || null;
     const price = Number(values.get('price'));
     if (!Number.isFinite(price) || price < 0) { this.productSaveError.set('Enter a valid non-negative price.'); return; }
