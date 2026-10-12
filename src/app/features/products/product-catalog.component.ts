@@ -55,6 +55,7 @@ export class ProductCatalogComponent {
       if (request > lastRequest) {
         lastRequest = request;
         this.editingProduct.set(null);
+        this.selectedCategoryIds.set([]);
         this.productSaveError.set('');
         this.productEditorOpen.set(true);
       }
