@@ -481,7 +481,33 @@ try {
   const inventoryAfterReservationCancellation = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
   const releasedLevel = inventoryAfterReservationCancellation.payload?.data?.find((item) => item.variantId === reservationVariantId);
   if (Number(releasedLevel?.quantityOnHand) !== 3 || Number(releasedLevel?.quantityReserved) !== 0) throw new Error('Cancelling an order did not release its reservation without changing on-hand stock.');
-  checks.push('durable inventory reservations, completion consumption, cancellation release, and idempotent physical-return restocking');
+  const raceOrders = await Promise.all([1, 2].map((attempt) => request(`/api/v1/organizations/${organizationId}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, notes: `Concurrent reservation attempt ${attempt}`, idempotencyKey: `reserve-race-${attempt}-${suffix}`, items: [{ variantId: reservationVariantId, quantity: 2 }] })
+  })));
+  const raceAttempts = await Promise.all(raceOrders.map(async (raceOrder) => {
+    const response = await fetch(new URL(`/api/v1/organizations/${organizationId}/orders/${raceOrder.payload?.data?.id}/inventory-reservations`, baseUrl), {
+      method: 'POST', headers: authHeaders, body: JSON.stringify({ locationId: location.payload?.data?.id })
+    });
+    const responseText = await response.text();
+    let payload = {};
+    try { payload = responseText ? JSON.parse(responseText) : {}; } catch { /* Status is asserted below. */ }
+    return { status: response.status, orderId: raceOrder.payload?.data?.id, payload };
+  }));
+  const successfulRace = raceAttempts.find((attempt) => attempt.status === 201);
+  const rejectedRace = raceAttempts.find((attempt) => attempt.status === 409);
+  if (!successfulRace || !rejectedRace || rejectedRace.payload?.error?.code !== 'INSUFFICIENT_STOCK') {
+    throw new Error(`Concurrent reservations must allow only one order to claim the remaining stock; received statuses ${raceAttempts.map((attempt) => attempt.status).join(', ')}.`);
+  }
+  await request(`/api/v1/organizations/${organizationId}/orders/${successfulRace.orderId}`, 200, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' })
+  });
+  const inventoryAfterReservationRace = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const raceLevel = inventoryAfterReservationRace.payload?.data?.find((item) => item.variantId === reservationVariantId);
+  if (Number(raceLevel?.quantityOnHand) !== 3 || Number(raceLevel?.quantityReserved) !== 0) {
+    throw new Error('Concurrent reservation handling or cancellation left stock counters inconsistent.');
+  }
+  checks.push('durable reservations, completion consumption, cancellation release, idempotent returns, and concurrent oversell prevention');
   await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 200, {
     method: 'PUT', headers: authHeaders,
     body: JSON.stringify({ locationId: location.payload?.data?.id, variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantityOnHand: 5, reorderPoint: 1 })
