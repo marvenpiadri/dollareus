@@ -70,6 +70,8 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - name: Create a fresh test schema
         run: pnpm db:setup
+      - name: Verify migration history and checksums
+        run: pnpm db:status
       - name: Start API and run HTTP smoke checks
         run: |
           pnpm api:start > /tmp/dollareus-api.log 2>&1 &
