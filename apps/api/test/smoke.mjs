@@ -888,6 +888,21 @@ try {
   const publicEntryPoint = await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 200);
   if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-${suffix}/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
   checks.push('storefront publishing, public restaurant menu access, and branded public QR destinations');
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 403, {
+    method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ status: 'paused' })
+  });
+  await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
+    method: 'PATCH', headers: authHeaders,
+    body: JSON.stringify({ name: 'Updated Smoke Store', businessType: 'restaurant', status: 'paused', currency: 'EUR', locale: 'fr', timeZone: 'Europe/Paris' })
+  });
+  const updatedStores = await request(`/api/v1/organizations/${organizationId}/stores`, 200, { headers: authHeaders });
+  const updatedStore = updatedStores.payload?.data?.find((item) => item.id === storeId);
+  if (updatedStore?.name !== 'Updated Smoke Store' || updatedStore?.status !== 'paused' || updatedStore?.defaultCurrency?.trim() !== 'EUR'
+      || updatedStore?.locale !== 'fr' || updatedStore?.timeZone !== 'Europe/Paris' || updatedStore?.businessType !== 'restaurant') {
+    throw new Error('Core store identity, currency, locale, time zone, or lifecycle changes did not persist.');
+  }
+  await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
+  checks.push('manager-only core store identity, business type, status, currency, locale, time zone, and paused-store public gating');
 
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
   for (const check of checks) console.log(`  ✓ ${check}`);
