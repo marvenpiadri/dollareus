@@ -17,11 +17,14 @@ export class PublicMenuComponent {
 
   constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService) {
     const routeSlug = this.route.snapshot.paramMap.get('storeSlug') ?? '';
+    const storeHandle = this.route.snapshot.paramMap.get('storeHandle') ?? '';
+    const locationSlug = this.route.snapshot.paramMap.get('locationSlug') ?? '';
     const hostnameLabels = typeof window !== 'undefined' ? window.location.hostname.toLowerCase().split('.') : [];
     const hostStoreSlug = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/menu' && hostnameLabels.length >= 3 ? hostnameLabels[0] : '';
     const storeSlug = routeSlug || hostStoreSlug;
-    this.publicMenuStoreSlug.set(storeSlug);
-    void this.loadPublicMenu(storeSlug);
+    const publicIdentity = storeHandle && locationSlug ? { storeHandle, locationSlug } : null;
+    this.publicMenuStoreSlug.set(publicIdentity ? storeHandle + '/' + locationSlug : storeSlug);
+    void this.loadPublicMenu(storeSlug, publicIdentity);
   }
 
   protected publicMenuSections(menu: { items?: any[] }): { name: string; items: any[] }[] {
@@ -39,7 +42,7 @@ export class PublicMenuComponent {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
 
-  private async loadPublicMenu(storeSlug: string): Promise<void> {
+  private async loadPublicMenu(storeSlug: string, publicIdentity: { storeHandle: string; locationSlug: string } | null = null): Promise<void> {
     if (!storeSlug) {
       this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
       return;
@@ -48,9 +51,12 @@ export class PublicMenuComponent {
     this.publicMenuError.set('');
     try {
       const encodedSlug = encodeURIComponent(storeSlug);
+      const publicPath = publicIdentity
+        ? '/api/v1/public/storefronts/' + encodeURIComponent(publicIdentity.storeHandle) + '/' + encodeURIComponent(publicIdentity.locationSlug)
+        : '/api/v1/public/stores/' + encodedSlug;
       const [store, menus] = await Promise.all([
-        this.apiClient.request('/api/v1/public/stores/' + encodedSlug),
-        this.apiClient.request('/api/v1/public/stores/' + encodedSlug + '/menus')
+        this.apiClient.request(publicPath),
+        this.apiClient.request(publicPath + '/menus')
       ]);
       this.publicMenuStore.set(store);
       this.publicMenus.set(Array.isArray(menus) ? menus.map((menu: any) => ({ ...menu, items: (Array.isArray(menu.items) ? menu.items : []).map((item: any) => ({ ...item, imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null })) })) : []);
