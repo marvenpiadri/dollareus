@@ -69,7 +69,7 @@
                             @for(option of group.options; track $index; let optionIndex = $index){
                               <div class="modifier-option">
                                 <label>Option name<input [value]="option.name" (input)="updateModifierOption(groupIndex,optionIndex,'name',$any($event.target).value)" required maxlength="100" placeholder="e.g. Large"></label>
-                                <label>Extra price ({{currency()}})<input type="number" min="0" step="0.01" [value]="option.priceDeltaMinor / 100" (input)="updateModifierOption(groupIndex,optionIndex,'priceDeltaMinor',Math.round(+$any($event.target).value * 100))" required></label>
+                                <label>Extra price ({{currency()}})<input type="number" min="0" step="0.01" [value]="option.priceDeltaMinor / 100" (input)="updateModifierOption(groupIndex,optionIndex,'priceDeltaMinor',toMinorUnits($any($event.target).value))" required></label>
                                 <button class="button small" type="button" (click)="removeModifierOption(groupIndex,optionIndex)" [disabled]="group.options.length <= 1" [attr.aria-label]="'Remove '+option.name">Remove option</button>
                               </div>
                             }
