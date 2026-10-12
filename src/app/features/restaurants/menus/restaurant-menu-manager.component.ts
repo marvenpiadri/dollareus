@@ -28,6 +28,7 @@ export class RestaurantMenuManagerComponent {
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
   protected readonly categoryBusy = signal(false);
+  protected readonly editingCategory = signal<CategoryRow | null>(null);
   protected readonly pendingMenuItemImage = signal<File | null>(null);
   protected readonly menuImageBusy = signal(false);
   protected readonly commonAllergens = ['Milk', 'Eggs', 'Fish', 'Crustaceans', 'Peanuts', 'Tree nuts', 'Soy', 'Wheat', 'Sesame', 'Mustard', 'Celery', 'Sulphites', 'Lupin', 'Molluscs'];
@@ -202,6 +203,37 @@ export class RestaurantMenuManagerComponent {
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create category.'); }
     finally { this.categoryBusy.set(false); }
   }
+  protected async saveCategory(event: Event, category: CategoryRow): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const name = String(values.get('name') ?? '').trim();
+    const status = String(values.get('status') ?? category.status);
+    if (!name || !['draft', 'active', 'archived'].includes(status)) {
+      this.menuError.set('Enter a category name and choose a valid status.'); return;
+    }
+    this.categoryBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories/' + encodeURIComponent(category.id), {
+        method: 'PATCH', body: JSON.stringify({ name, status })
+      });
+      await this.load(); this.dataChanged.emit(); this.editingCategory.set(null);
+      this.notifyRequested.emit('Category updated.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update category.'); }
+    finally { this.categoryBusy.set(false); }
+  }
+
+  protected async setCategoryStatus(category: CategoryRow, status: CategoryRow['status']): Promise<void> {
+    this.categoryBusy.set(true); this.menuError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories/' + encodeURIComponent(category.id), {
+        method: 'PATCH', body: JSON.stringify({ status })
+      });
+      await this.load(); this.dataChanged.emit();
+      this.notifyRequested.emit(status === 'active' ? 'Category activated.' : 'Category archived.');
+    } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update category status.'); }
+    finally { this.categoryBusy.set(false); }
+  }
+
   protected async createMenu(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
