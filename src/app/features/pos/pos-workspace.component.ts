@@ -114,6 +114,16 @@ export class PosWorkspaceComponent {
   }
 
   protected hasOpenPosSession(): boolean { return this.posSessions().some((session: any) => session.status === 'open'); }
+  protected selectPosSession(sessionId: string): void {
+    this.selectedPosSessionId.set(sessionId);
+    const session = this.posSessions().find(row => String(row.id) === sessionId);
+    if (session?.locationId) this.selectedPosLocationId.set(String(session.locationId));
+  }
+  protected selectedPosSessionNeedsLocation(): boolean {
+    const session = this.posSessions().find(row => String(row.id) === this.selectedPosSessionId());
+    const hasTrackedRetailItems = this.products().some(product => product.status === 'Active' && (product.kind === 'physical' || product.kind === 'food'));
+    return !!session && !session.locationId && hasTrackedRetailItems;
+  }
 
   protected async createPosSession(event: Event): Promise<void> {
     event.preventDefault();
