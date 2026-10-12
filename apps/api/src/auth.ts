@@ -92,6 +92,14 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       await reply.code(429).send({ error: { code: 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED', message: 'This API credential has reached its daily request quota. Retry after the UTC day resets.', requestId: request.id } });
       return;
     }
+    const isCatalogRead = ['GET', 'HEAD'].includes(request.method.toUpperCase())
+      && scopedSegments.length === 7
+      && scopedSegments[5] === 'integrations'
+      && scopedSegments[6] === 'catalog';
+    if (!isCatalogRead) {
+      await reply.code(403).send({ error: { code: 'API_ROUTE_NOT_ALLOWED', message: 'Developer credentials are currently limited to the published organization catalog endpoint.', requestId: request.id } });
+      return;
+    }
     await pool.query('UPDATE api_credentials SET last_used_at=$1,updated_at=$1 WHERE id=$2', [now, row.credential_id]);
     return;
   }
