@@ -8,7 +8,7 @@ interface ApiEnvelope<T> {
 @Injectable({ providedIn: 'root' })
 export class ApiClientService {
   private readonly runtime = globalThis as typeof globalThis & { DOLLAREUS_API_URL?: string; process?: { env?: Record<string, string | undefined> } };
-  readonly baseUrl = (this.runtime.DOLLAREUS_API_URL ?? this.runtime.process?.env?.DOLLAREUS_API_URL ?? '').replace(/\/$/, '');
+  readonly baseUrl = (this.runtime.DOLLAREUS_API_URL ?? this.runtime.process?.env?.['DOLLAREUS_API_URL'] ?? '').replace(/\/$/, '');
 
   url(path: string): string {
     return this.baseUrl + path;
