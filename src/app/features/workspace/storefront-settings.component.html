@@ -26,7 +26,7 @@
       </section>
       <section class="settings-card">
         <div class="card-heading"><span class="step">03</span><div><h3>Add another location</h3><p>Keep one username for the business and give each branch its own location address. Each location can publish its own menu and product catalog.</p></div></div>
-        <form class="create-location-form" (submit)="createLocation($event)">
+        <div class="create-location-form">
           <div class="fields two-col">
             <label>New location name<input name="newLocationName" maxlength="180" placeholder="Downtown branch"></label>
             <label>New location URL slug<input name="newLocationSlug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="kfc-casablanca-maarif"><small>URL preview: /{{settings()?.publicHandle}}/your-location-slug</small></label>
@@ -35,8 +35,8 @@
             <label>Street address<input name="newAddressLine" maxlength="300" placeholder="Street, number, district"></label>
           </div>
           @if(locationCreateError()){<p class="settings-error" role="alert">{{locationCreateError()}}</p>}
-          <button class="secondary-save" type="submit" [disabled]="creatingLocation()">{{creatingLocation() ? 'Creating location…' : 'Create location'}}</button>
-        </form>
+          <button class="secondary-save" type="button" (click)="createLocation($event)" [disabled]="creatingLocation()">{{creatingLocation() ? 'Creating location…' : 'Create location'}}</button>
+        </div>
       </section>
       <section class="settings-card">
         <div class="card-heading"><span class="step">04</span><div><h3>Search engine details</h3><p>These fields help customers understand the page before they visit it from search results.</p></div></div>
