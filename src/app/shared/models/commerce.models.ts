@@ -5,7 +5,7 @@ export interface OrderRow { id: string; resourceId: string; customer: string; ch
 export interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 export interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
 export interface MenuRow { id: string; slug: string; name: string; description: string | null; status: 'draft' | 'active' | 'archived'; servicePeriods: string[]; itemCount: number; }
-export type PosCartLine = { key: string; sourceType: 'product' | 'menu_item'; sourceItemId: string; sourceVariantId?: string; quantity: number; name: string; priceAmountMinor: number; currency: string; metadata?: Record<string, unknown> };
+export type PosCartLine = { key: string; sourceType: 'product' | 'service' | 'menu_item'; sourceItemId: string; sourceVariantId?: string; quantity: number; name: string; priceAmountMinor: number; currency: string; metadata?: Record<string, unknown> };
 export type MenuModifierOption = { id: string; name: string; priceDeltaMinor: number };
 export type MenuModifierGroup = { id: string; name: string; required: boolean; minSelections: number; maxSelections: number; options: MenuModifierOption[] };
 export interface MenuItemRow { id: string; menuId: string; slug: string; name: string; description: string | null; priceAmountMinor: number; currency: string; status: 'draft' | 'active' | 'archived'; availability: 'available' | 'unavailable' | 'limited'; position: number; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; modifierGroups?: MenuModifierGroup[]; metadata?: Record<string, unknown>; imageUrl?: string | null; }
