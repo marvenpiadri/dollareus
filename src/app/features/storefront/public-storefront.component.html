@@ -9,7 +9,7 @@
       <div class="hero-copy" id="contact">
         <span class="eyebrow">{{store()?.businessType || 'Independent business'}} · {{locationLabel()}}</span>
         <h1>{{store()?.name}}</h1>
-        @if (store()?.description) { <p class="description">{{store()?.description}}</p> }
+        @if (store()?.description || store()?.seoDescription) { <p class="description">{{store()?.description || store()?.seoDescription}}</p> }
         @if (store()?.addressLine || store()?.city || store()?.countryCode) { <p class="address-line">@if(store()?.addressLine){<span>{{store()?.addressLine}}</span>} @if(store()?.city){<span>{{store()?.city}}</span>} @if(store()?.countryCode){<span>{{store()?.countryCode}}</span>}</p> }
         @if (store()?.phone || store()?.websiteUrl || store()?.googleMapsUrl) { <div class="contact-links">@if(store()?.phone){<a [href]="'tel:' + store()?.phone">Call this location</a>} @if(store()?.websiteUrl){<a [href]="store()?.websiteUrl" target="_blank" rel="noopener noreferrer">Official website ↗</a>} @if(store()?.googleMapsUrl){<a [href]="store()?.googleMapsUrl" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a>}</div> }
         <div class="hero-actions">
