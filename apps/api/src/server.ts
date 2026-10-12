@@ -1366,17 +1366,19 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
   );
   if (!result.rowCount) return fail(reply, request, 404, 'ENTRY_POINT_NOT_FOUND', 'The published entry point does not exist.');
   const row = result.rows[0];
-  const storePath = '/' + row.store_handle + '/' + row.location_slug;\n  const targetUrlPath = row.target_path === '/' ? storePath : storePath + row.target_path;
+  const storePath = '/' + row.store_handle + '/' + row.location_slug;
+  const targetUrlPath = row.target_path === '/' ? storePath : storePath + row.target_path;
   const primaryDomain = await pool.query("SELECT hostname FROM store_domains WHERE store_id=(SELECT store_id FROM entry_points WHERE id=$1) AND status='active' AND is_primary=true LIMIT 1", [row.id]);
   const configuredBaseValue = (process.env.PUBLIC_STOREFRONT_BASE_URL ?? '').trim();
   const configuredBase = configuredBaseValue.endsWith('/') ? configuredBaseValue.slice(0, -1) : configuredBaseValue;
-  const publicDomain = (process.env.PUBLIC_STORE_DOMAIN ?? '').trim().replace(/^https?:\\/\\//, '').replace(/\\/$/, '');\n  const publicDomainBase = publicDomain ? 'https://' + publicDomain : '';
+  const publicDomain = (process.env.PUBLIC_STORE_DOMAIN ?? '').trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const publicDomainBase = publicDomain ? 'https://' + publicDomain : '';
   const targetUrl = primaryDomain.rows[0]?.hostname
     ? 'https://' + primaryDomain.rows[0].hostname + (row.target_path === '/' ? '' : row.target_path)
     : configuredBase
       ? configuredBase + targetUrlPath
-      : subdomainBase
-        ? subdomainBase + (row.target_path === '/' ? '' : row.target_path)
+      : publicDomainBase
+        ? publicDomainBase + targetUrlPath
         : null;
   return { data: { id: row.id, type: row.type, targetPath: row.target_path, storeSlug: row.store_slug, storeHandle: row.store_handle, locationSlug: row.location_slug, storeName: row.store_name, targetUrlPath, targetUrl, branding: row.branding ?? {} }, requestId: request.id };
 });
