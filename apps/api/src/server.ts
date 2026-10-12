@@ -560,6 +560,12 @@ const CategoryInput = z.object({
   description: z.string().max(5000).nullable().optional(), position: z.number().int().nonnegative().optional(),
   status: z.enum(['draft', 'active', 'archived']).optional()
 }).strict();
+const CategoryPatchInput = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  position: z.number().int().nonnegative().optional()
+}).strict().refine(value => Object.keys(value).length > 0, { message: 'At least one category field must be supplied.' });
 const CustomerInput = z.object({
   email: z.string().trim().email().max(254).nullable().optional(), phone: z.string().trim().max(80).nullable().optional(),
   firstName: z.string().trim().max(120).nullable().optional(), lastName: z.string().trim().max(120).nullable().optional(),
@@ -610,6 +616,21 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'CATEGORY_CONFLICT', 'A category with this slug already exists in the selected store.');
     throw error;
   }
+});
+
+app.patch<{ Params: { organizationId: string; categoryId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/categories/:categoryId', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, categoryId } = request.params;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = CategoryPatchInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The category update is invalid.');
+  const current = await pool.query('SELECT id,store_id FROM categories WHERE id=$1 AND organization_id=$2', [categoryId, organizationId]);
+  if (!current.rowCount) return fail(reply, request, 404, 'CATEGORY_NOT_FOUND', 'The category does not exist in this organization.');
+  const value = parsed.data;
+  const result = await pool.query(
+    'UPDATE categories SET name=COALESCE($1,name),description=CASE WHEN $2 THEN $3 ELSE description END,status=COALESCE($4,status),position=COALESCE($5,position),updated_at=$6 WHERE id=$7 AND organization_id=$8 RETURNING id,organization_id,store_id,name,slug,description,position,status,created_at,updated_at',
+    [value.name ?? null, value.description !== undefined, value.description ?? null, value.status ?? null, value.position ?? null, new Date(), categoryId, organizationId]
+  );
+  return { data: camelize(result.rows[0]), requestId: request.id };
 });
 
 app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; search?: string } }>('/api/v1/organizations/:organizationId/customers', { preHandler: authenticate }, async (request, reply) => {
