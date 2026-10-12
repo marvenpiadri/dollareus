@@ -7,6 +7,7 @@ const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = 'dollareus_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const OAUTH_STATE_TTL_MS = 1000 * 60 * 10;
+const API_CREDENTIAL_DAILY_LIMIT = Math.max(1, Number.parseInt(process.env.API_CREDENTIAL_DAILY_LIMIT ?? '10000', 10) || 10000);
 
 export interface AuthIdentity {
   uid: string;
@@ -83,6 +84,13 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     }
     request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
     request.apiCredential = { id: row.credential_id, organizationId: row.organization_id, scopes: row.scopes };
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const usage = await pool.query('SELECT count(*)::int AS request_count FROM api_usage_events WHERE credential_id=$1 AND created_at >= $2', [row.credential_id, dayStart]);
+    if (Number(usage.rows[0]?.request_count ?? 0) >= API_CREDENTIAL_DAILY_LIMIT) {
+      reply.header('Retry-After', String(Math.max(1, Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000)));
+      await reply.code(429).send({ error: { code: 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED', message: 'This API credential has reached its daily request quota. Retry after the UTC day resets.', requestId: request.id } });
+      return;
+    }
     await pool.query('UPDATE api_credentials SET last_used_at=$1,updated_at=$1 WHERE id=$2', [now, row.credential_id]);
     return;
   }
