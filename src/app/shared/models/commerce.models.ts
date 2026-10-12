@@ -1,6 +1,6 @@
 export type ProductStatus = 'Active' | 'Draft' | 'Archived';
 export interface ProductVariantRow { id: string; title: string; sku: string; priceMinor: number; currency: string; stock: number | null; }
-export interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; categoryIds?: string[]; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; variants?: ProductVariantRow[]; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
+export interface ProductRow { id: string; name: string; slug: string; description: string | null; category: string; categoryIds?: string[]; sku: string; variantId: string; priceMinor: number; currency: string; stock: number | null; variants?: ProductVariantRow[]; kind?: 'physical' | 'digital' | 'service' | 'food'; status: ProductStatus; initials: string; tone: string; imageUrl: string | null; }
 export interface OrderRow { id: string; resourceId: string; customer: string; channel: string; totalMinor: number; currency: string; status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled' | 'refunded'; paymentStatus: string; }
 export interface CustomerRow { id: string; displayName: string; email: string | null; phone: string | null; }
 export interface CategoryRow { id: string; name: string; slug: string; description: string | null; position: number; status: 'draft' | 'active' | 'archived'; }
