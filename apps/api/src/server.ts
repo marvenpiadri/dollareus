@@ -155,15 +155,23 @@ const Slug = z.string().trim().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$
 const OrganizationInput = z.object({ name: z.string().trim().min(1).max(180), slug: Slug }).strict();
 const StoreInput = z.object({
   name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable(), slug: Slug,
+  publicHandle: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+([_-][a-z0-9]+)*$/).optional(),
+  locationSlug: Slug.optional(),
   businessType: z.enum(['retail', 'restaurant', 'freelancer', 'services', 'digital', 'general']),
   status: z.enum(['setup', 'active', 'paused', 'archived']), currency: z.string().regex(/^[A-Z]{3}$/),
   locale: z.enum(['en', 'fr', 'ar']), timeZone: z.string().min(1).max(100),
   defaultExperience: z.enum(['commerce', 'menu', 'catalog', 'services']),
   enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1),
-  published: z.boolean(), theme: z.record(z.string(), z.unknown())
+  published: z.boolean(), theme: z.record(z.string(), z.unknown()),
+  wifiSsid: z.string().trim().max(120).nullable().optional(), wifiPassword: z.string().max(120).nullable().optional(),
+  wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional()
 }).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' });
 const StorefrontPatchInput = z.object({
   published: z.boolean().optional(),
+  publicHandle: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+([_-][a-z0-9]+)*$/).optional(),
+  locationSlug: Slug.optional(),
+  wifiSsid: z.string().trim().max(120).nullable().optional(), wifiPassword: z.string().max(120).nullable().optional(),
+  wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional(),
   defaultExperience: z.enum(['commerce', 'menu', 'catalog', 'services']).optional(),
   enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1).optional(),
   seoTitle: z.string().trim().max(180).nullable().optional(),
@@ -504,7 +512,10 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('INSERT INTO stores (id,organization_id,name,description,slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)', [id, organizationId, parsed.data.name, parsed.data.description, parsed.data.slug, parsed.data.businessType, parsed.data.status, parsed.data.currency, parsed.data.locale, parsed.data.timeZone, now]);
+    const organization = await client.query('SELECT slug FROM organizations WHERE id=$1', [organizationId]);
+    const publicHandle = parsed.data.publicHandle ?? String(organization.rows[0]?.slug ?? parsed.data.slug);
+    const locationSlug = parsed.data.locationSlug ?? parsed.data.slug;
+    await client.query('INSERT INTO stores (id,organization_id,name,description,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,wifi_ssid,wifi_password,wifi_security,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULL,NULL,$13,$14,$14)', [id, organizationId, parsed.data.name, parsed.data.description, locationSlug, publicHandle, locationSlug, parsed.data.businessType, parsed.data.status, parsed.data.currency, parsed.data.locale, parsed.data.timeZone, parsed.data.wifiSecurity ?? 'WPA2', now]);
     await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$7)', [id, organizationId, parsed.data.defaultExperience, parsed.data.enabledExperiences, parsed.data.published, JSON.stringify(parsed.data.theme), now]);
     await client.query('COMMIT');
     return reply.code(201).send({ data: { id, organizationId, ...parsed.data, createdAt: now, updatedAt: now }, requestId: request.id });
@@ -528,21 +539,36 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = StorefrontPatchInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The storefront settings payload is invalid.');
-  const current = await pool.query('SELECT s.id,s.status,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
+  const current = await pool.query('SELECT s.id,s.status,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
   if (!current.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
   const row = current.rows[0];
   const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
   const enabledExperiences = parsed.data.enabledExperiences ?? row.enabled_experiences;
   if (!enabledExperiences.includes(defaultExperience)) return fail(reply, request, 400, 'INVALID_DEFAULT_EXPERIENCE', 'The default experience must be included in enabled experiences.');
-  const result = await pool.query(
-    'UPDATE store_frontends SET default_experience=$1,enabled_experiences=$2,published=$3,seo_title=$4,seo_description=$5,theme=$6::jsonb,updated_at=$7 WHERE store_id=$8 AND organization_id=$9 RETURNING store_id,organization_id,default_experience,enabled_experiences,published,seo_title,seo_description,theme,updated_at',
-    [defaultExperience, enabledExperiences, parsed.data.published ?? row.published, parsed.data.seoTitle === undefined ? row.seo_title : parsed.data.seoTitle, parsed.data.seoDescription === undefined ? row.seo_description : parsed.data.seoDescription, JSON.stringify(parsed.data.theme ?? row.theme ?? {}), new Date(), storeId, organizationId]
-  );
-  return { data: camelize(result.rows[0]), requestId: request.id };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const publicHandle = parsed.data.publicHandle ?? row.public_handle;
+    const locationSlug = parsed.data.locationSlug ?? row.location_slug;
+    const wifiSsid = parsed.data.wifiSsid === undefined ? row.wifi_ssid : parsed.data.wifiSsid;
+    const wifiPassword = parsed.data.wifiPassword === undefined ? row.wifi_password : parsed.data.wifiPassword;
+    const wifiSecurity = parsed.data.wifiSecurity ?? row.wifi_security;
+    await client.query('UPDATE stores SET public_handle=$1,location_slug=$2,wifi_ssid=$3,wifi_password=$4,wifi_security=$5,updated_at=$6 WHERE id=$7 AND organization_id=$8', [publicHandle, locationSlug, wifiSsid, wifiPassword, wifiSecurity, new Date(), storeId, organizationId]);
+    const result = await client.query(
+      'UPDATE store_frontends SET default_experience=$1,enabled_experiences=$2,published=$3,seo_title=$4,seo_description=$5,theme=$6::jsonb,updated_at=$7 WHERE store_id=$8 AND organization_id=$9 RETURNING store_id,organization_id,default_experience,enabled_experiences,published,seo_title,seo_description,theme,updated_at',
+      [defaultExperience, enabledExperiences, parsed.data.published ?? row.published, parsed.data.seoTitle === undefined ? row.seo_title : parsed.data.seoTitle, parsed.data.seoDescription === undefined ? row.seo_description : parsed.data.seoDescription, JSON.stringify(parsed.data.theme ?? row.theme ?? {}), new Date(), storeId, organizationId]
+    );
+    await client.query('COMMIT');
+    return { data: { ...camelize(result.rows[0]) as Record<string, unknown>, publicHandle, locationSlug, wifiSsid, wifiPassword, wifiSecurity }, requestId: request.id };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'STORE_PUBLIC_PATH_TAKEN', 'That public store address is already in use. Choose another username or location address.');
+    throw error;
+  } finally { client.release(); }
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', async (request, reply) => {
-  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
+  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE (s.slug=$1 OR s.public_handle=$1) AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
   if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
