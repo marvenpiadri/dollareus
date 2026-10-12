@@ -596,7 +596,15 @@ try {
     body: JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', idempotencyKey: `viewer-payment-${suffix}` })
   });
   const posPaymentPath = `/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/payments`;
-  const posPaymentBody = JSON.stringify({ method: 'cash', amountMinor: 2598, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` });
+  const partialPosPayment = await request(posPaymentPath, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ method: 'cash', amountMinor: 500, status: 'succeeded', reference: `POS-PARTIAL-${suffix}`, idempotencyKey: `smoke-pos-partial-payment-${suffix}` })
+  });
+  if (partialPosPayment.payload?.data?.paymentStatus !== 'partially_paid') throw new Error('A partial manual POS payment did not set the effective payment status.');
+  const partiallyPaidPosOrders = await request(`${posBase}/orders`, 200, { headers: authHeaders });
+  const partiallyPaidProjection = partiallyPaidPosOrders.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
+  if (partiallyPaidProjection?.paymentStatus !== 'partially_paid') throw new Error('POS order projection did not expose the partial payment status.');
+  const posPaymentBody = JSON.stringify({ method: 'cash', amountMinor: 2098, status: 'succeeded', reference: `POS-CASH-${suffix}`, idempotencyKey: `smoke-pos-payment-${suffix}` });
   const concurrentPaymentAttempts = await Promise.all([1, 2].map(async () => {
     const response = await fetch(new URL(posPaymentPath, baseUrl), { method: 'POST', headers: authHeaders, body: posPaymentBody });
     const text = await response.text();
