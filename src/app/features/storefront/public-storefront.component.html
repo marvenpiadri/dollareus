@@ -6,7 +6,7 @@
     <section class="state-panel error-panel" role="alert"><span class="eyebrow">STOREFRONT UNAVAILABLE</span><h1>We couldn't find this store</h1><p>{{error()}}</p><a routerLink="/">Return to Dollareus</a></section>
   } @else {
     <section class="hero">
-      <div class="hero-copy">
+      <div class="hero-copy" id="contact">
         <span class="eyebrow">{{store()?.businessType || 'Independent business'}} · {{locationLabel()}}</span>
         <h1>{{store()?.name}}</h1>
         @if (store()?.description) { <p class="description">{{store()?.description}}</p> }
@@ -29,7 +29,7 @@
       <div class="section-heading"><div><span class="eyebrow">EXPLORE</span><h2>What would you like to see?</h2></div><p>Choose the experience this business has published.</p></div>
       <div class="offering-grid">
         @for (experience of availableExperiences(); track experience) {
-          <a class="offering-card" [routerLink]="storePath(experience === 'menu' ? '/menu' : experience === 'services' ? '/services' : '/products')">
+          <a class="offering-card" [routerLink]="storePath(experience === 'menu' ? '/menu' : experience === 'services' ? '#contact' : '/products')">
             <span class="offering-icon">{{experience === 'menu' ? '☷' : experience === 'services' ? '✳' : '◇'}}</span>
             <span class="offering-title">{{experienceLabel(experience)}}</span>
             <span class="offering-description">{{experience === 'menu' ? 'Menus, dishes, descriptions and prices.' : experience === 'services' ? 'Services and ways to work with this business.' : 'Products, categories and prices.'}}</span>
