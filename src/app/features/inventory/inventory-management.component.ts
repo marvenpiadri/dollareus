@@ -1,4 +1,4 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 
@@ -8,6 +8,8 @@ import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
   templateUrl: './inventory-management.component.html',
   styleUrl: './inventory-management.component.css'
 })
+type InventoryMovement = { id: string; locationName: string; productName: string; variantTitle: string; movementType: string; quantityDelta: number; quantityAfter: number; referenceType: string | null; referenceId: string | null; note: string | null; createdAt: string };
+
 export class InventoryManagementComponent {
   readonly inventory = input.required<InventoryRow[]>();
   readonly products = input.required<ProductRow[]>();
@@ -18,8 +20,30 @@ export class InventoryManagementComponent {
   protected readonly inventoryError = signal('');
   protected readonly inventoryBusy = signal(false);
   protected readonly currentStoreInventory = computed(() => this.inventory().filter(item => item.storeId === this.storeId()));
+  protected readonly movementHistory = signal<InventoryMovement[]>([]);
+  protected readonly movementHistoryError = signal('');
+  private movementLoadVersion = 0;
 
-  constructor(private readonly apiClient: ApiClientService) {}
+  constructor(private readonly apiClient: ApiClientService) {
+    effect(() => {
+      const organizationId = this.organizationId();
+      const storeId = this.storeId();
+      if (organizationId && storeId) void this.loadMovementHistory(organizationId, storeId);
+    });
+  }
+
+  private async loadMovementHistory(organizationId = this.organizationId(), storeId = this.storeId()): Promise<void> {
+    const version = ++this.movementLoadVersion;
+    try {
+      const rows = await this.apiClient.request<InventoryMovement[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/inventory/movements?storeId=${encodeURIComponent(storeId)}&limit=100`);
+      if (version === this.movementLoadVersion && organizationId === this.organizationId() && storeId === this.storeId()) {
+        this.movementHistory.set(Array.isArray(rows) ? rows : []);
+        this.movementHistoryError.set('');
+      }
+    } catch (error) {
+      if (version === this.movementLoadVersion) this.movementHistoryError.set(error instanceof Error ? error.message : 'Could not load stock movement history.');
+    }
+  }
 
   protected locationOptions(): { id: string; name: string }[] {
     const unique = new Map<string, string>();
@@ -45,6 +69,7 @@ export class InventoryManagementComponent {
         method: 'PUT', body: JSON.stringify({ locationId, variantId, quantityOnHand, reorderPoint })
       });
       this.dataChanged.emit();
+      await this.loadMovementHistory();
       this.notifyRequested.emit('Stock level saved.');
     } catch (error) {
       this.inventoryError.set(error instanceof Error ? error.message : 'Could not set stock level.');
@@ -89,6 +114,7 @@ export class InventoryManagementComponent {
         method: 'PUT', body: JSON.stringify({ locationId: item.locationId, variantId: item.variantId, quantityOnHand, reorderPoint })
       });
       this.dataChanged.emit();
+      await this.loadMovementHistory();
       this.notifyRequested.emit('Stock level updated.');
     } catch (error) {
       this.inventoryError.set(error instanceof Error ? error.message : 'Could not update stock.');
