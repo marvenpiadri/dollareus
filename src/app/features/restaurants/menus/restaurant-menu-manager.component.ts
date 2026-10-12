@@ -89,6 +89,11 @@ export class RestaurantMenuManagerComponent {
     }
   }
 
+  protected toMinorUnits(value: string | number): number {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
+  }
+
   protected categoryName(categoryId?: string | null): string {
     return this.categories().find(category => category.id === categoryId)?.name ?? '—';
   }
