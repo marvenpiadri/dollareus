@@ -782,20 +782,45 @@ app.put<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiza
   const parsed = InventoryAdjustmentInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The inventory adjustment payload is invalid.');
   const now = new Date();
+  const client = await pool.connect();
   try {
-    const location = await pool.query('SELECT id,store_id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3', [parsed.data.locationId, organizationId, 'active']);
-    if (!location.rowCount) return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The inventory location does not exist or is inactive.');
-    const variant = await pool.query('SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.organization_id=$2 AND p.organization_id=$2 AND ($3::text IS NULL OR p.store_id=$3)', [parsed.data.variantId, organizationId, location.rows[0].store_id]);
-    if (!variant.rowCount) return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The product variant does not exist in this organization.');
-    const result = await pool.query(
+    await client.query('BEGIN');
+    const location = await client.query('SELECT id,store_id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3 FOR SHARE', [parsed.data.locationId, organizationId, 'active']);
+    if (!location.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The inventory location does not exist or is inactive.'); }
+    const variant = await client.query('SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.organization_id=$2 AND p.organization_id=$2 AND ($3::text IS NULL OR p.store_id=$3)', [parsed.data.variantId, organizationId, location.rows[0].store_id]);
+    if (!variant.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The product variant does not exist in this organization.'); }
+    const previous = await client.query('SELECT quantity_on_hand FROM inventory_levels WHERE organization_id=$1 AND location_id=$2 AND variant_id=$3 FOR UPDATE', [organizationId, parsed.data.locationId, parsed.data.variantId]);
+    const previousQuantity = Number(previous.rows[0]?.quantity_on_hand ?? 0);
+    const result = await client.query(
       'INSERT INTO inventory_levels (organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at) VALUES ($1,$2,$3,$4,0,$5,$6) ON CONFLICT (location_id,variant_id) DO UPDATE SET quantity_on_hand=EXCLUDED.quantity_on_hand,reorder_point=EXCLUDED.reorder_point,updated_at=EXCLUDED.updated_at RETURNING organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at',
       [organizationId, parsed.data.locationId, parsed.data.variantId, parsed.data.quantityOnHand, parsed.data.reorderPoint ?? null, now]
     );
+    const delta = parsed.data.quantityOnHand - previousQuantity;
+    if (delta !== 0) {
+      await client.query(
+        'INSERT INTO inventory_movements (id,organization_id,location_id,variant_id,movement_type,quantity_delta,quantity_after,reference_type,reference_id,note,actor_user_id,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [randomUUID(), organizationId, parsed.data.locationId, parsed.data.variantId, 'adjustment', delta, parsed.data.quantityOnHand, 'manual_adjustment', null, 'Manual stock count adjustment', request.identity!.uid, now]
+      );
+    }
+    await client.query('COMMIT');
     return { data: camelize(result.rows[0]), requestId: request.id };
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23514') return fail(reply, request, 409, 'INVENTORY_BELOW_RESERVED', 'On-hand quantity cannot be lower than the quantity already reserved.');
     throw error;
-  }
+  } finally { client.release(); }
+});
+
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string; variantId?: string } }>('/api/v1/organizations/:organizationId/inventory/movements', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsedLimit = Number.parseInt(request.query.limit ?? '100', 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 500)) : 100;
+  const result = await pool.query(
+    'SELECT m.id,m.location_id,l.name AS location_name,l.store_id,m.variant_id,v.sku,v.title AS variant_title,p.name AS product_name,m.movement_type,m.quantity_delta,m.quantity_after,m.reference_type,m.reference_id,m.note,m.actor_user_id,m.created_at FROM inventory_movements m JOIN inventory_locations l ON l.id=m.location_id AND l.organization_id=m.organization_id JOIN product_variants v ON v.id=m.variant_id AND v.organization_id=m.organization_id JOIN products p ON p.id=v.product_id AND p.organization_id=m.organization_id WHERE m.organization_id=$1 AND ($2::text IS NULL OR l.store_id=$2) AND ($3::text IS NULL OR m.variant_id=$3) ORDER BY m.created_at DESC,m.id DESC LIMIT $4',
+    [organizationId, request.query.storeId ?? null, request.query.variantId ?? null, limit]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
 });
 
 app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string } }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
@@ -2059,9 +2084,13 @@ app.patch<{ Params: { organizationId: string; storeId: string; orderId: string }
           await client.query('ROLLBACK');
           return fail(reply, request, 409, 'POS_INSUFFICIENT_STOCK', 'There is not enough available stock at this register location to complete the sale.');
         }
-        await client.query(
-          'UPDATE inventory_levels SET quantity_on_hand=quantity_on_hand-$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5',
+        const updatedLevel = await client.query(
+          'UPDATE inventory_levels SET quantity_on_hand=quantity_on_hand-$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5 RETURNING quantity_on_hand',
           [quantity, now, organizationId, locationId, variantId]
+        );
+        await client.query(
+          'INSERT INTO inventory_movements (id,organization_id,location_id,variant_id,movement_type,quantity_delta,quantity_after,reference_type,reference_id,note,actor_user_id,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+          [randomUUID(), organizationId, locationId, variantId, 'sale', -quantity, Number(updatedLevel.rows[0].quantity_on_hand), 'pos_order', orderId, 'POS sale completed', request.identity!.uid, now]
         );
         inventoryDeductions.push({ variantId, locationId, quantity });
       }
