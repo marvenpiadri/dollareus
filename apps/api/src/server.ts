@@ -916,13 +916,13 @@ app.post<{ Params: { organizationId: string; menuId: string; itemId: string }; B
   if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MENU_IMAGE_TYPE_INVALID', 'Only WebP images are accepted.');
   const dimensions = readWebpDimensions(body);
   if (!dimensions || dimensions.width !== dimensions.height || dimensions.width > 2400) return fail(reply, request, 400, 'MENU_IMAGE_DIMENSIONS_INVALID', 'Dish photos must be square and no larger than 2400 × 2400 pixels.');
-  const item = await pool.query('SELECT id,metadata FROM restaurant_menu_items WHERE id=$1 AND menu_id=$2 AND organization_id=$3', [itemId, menuId, organizationId]);
+  const item = await pool.query('SELECT id,name,metadata FROM restaurant_menu_items WHERE id=$1 AND menu_id=$2 AND organization_id=$3', [itemId, menuId, organizationId]);
   if (!item.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The menu item does not exist in this menu.');
   if (!process.env.AWS_S3_BUCKET || !process.env.AWS_ENDPOINT_URL_S3 || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return fail(reply, request, 503, 'MEDIA_STORAGE_NOT_CONFIGURED', 'S3-compatible media storage is not configured on the server.');
   const storageKey = 'organizations/' + organizationId + '/restaurant-menu-items/' + itemId + '/image.webp';
   const stored = await s3Request('PUT', storageKey, body);
   if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The dish photo could not be saved.');
-  const image = { storageKey, contentType: 'image/webp', width: dimensions.width, height: dimensions.height, byteSize: body.length, altText: String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500) || String((item.rows[0].metadata as Record<string, unknown> | null)?.name ?? 'Dish photo') };
+  const image = { storageKey, contentType: 'image/webp', width: dimensions.width, height: dimensions.height, byteSize: body.length, altText: String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500) || String(item.rows[0].name ?? 'Dish photo') };
   await pool.query("UPDATE restaurant_menu_items SET metadata=metadata || jsonb_build_object('restaurantImage',$1::jsonb),updated_at=$2 WHERE id=$3 AND menu_id=$4 AND organization_id=$5", [JSON.stringify(image), new Date(), itemId, menuId, organizationId]);
   return reply.code(201).send({ data: { imageUrl: '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image', width: dimensions.width, height: dimensions.height }, requestId: request.id });
 });
