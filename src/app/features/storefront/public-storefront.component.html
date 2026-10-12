@@ -1,0 +1,42 @@
+<main class="store-page">
+  <header class="topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span><span>Dollareus</span></a><span class="topbar-note">Independent businesses, made discoverable</span></header>
+  @if (loading()) {
+    <section class="state-panel"><span class="eyebrow">PUBLIC STOREFRONT</span><h1>Opening store…</h1><p>Loading the latest details and offerings.</p></section>
+  } @else if (error()) {
+    <section class="state-panel error-panel" role="alert"><span class="eyebrow">STOREFRONT UNAVAILABLE</span><h1>We couldn't find this store</h1><p>{{error()}}</p><a routerLink="/">Return to Dollareus</a></section>
+  } @else {
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">{{store()?.businessType || 'Independent business'}} · {{store()?.locationSlug?.replaceAll('-', ' ')}}</span>
+        <h1>{{store()?.name}}</h1>
+        @if (store()?.description) { <p class="description">{{store()?.description}}</p> }
+        <div class="hero-actions">
+          <a class="primary-action" [routerLink]="primaryLink()">{{primaryLabel()}} <span aria-hidden="true">↗</span></a>
+          @if (store()?.wifiSsid) { <a class="secondary-action" [routerLink]="storePath('/menu')">Guest Wi-Fi details</a> }
+        </div>
+        <p class="location-note">Prices and availability are maintained by this business.</p>
+      </div>
+      <aside class="identity-card">
+        <span class="card-label">OFFICIAL STORE PAGE</span>
+        <div class="identity-icon">{{String(store()?.name ?? 'S').slice(0, 1).toUpperCase()}}</div>
+        <h2>{{store()?.name}}</h2>
+        <p>{{store()?.businessType || 'Business'}}</p>
+        <span class="handle">@{{store()?.publicHandle}}</span>
+      </aside>
+    </section>
+    <section class="offerings">
+      <div class="section-heading"><div><span class="eyebrow">EXPLORE</span><h2>What would you like to see?</h2></div><p>Choose the experience this business has published.</p></div>
+      <div class="offering-grid">
+        @for (experience of availableExperiences(); track experience) {
+          <a class="offering-card" [routerLink]="storePath(experience === 'menu' ? '/menu' : experience === 'services' ? '/services' : '/products')">
+            <span class="offering-icon">{{experience === 'menu' ? '☷' : experience === 'services' ? '✳' : '◇'}}</span>
+            <span class="offering-title">{{experienceLabel(experience)}}</span>
+            <span class="offering-description">{{experience === 'menu' ? 'Menus, dishes, descriptions and prices.' : experience === 'services' ? 'Services and ways to work with this business.' : 'Products, categories and prices.'}}</span>
+            <span class="offering-arrow" aria-hidden="true">↗</span>
+          </a>
+        }
+      </div>
+    </section>
+    <footer class="store-footer"><span>Published with Dollareus</span><span>Store information is provided by the business.</span></footer>
+  }
+</main>
