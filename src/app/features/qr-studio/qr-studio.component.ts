@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { DEFAULT_QR_DESIGN, QrDesign } from '../../core/qr/qr-design.model';
+import { DEFAULT_QR_DESIGN, QrDesign, ModuleStyle, EyeFrameStyle, EyePupilStyle } from '../../core/qr/qr-design.model';
 import { QrCanvasRenderer } from '../../core/qr/qr-canvas-renderer';
 import { QrMatrixGenerator, QrEccLevel } from '../../core/qr/qr-matrix';
 import { QrSvgRenderer } from '../../core/qr/qr-svg-renderer';
@@ -17,6 +17,12 @@ export class QrStudioComponent {
   protected readonly label = signal(qrParam('label', 'Scan to view menu'));
   protected readonly logoUrl = signal(qrParam('logo', ''));
   protected readonly level = signal<QrEccLevel>('H');
+  protected readonly moduleStyle = signal<ModuleStyle>('rounded');
+  protected readonly eyeFrameStyle = signal<EyeFrameStyle>('rounded');
+  protected readonly eyePupilStyle = signal<EyePupilStyle>('rounded');
+  protected readonly useGradient = signal(false);
+  protected readonly gradientAngle = signal(45);
+  protected readonly quietZone = signal(4);
   protected readonly size = signal('640');
   protected readonly qrDataUrl = signal('');
   protected readonly svgDataUrl = signal('');
@@ -26,7 +32,7 @@ export class QrStudioComponent {
   protected setExample(value: string): void { this.content.set(value); this.error.set(''); }
   private makeDesign(): QrDesign {
     const logo = this.logoUrl().trim();
-    return { ...DEFAULT_QR_DESIGN, foreground: this.dark(), background: this.light(), useGradient: false, gradientColor2: this.accent(), quietZone: 4, eccLevel: logo ? 'H' : this.level(),
+    return { ...DEFAULT_QR_DESIGN, foreground: this.dark(), background: this.light(), useGradient: this.useGradient(), gradientAngle: this.gradientAngle(), gradientColor2: this.accent(), moduleStyle: this.moduleStyle(), eyeFrameStyle: this.eyeFrameStyle(), eyePupilStyle: this.eyePupilStyle(), quietZone: this.quietZone(), eccLevel: logo ? 'H' : this.level(),
       logo: { ...DEFAULT_QR_DESIGN.logo, enabled: Boolean(logo), dataUrl: logo, name: logo ? 'Business logo' : '', sizeRatio: 0.18, padding: 1, bgColor: this.light(), shape: 'rounded' },
       frame: { ...DEFAULT_QR_DESIGN.frame, type: this.frame() === 'top-label' ? 'badge-top' : this.frame() === 'bottom-label' ? 'badge-bottom' : 'none', text: this.label().trim() || this.brandName().trim() || 'SCAN ME', color: this.accent(), textColor: '#ffffff', fontFamily: 'Inter, Arial, sans-serif' }
     };
