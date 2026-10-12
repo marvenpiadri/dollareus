@@ -97,8 +97,10 @@ export class PublicCatalogComponent {
       const categorySlug = this.selectedCategorySlug();
       const category = categorySlug ? (Array.isArray(products) ? products.flatMap((item: any) => item.categories ?? []).find((item: any) => item.slug === categorySlug) : null) : null;
       const pageTitle = product ? String(product.name) + ' | ' + name : category ? String(category.name) + ' | ' + name : title;
-      this.title.setTitle(pageTitle);
+      const missingTarget = Boolean((productSlug && !product) || (categorySlug && !category));
+      this.title.setTitle(missingTarget ? (productSlug ? 'Product unavailable | ' : 'Category unavailable | ') + name : pageTitle);
       this.meta.updateTag({ name: 'description', content: String(product?.description ?? (category ? 'Browse ' + category.name + ' from ' + name + '.' : store?.seoDescription ?? ('Browse products and prices from ' + name + '.'))).slice(0, 320) });
+      this.meta.updateTag({ name: 'robots', content: missingTarget ? 'noindex,nofollow' : 'index,follow' });
       this.meta.updateTag({ property: 'og:title', content: title });
       this.meta.updateTag({ property: 'og:type', content: 'website' });
       this.meta.updateTag({ name: 'robots', content: 'index,follow' });
