@@ -20,7 +20,7 @@
       <section class="catalog-state"><p class="eyebrow">PRODUCT UNAVAILABLE</p><h1>We couldn't find that product</h1><p>This product may have been removed or is no longer published.</p><a class="primary-action" [routerLink]="storePath('/products')">Browse all products</a></section>
     }
   } @else {
-    <section class="catalog-hero"><p class="eyebrow">{{store()?.name}} · {{locationLabel()}}</p><h1>{{selectedCategorySlug() ? categoryTitle() : 'Products'}}</h1><p>{{selectedCategorySlug() ? 'Explore products in this category.' : 'Explore the products and current prices published by this business.'}}</p><span class="product-count">{{visibleCategories().reduce((count, category) => count + category.products.length, 0)}} products</span></section>
+    <section class="catalog-hero"><p class="eyebrow">{{store()?.name}} · {{locationLabel()}}</p><h1>{{selectedCategorySlug() ? categoryTitle() : 'Products'}}</h1><p>{{selectedCategorySlug() ? 'Explore products in this category.' : 'Explore the products and current prices published by this business.'}}</p><span class="product-count">{{visibleProductCount()}} products</span></section>
     @if(selectedCategorySlug() && !visibleCategories().length){<section class="empty-catalog"><h2>Category unavailable</h2><p>This category may have been removed or is no longer published.</p><a [routerLink]="storePath('/products')">Browse all products</a></section>}
     @else if (!products().length) { <section class="empty-catalog"><h2>Products coming soon</h2><p>This business hasn't published any products yet.</p></section> }
     @for (category of visibleCategories(); track category.id) {
