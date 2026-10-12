@@ -428,6 +428,59 @@ try {
   const categorizedProduct = categorizedProducts.payload?.data?.find((item) => item.id === activeProduct.payload?.data?.id);
   if (!categorizedProduct?.categoryIds?.includes(category.payload?.data?.id)) throw new Error('Product category assignment did not persist.');
   checks.push('product category assignment and tenant/store validation');
+  const reservationProduct = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({
+      storeId, slug: `reservation-product-${suffix}`, name: 'Reservation Lifecycle Product',
+      description: null, status: 'active', kind: 'physical', availabilityStatus: 'available',
+      availabilityNote: null, attributes: {}, categoryIds: [],
+      variants: [{ id: `reservation-variant-${suffix}`, sku: `RESERVE-${suffix}`, title: 'Standard', options: {}, amountMinor: 1999, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }]
+    })
+  });
+  const reservationVariantId = reservationProduct.payload?.data?.variants?.[0]?.id;
+  await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 200, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ locationId: location.payload?.data?.id, variantId: reservationVariantId, quantityOnHand: 4, reorderPoint: 1 })
+  });
+  const reservedOrder = await request(`/api/v1/organizations/${organizationId}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, notes: 'Reservation lifecycle test', idempotencyKey: `reserve-order-${suffix}`, items: [{ variantId: reservationVariantId, quantity: 2 }] })
+  });
+  const reservationPath = `/api/v1/organizations/${organizationId}/orders/${reservedOrder.payload?.data?.id}/inventory-reservations`;
+  const createdReservations = await request(reservationPath, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify({ locationId: location.payload?.data?.id }) });
+  if (!Array.isArray(createdReservations.payload?.data) || createdReservations.payload.data.length !== 1 || Number(createdReservations.payload.data[0].quantity) !== 2) throw new Error('Tracked order inventory reservation did not persist.');
+  const inventoryWithReservation = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const reservedLevel = inventoryWithReservation.payload?.data?.find((item) => item.variantId === reservationVariantId);
+  if (Number(reservedLevel?.quantityOnHand) !== 4 || Number(reservedLevel?.quantityReserved) !== 2) throw new Error('Reservation did not protect stock without changing on-hand quantity.');
+  await request(`/api/v1/organizations/${organizationId}/orders/${reservedOrder.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'confirmed' }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${reservedOrder.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'processing' }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${reservedOrder.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
+  const inventoryAfterReservedCompletion = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const consumedLevel = inventoryAfterReservedCompletion.payload?.data?.find((item) => item.variantId === reservationVariantId);
+  if (Number(consumedLevel?.quantityOnHand) !== 2 || Number(consumedLevel?.quantityReserved) !== 0) throw new Error('Order completion did not consume its reservation and deduct on-hand stock.');
+  const returned = await request(`/api/v1/organizations/${organizationId}/inventory/returns`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ orderId: reservedOrder.payload?.data?.id, locationId: location.payload?.data?.id, variantId: reservationVariantId, quantity: 1, idempotencyKey: `return-once-${suffix}`, note: 'Returned in resellable condition' })
+  });
+  const returnReplay = await request(`/api/v1/organizations/${organizationId}/inventory/returns`, 200, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ orderId: reservedOrder.payload?.data?.id, locationId: location.payload?.data?.id, variantId: reservationVariantId, quantity: 1, idempotencyKey: `return-once-${suffix}`, note: 'Returned in resellable condition' })
+  });
+  if (returnReplay.payload?.data?.id !== returned.payload?.data?.id) throw new Error('Inventory return idempotency did not replay the original movement.');
+  const inventoryAfterReturn = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const returnedLevel = inventoryAfterReturn.payload?.data?.find((item) => item.variantId === reservationVariantId);
+  if (Number(returnedLevel?.quantityOnHand) !== 3) throw new Error('A confirmed physical return did not restore sellable stock exactly once.');
+  const cancelledOrder = await request(`/api/v1/organizations/${organizationId}/orders`, 201, {
+    method: 'POST', headers: authHeaders,
+    body: JSON.stringify({ storeId, notes: 'Reservation cancellation test', idempotencyKey: `reserve-cancel-${suffix}`, items: [{ variantId: reservationVariantId, quantity: 1 }] })
+  });
+  const cancelledReservationPath = `/api/v1/organizations/${organizationId}/orders/${cancelledOrder.payload?.data?.id}/inventory-reservations`;
+  await request(cancelledReservationPath, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify({ locationId: location.payload?.data?.id }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${cancelledOrder.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
+  const inventoryAfterReservationCancellation = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
+  const releasedLevel = inventoryAfterReservationCancellation.payload?.data?.find((item) => item.variantId === reservationVariantId);
+  if (Number(releasedLevel?.quantityOnHand) !== 3 || Number(releasedLevel?.quantityReserved) !== 0) throw new Error('Cancelling an order did not release its reservation without changing on-hand stock.');
+  checks.push('durable inventory reservations, completion consumption, cancellation release, and idempotent physical-return restocking');
   await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 200, {
     method: 'PUT', headers: authHeaders,
     body: JSON.stringify({ locationId: location.payload?.data?.id, variantId: activeProduct.payload?.data?.variants?.[0]?.id, quantityOnHand: 5, reorderPoint: 1 })
