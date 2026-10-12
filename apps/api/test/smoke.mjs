@@ -764,6 +764,11 @@ try {
   if (publicStorefront.payload?.data?.publicHandle !== `smoke-${suffix}` || publicStorefront.payload?.data?.locationSlug !== `smoke-store-${suffix}` || publicStorefront.payload?.data?.wifiSsid !== 'Smoke Guest WiFi' || publicStorefront.payload?.data?.wifiPassword !== 'smoke-password-123') throw new Error('Username/location public identity or guest Wi-Fi settings did not persist.');
   await request(`/api/v1/public/storefronts/smoke-${suffix}/missing-location`, 404);
   checks.push('published storefront username/location routes, SEO fields, and guest Wi-Fi settings');
+  const publicMenusByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
+  if (!Array.isArray(publicMenusByUsername.payload?.data)) throw new Error('The username/location public menu endpoint did not return menus.');
+  const publicCatalogByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 200);
+  if (!Array.isArray(publicCatalogByUsername.payload?.data)) throw new Error('The username/location public catalog endpoint did not return products.');
+  checks.push('username/location public menu and product catalog endpoints');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
   });
