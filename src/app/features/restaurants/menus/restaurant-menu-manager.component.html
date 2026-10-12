@@ -23,7 +23,7 @@
                   <label>Menu name<input name="name" required maxlength="180" [value]="menuToEdit.name"></label>
                   <input type="hidden" name="slug" [value]="menuToEdit.slug">
                   <label>Description<input name="description" maxlength="5000" [value]="menuToEdit.description || ''"></label>
-                  <label>Service periods<input name="servicePeriods" required maxlength="800" [value]="menuToEdit.servicePeriods.join(', ')" placeholder="lunch, dinner"></label>
+                  <fieldset class="menu-choice-field service-period-field"><legend>When is this menu served?</legend><div class="menu-choice-options">@for(period of commonServicePeriods;track period.value){<label><input type="checkbox" name="servicePeriod" [value]="period.value" [checked]="menuToEdit.servicePeriods.includes(period.value)"> {{period.label}}</label>}</div><label>Other periods (optional)<input name="otherServicePeriods" maxlength="800" [value]="menuToEdit.servicePeriods.filter(value => !commonServicePeriods.some(period => period.value === value)).join(', ')" placeholder="e.g. Weekend specials"></label></fieldset>
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save menu changes'}}</button>
                 </form>
               }
