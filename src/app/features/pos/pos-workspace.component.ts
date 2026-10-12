@@ -308,6 +308,19 @@ export class PosWorkspaceComponent {
     } finally { this.posSaveBusy.set(false); }
   }
 
+  protected readonly posItemSearch = signal('');
+
+  protected availablePosProducts(): ProductRow[] {
+    const query = this.posItemSearch().trim().toLocaleLowerCase();
+    return this.products().filter(product => product.status === 'Active' && (!query ||
+      product.name.toLocaleLowerCase().includes(query) ||
+      (product.variants ?? []).some(variant =>
+        variant.sku.toLocaleLowerCase().includes(query) ||
+        variant.title.toLocaleLowerCase().includes(query)
+      )
+    ));
+  }
+
   protected selectedPosMenuItem(): MenuItemRow | null { return this.menuItems().find(item => item.id === this.posVariantId() && item.status === 'active' && item.availability !== 'unavailable' && this.menus().some(menu => menu.id === item.menuId && menu.status === 'active')) ?? null; }
   protected togglePosModifier(groupId: string, optionId: string, checked: boolean, maxSelections: number): void {
     this.posModifiers.update(current => {
