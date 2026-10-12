@@ -109,12 +109,8 @@ try {
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
   const usageEvents = await pool.query('SELECT count(*)::int AS count FROM api_usage_events WHERE credential_id=$1', [apiCredentialId]);
   if (Number(usageEvents.rows[0]?.count ?? 0) < 3) throw new Error('API credential usage was not metered.');
-  const utcDayStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
-  let dailyUsage = Number((await pool.query('SELECT count(*)::int AS count FROM api_usage_events WHERE credential_id=$1 AND created_at >= $2', [apiCredentialId, utcDayStart])).rows[0]?.count ?? 0);
-  while (dailyUsage < 8) {
-    await pool.query('INSERT INTO api_usage_events (id,organization_id,credential_id,request_id,method,route_template,status_code,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), organizationId, apiCredentialId, randomUUID(), 'GET', '/api/v1/organizations/:organizationId/products', 200, new Date()]);
-    dailyUsage += 1;
-  }
+  const utcDay = new Date().toISOString().slice(0, 10);
+  await pool.query('UPDATE api_credentials SET usage_day=$2::date,daily_request_count=8 WHERE id=$1', [apiCredentialId, utcDay]);
   const quotaResponse = await request(`/api/v1/organizations/${organizationId}/integrations/catalog`, 429, { headers: apiHeaders });
   if (quotaResponse.payload?.error?.code !== 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED') throw new Error('Developer API daily quota was not enforced.');
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({}) });
