@@ -93,7 +93,7 @@ try {
   const apiCredentialId = apiCredential.payload?.data?.id;
   if (!rawApiToken?.startsWith('dlr_live_') || !apiCredentialId) throw new Error('API credential creation did not return its one-time token and id.');
   const apiHeaders = { Authorization: `Bearer ${rawApiToken}` };
-  await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: apiHeaders });
+  await request(`/api/v1/organizations/${organizationId}/integrations/catalog`, 200, { headers: apiHeaders });
   const unsupportedWriteCredential = await request(`/api/v1/organizations/${organizationId}/api-credentials`, 400, {
     method: 'POST', headers: authHeaders, body: JSON.stringify({ name: 'Write access must remain disabled', scopes: ['write'] })
   });
@@ -101,7 +101,9 @@ try {
   const privilegedCredentialStoreAttempt = await request(`/api/v1/organizations/${organizationId}/stores`, 403, {
     method: 'POST', headers: apiHeaders, body: JSON.stringify({ name: 'Must not create stores', slug: `api-key-store-${suffix}` })
   });
-  if (privilegedCredentialStoreAttempt.payload?.error?.code !== 'API_INTERACTIVE_SESSION_REQUIRED') throw new Error('Developer credential unexpectedly passed the manager-only store creation gate.');
+  if (privilegedCredentialStoreAttempt.payload?.error?.code !== 'API_ROUTE_NOT_ALLOWED') throw new Error('Developer credential unexpectedly passed the published-catalog-only route allowlist.');
+  const privateProductRead = await request(`/api/v1/organizations/${organizationId}/products`, 403, { headers: apiHeaders });
+  if (privateProductRead.payload?.error?.code !== 'API_ROUTE_NOT_ALLOWED') throw new Error('Developer credential can access the private product-management endpoint.');
   await request(`/api/v1/organizations/${organizationId}/products`, 403, { method: 'POST', headers: apiHeaders, body: '{}' });
   await request(`/api/v1/organizations/${randomUUID()}/products`, 403, { headers: apiHeaders });
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
@@ -113,10 +115,10 @@ try {
     await pool.query('INSERT INTO api_usage_events (id,organization_id,credential_id,request_id,method,route_template,status_code,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), organizationId, apiCredentialId, randomUUID(), 'GET', '/api/v1/organizations/:organizationId/products', 200, new Date()]);
     dailyUsage += 1;
   }
-  const quotaResponse = await request(`/api/v1/organizations/${organizationId}/products`, 429, { headers: apiHeaders });
+  const quotaResponse = await request(`/api/v1/organizations/${organizationId}/integrations/catalog`, 429, { headers: apiHeaders });
   if (quotaResponse.payload?.error?.code !== 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED') throw new Error('Developer API daily quota was not enforced.');
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({}) });
-  await request(`/api/v1/organizations/${organizationId}/products`, 401, { headers: apiHeaders });
+  await request(`/api/v1/organizations/${organizationId}/integrations/catalog`, 401, { headers: apiHeaders });
   checks.push('organization-scoped read-only developer API credentials, privileged-route denial, daily quota enforcement, usage metering and revocation');
 
   viewerUserId = randomUUID();
