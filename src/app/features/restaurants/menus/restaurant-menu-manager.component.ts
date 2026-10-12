@@ -356,7 +356,7 @@ export class RestaurantMenuManagerComponent {
     const path = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image';
     const response = await fetch(this.apiClient.url(path), {
       method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': (altText.trim() || file.name.replace(/\.[^.]+$/, '')).slice(0, 500) },
+      headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': encodeURIComponent((altText.trim() || file.name.replace(/\.[^.]+$/, '')).slice(0, 500)) },
       body: optimized
     });
     if (!response.ok) {
