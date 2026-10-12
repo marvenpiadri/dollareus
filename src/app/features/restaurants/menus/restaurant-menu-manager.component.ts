@@ -167,14 +167,14 @@ export class RestaurantMenuManagerComponent {
   protected openEditMenuItem(item: MenuItemRow): void {
     this.editingMenuItem.set(item);
     this.modifierDraft.set((item.modifierGroups ?? []).map(group => ({
-      ...group, options: group.options.map(option => ({ ...option }))
+      ...group, options: group['options'].map(option => ({ ...option }))
     })));
   }
   protected addModifierGroup(): void {
     if (this.modifierDraft().length >= 20) return;
     const groups = this.modifierDraft();
     let index = groups.length + 1;
-    while (groups.some(group => group.id === `modifier-${index}`)) index++;
+    while (groups.some(group => group['id'] === `modifier-${index}`)) index++;
     this.modifierDraft.set([...groups, {
       id: `modifier-${index}`, name: 'New choice', required: false,
       minSelections: 0, maxSelections: 1, options: [{ id: 'option-1', name: 'Option 1', priceDeltaMinor: 0 }]
@@ -207,9 +207,9 @@ export class RestaurantMenuManagerComponent {
   }
   protected addModifierOption(groupIndex: number): void {
     const group = this.modifierDraft()[groupIndex];
-    if (!group || group.options.length >= 30) return;
-    let index = group.options.length + 1;
-    while (group.options.some(option => option.id === `option-${index}`)) index++;
+    if (!group || group['options'].length >= 30) return;
+    let index = group['options'].length + 1;
+    while (group['options'].some(option => option['id'] === `option-${index}`)) index++;
     this.modifierDraft.update(groups => groups.map((item, i) => i === groupIndex
       ? { ...item, options: [...item.options, { id: `option-${index}`, name: `Option ${index}`, priceDeltaMinor: 0 }] }
       : item));
@@ -217,13 +217,13 @@ export class RestaurantMenuManagerComponent {
   protected removeModifierOption(groupIndex: number, optionIndex: number): void {
     this.modifierDraft.update(groups => groups.map((group, i) => {
       if (i !== groupIndex) return group;
-      const options = group.options.filter((_, j) => j !== optionIndex);
-      return { ...group, options, maxSelections: Math.max(1, Math.min(group.maxSelections, options.length)), minSelections: Math.min(group.minSelections, options.length) };
+      const options = group['options'].filter((_, j) => j !== optionIndex);
+      return { ...group, options, maxSelections: Math.max(1, Math.min(group['maxSelections'], options.length)), minSelections: Math.min(group['minSelections'], options.length) };
     }));
   }
   protected updateModifierOption(groupIndex: number, optionIndex: number, field: 'id' | 'name' | 'priceDeltaMinor', value: string | number): void {
     this.modifierDraft.update(groups => groups.map((group, i) => i === groupIndex
-      ? { ...group, options: group.options.map((option, j) => j === optionIndex ? { ...option, [field]: value } : option) }
+      ? { ...group, options: group['options'].map((option, j) => j === optionIndex ? { ...option, [field]: value } : option) }
       : group));
   }
 
@@ -468,46 +468,46 @@ export class RestaurantMenuManagerComponent {
           throw new Error(`Modifier group ${groupIndex + 1} must be an object.`);
         }
         const group = rawGroup as Record<string, unknown>;
-        const groupName = typeof group.name === 'string' ? group.name.trim() : '';
-        let id = typeof group.id === 'string' ? group.id.trim() : '';
-        const minSelections = group.minSelections;
-        const maxSelections = group.maxSelections;
+        const groupName = typeof group['name'] === 'string' ? group['name'].trim() : '';
+        let id = typeof group['id'] === 'string' ? group['id'].trim() : '';
+        const minSelections = group['minSelections'];
+        const maxSelections = group['maxSelections'];
         if (!groupName || groupName.length > 100) {
           throw new Error(`Enter a name for choice group ${groupIndex + 1} (up to 100 characters).`);
         }
         if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || groupIds.has(id)) {
           id = this.uniqueModifierId(groupName, groupIds, `choice-${groupIndex + 1}`);
         }
-        if (typeof group.required !== 'boolean' ||
+        if (typeof group['required'] !== 'boolean' ||
             !Number.isSafeInteger(minSelections) || !Number.isSafeInteger(maxSelections) ||
             (minSelections as number) < 0 || (minSelections as number) > 20 ||
             (maxSelections as number) < 1 || (maxSelections as number) > 20 ||
             (maxSelections as number) < (minSelections as number) ||
-            (group.required && (minSelections as number) < 1) || !Array.isArray(group.options) ||
-            group.options.length < 1 || group.options.length > 30 || (maxSelections as number) > group.options.length) {
+            (group['required'] && (minSelections as number) < 1) || !Array.isArray(group['options']) ||
+            group['options'].length < 1 || group['options'].length > 30 || (maxSelections as number) > group['options'].length) {
           throw new Error(`Modifier group "${groupName || id}" has invalid names, selection limits, or options.`);
         }
         groupIds.add(id);
         const optionIds = new Set<string>();
-        const options = (group.options as unknown[]).map((rawOption, optionIndex) => {
+        const options = (group['options'] as unknown[]).map((rawOption, optionIndex) => {
           if (!rawOption || typeof rawOption !== 'object' || Array.isArray(rawOption)) {
             throw new Error(`Option ${optionIndex + 1} in "${groupName}" must be an object.`);
           }
           const option = rawOption as Record<string, unknown>;
-          const optionName = typeof option.name === 'string' ? option.name.trim() : '';
-          let optionId = typeof option.id === 'string' ? option.id.trim() : '';
-          if (!optionName || optionName.length > 100 || !Number.isSafeInteger(option.priceDeltaMinor) ||
-              (option.priceDeltaMinor as number) < 0 || (option.priceDeltaMinor as number) > Number.MAX_SAFE_INTEGER) {
+          const optionName = typeof option['name'] === 'string' ? option['name'].trim() : '';
+          let optionId = typeof option['id'] === 'string' ? option['id'].trim() : '';
+          if (!optionName || optionName.length > 100 || !Number.isSafeInteger(option['priceDeltaMinor']) ||
+              (option['priceDeltaMinor'] as number) < 0 || (option['priceDeltaMinor'] as number) > Number.MAX_SAFE_INTEGER) {
             throw new Error(`Enter a valid name and non-negative extra price for option ${optionIndex + 1} in "${groupName}".`);
           }
           if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(optionId) || optionIds.has(optionId)) {
             optionId = this.uniqueModifierId(optionName, optionIds, `option-${optionIndex + 1}`);
           }
           optionIds.add(optionId);
-          return { id: optionId, name: optionName, priceDeltaMinor: option.priceDeltaMinor as number };
+          return { id: optionId, name: optionName, priceDeltaMinor: option['priceDeltaMinor'] as number };
         });
         return {
-          id, name: groupName, required: group.required as boolean,
+          id, name: groupName, required: group['required'] as boolean,
           minSelections: minSelections as number, maxSelections: maxSelections as number, options
         };
       });
