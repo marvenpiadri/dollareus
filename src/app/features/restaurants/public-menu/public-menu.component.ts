@@ -14,6 +14,7 @@ export class PublicMenuComponent {
   protected readonly publicMenus = signal<any[]>([]);
   protected readonly publicMenuLoading = signal(false);
   protected readonly publicMenuError = signal('');
+  protected readonly wifiQrDataUrl = signal('');
 
   constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService) {
     const routeSlug = this.route.snapshot.paramMap.get('storeSlug') ?? '';
@@ -42,6 +43,23 @@ export class PublicMenuComponent {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
 
+  private async generateWifiQr(store: any): Promise<void> {
+    const ssid = typeof store?.wifiSsid === 'string' ? store.wifiSsid : '';
+    if (!ssid) return;
+    const encoder = (globalThis as typeof globalThis & { QRCode?: { toDataURL(text: string, options?: Record<string, unknown>): Promise<string> } }).QRCode;
+    if (!encoder) return;
+    const escapeWifi = (value: string) => value.replace(/[\\\\;,:"]/g, character => '\\\\' + character);
+    const security = String(store?.wifiSecurity ?? 'WPA2');
+    const type = security === 'none' ? 'nopass' : security;
+    const password = typeof store?.wifiPassword === 'string' ? store.wifiPassword : '';
+    const payload = 'WIFI:T:' + type + ';S:' + escapeWifi(ssid) + ';' + (type === 'nopass' ? '' : 'P:' + escapeWifi(password) + ';') + ';';
+    try {
+      this.wifiQrDataUrl.set(await encoder.toDataURL(payload, { width: 240, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#193522', light: '#ffffff' } }));
+    } catch {
+      this.wifiQrDataUrl.set('');
+    }
+  }
+
   private async loadPublicMenu(storeSlug: string, publicIdentity: { storeHandle: string; locationSlug: string } | null = null): Promise<void> {
     if (!storeSlug) {
       this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
@@ -59,6 +77,7 @@ export class PublicMenuComponent {
         this.apiClient.request(publicPath + '/menus')
       ]);
       this.publicMenuStore.set(store);
+      await this.generateWifiQr(store);
       this.publicMenus.set(Array.isArray(menus) ? menus.map((menu: any) => ({ ...menu, items: (Array.isArray(menu.items) ? menu.items : []).map((item: any) => ({ ...item, imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null })) })) : []);
     } catch (error) {
       this.publicMenuError.set(error instanceof Error ? error.message : 'Could not load this restaurant menu.');
