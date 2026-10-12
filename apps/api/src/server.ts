@@ -1745,7 +1745,7 @@ const OrderStatusUpdateInput = z.object({ status: z.enum(['pending', 'confirmed'
 
 app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, orderId } = request.params;
-  if (!await requireMembership(request, reply, organizationId)) return;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = OrderStatusUpdateInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Choose a supported order status.');
   const client = await pool.connect();
