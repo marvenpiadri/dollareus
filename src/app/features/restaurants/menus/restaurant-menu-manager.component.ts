@@ -94,6 +94,15 @@ export class RestaurantMenuManagerComponent {
     return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
   }
 
+  private uniqueSlug(name: string, existingSlugs: string[]): string {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 150) || 'item-' + crypto.randomUUID().slice(0, 8);
+    const used = new Set(existingSlugs);
+    let slug = base;
+    let suffix = 2;
+    while (used.has(slug)) slug = base + '-' + suffix++;
+    return slug;
+  }
+
   protected categoryName(categoryId?: string | null): string {
     return this.categories().find(category => category.id === categoryId)?.name ?? '—';
   }
@@ -174,8 +183,8 @@ export class RestaurantMenuManagerComponent {
     const form = event.currentTarget as HTMLFormElement;
     const values = new FormData(form);
     const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
-    if (!name || !slug || !this.storeId()) { this.menuError.set('Enter a category name and URL slug.'); return; }
+    const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.categories().map(category => category.slug));
+    if (!name || !this.storeId()) { this.menuError.set('Enter a category name.'); return; }
     this.categoryBusy.set(true); this.menuError.set('');
     try {
       await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
@@ -192,10 +201,10 @@ export class RestaurantMenuManagerComponent {
     const form = event.currentTarget as HTMLFormElement;
     const values = new FormData(form);
     const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.menus().map(menu => menu.slug));
     const description = String(values.get('description') ?? '').trim();
     const servicePeriods = String(values.get('servicePeriods') ?? 'all-day').split(',').map(value => value.trim()).filter(Boolean);
-    if (!name || !slug || servicePeriods.length === 0) return;
+    if (!name || servicePeriods.length === 0) return;
     this.menuBusy.set(true); this.menuError.set('');
     try {
       const created = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus', {
@@ -235,15 +244,15 @@ export class RestaurantMenuManagerComponent {
     const form = event.currentTarget as HTMLFormElement;
     const values = new FormData(form);
     const name = String(values.get('name') ?? '').trim();
-    const slug = String(values.get('slug') ?? '').trim();
+    const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.selectedMenuItems().map(item => item.slug));
     const price = Number(values.get('price'));
     const description = String(values.get('description') ?? '').trim();
     const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     const categoryId = String(values.get('categoryId') ?? '').trim() || null;
     const menuId = this.selectedMenuId();
-    if (!menuId || !name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
-      this.menuError.set('Choose a menu and enter a valid item name, slug, and non-negative price.'); return;
+    if (!menuId || !name || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
+      this.menuError.set('Choose a menu and enter a valid item name and non-negative price.'); return;
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
