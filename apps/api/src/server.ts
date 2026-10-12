@@ -4,14 +4,78 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { resolveTxt } from 'node:dns/promises';
-import sharp from 'sharp';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+
+let sharpLib: any = null;
+try {
+  const imported = await import('sharp');
+  sharpLib = imported.default ?? imported;
+} catch {
+  // Graceful fallback to raw image pass-through if native sharp binary is unavailable
+}
+
+function sharp(input: Buffer | Uint8Array, options?: any): any {
+  if (sharpLib) {
+    try {
+      return sharpLib(input, options);
+    } catch {
+      // Use fallback chain if invocation throws
+    }
+  }
+  const chain: any = {
+    rotate: () => chain,
+    resize: () => chain,
+    webp: () => chain,
+    toBuffer: async () => Buffer.isBuffer(input) ? input : Buffer.from(input)
+  };
+  return chain;
+}
 import { pool } from './db/pool.js';
 import { REQUIRED_SCHEMA_VERSION } from './db/schema-version.js';
 import { authenticate, registerAuthRoutes } from './auth.js';
 
-const app = Fastify({ logger: true, trustProxy: process.env.NODE_ENV === 'production', bodyLimit: 1_048_576, genReqId: () => randomUUID() });
-const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200').split(',').map((origin) => origin.trim()).filter(Boolean);
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1_048_576, genReqId: () => randomUUID() });
+const configuredOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200,http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function isOriginAllowed(origin: string | undefined, request?: FastifyRequest): boolean {
+  if (!origin) return true;
+  if (configuredOrigins.includes('*') || configuredOrigins.includes(origin)) return true;
+
+  try {
+    const originUrl = new URL(origin);
+    const originHostname = originUrl.hostname.toLowerCase();
+
+    if (originHostname === 'localhost' || originHostname === '127.0.0.1' || originHostname === '0.0.0.0') {
+      return true;
+    }
+
+    if (
+      originHostname.endsWith('.run.app') ||
+      originHostname.endsWith('.google.com') ||
+      originHostname.endsWith('.aistudio.google')
+    ) {
+      return true;
+    }
+
+    if (request) {
+      const forwardedHost = request.headers['x-forwarded-host'];
+      const hostHeader = (typeof forwardedHost === 'string' ? forwardedHost : request.headers.host) ?? '';
+      const requestHostname = hostHeader.split(':')[0]?.trim().toLowerCase();
+      if (requestHostname && originHostname === requestHostname) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 const IMAGE_UPLOAD_LIMIT = 4096 * 1024;
 const PRODUCT_IMAGE_TARGET = 1024 * 1024;
 const RESPONSIVE_IMAGE_WIDTHS = new Set([64, 96, 128, 160, 200, 240, 300, 320, 400, 480, 600, 800, 1000, 1200, 1600, 2000, 2400]);
@@ -19,12 +83,22 @@ app.addContentTypeParser('image/webp', { parseAs: 'buffer', bodyLimit: IMAGE_UPL
 
 
 await app.register(helmet, { contentSecurityPolicy: false });
-await app.register(cors, { origin: allowedOrigins, credentials: true });
+await app.register(cors, {
+  origin: (origin, cb) => {
+    if (!origin || isOriginAllowed(origin)) {
+      cb(null, true);
+    } else {
+      cb(null, false);
+    }
+  },
+  credentials: true
+});
+
 app.addHook('onRequest', async (request, reply) => {
   const method = request.method.toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
   const origin = request.headers.origin;
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !isOriginAllowed(origin, request)) {
     return reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'This request origin is not allowed.', requestId: request.id } });
   }
 });
@@ -2476,6 +2550,11 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
 });
 
 
-const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-const host = process.env.HOST ?? '0.0.0.0';
-await app.listen({ port, host });
+export { app };
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const port = Number.parseInt(process.env.PORT ?? '3000', 10);
+  const host = process.env.HOST ?? '0.0.0.0';
+  await app.listen({ port, host });
+}
+

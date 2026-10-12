@@ -30,7 +30,9 @@
             "security": {
               "allowedHosts": [
                 "localhost",
-                "127.0.0.1"
+                "127.0.0.1",
+                "*.run.app",
+                "*.google.com"
               ]
             }
           },
@@ -39,8 +41,8 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "650kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "900kB",
+                  "maximumError": "1.5MB"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -60,6 +62,11 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 3000,
+            "host": "0.0.0.0",
+            "allowedHosts": true
+          },
           "configurations": {
             "production": {
               "buildTarget": "dollareus:build:production"

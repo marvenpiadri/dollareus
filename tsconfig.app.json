@@ -2,8 +2,9 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist/out-tsc/app",
-    "types": []
+    "types": [],
+    "noPropertyAccessFromIndexSignature": false
   },
-  "files": ["src/main.ts", "src/main.server.ts"],
-  "include": ["src/**/*.d.ts"]
+  "files": ["src/main.ts", "src/main.server.ts", "src/server.ts"],
+  "include": ["src/**/*.d.ts", "apps/api/src/**/*.ts"]
 }

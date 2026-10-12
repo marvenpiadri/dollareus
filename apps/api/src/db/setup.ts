@@ -18,27 +18,31 @@ try {
       "SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists"
     );
 
+    const isBaseline = process.argv.includes('--baseline') || process.env.DB_BASELINE === 'true';
+
     if (!migrationTable.rows[0]?.exists) {
-      const existing = await client.query<{ count: string }>(
-        `SELECT count(*)::text AS count
-         FROM information_schema.tables
-         WHERE table_schema = 'public'
-           AND table_type = 'BASE TABLE'`
-      );
-
-      if (Number(existing.rows[0]?.count ?? 0) > 0) {
-        throw new Error(
-          'The public schema already contains tables but has no schema_migrations history. Refusing to adopt or modify an existing database automatically. Review it and establish a baseline migration deliberately.'
-        );
-      }
-
       await client.query(`
-        CREATE TABLE public.schema_migrations (
+        CREATE TABLE IF NOT EXISTS public.schema_migrations (
           name text PRIMARY KEY,
           checksum char(64) NOT NULL,
           applied_at timestamptz NOT NULL DEFAULT now()
         )
       `);
+
+      const existing = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_type = 'BASE TABLE'
+           AND table_name != 'schema_migrations'`
+      );
+
+      const hasExistingTables = Number(existing.rows[0]?.count ?? 0) > 0;
+      if (hasExistingTables && !isBaseline) {
+        throw new Error(
+          'The public schema already contains tables but has no schema_migrations history. Refusing to adopt or modify an existing database automatically. Review it and run with --baseline to establish a baseline migration deliberately.'
+        );
+      }
     }
 
     const files = (await readdir(migrationsDirectory))
@@ -68,6 +72,16 @@ try {
             `Applied migration "${name}" has changed. Create a new migration instead of editing an applied migration.`
           );
         }
+        continue;
+      }
+
+      if (isBaseline) {
+        await client.query(
+          'INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING',
+          [name, checksum]
+        );
+        newlyApplied += 1;
+        console.log(`[db:migrate] Baselined ${name}`);
         continue;
       }
 

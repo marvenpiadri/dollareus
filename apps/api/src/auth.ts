@@ -190,11 +190,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const passwordHash = `scrypt:${salt.toString('hex')}:${derived.toString('hex')}`;
     const client = await pool.connect();
     const userId = randomUUID();
+    const orgId = randomUUID();
+    const storeId = randomUUID();
     const now = new Date();
     try {
       await client.query('BEGIN');
       await client.query('INSERT INTO users (id,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [userId, email, displayName || null, 'active', now]);
       await client.query('INSERT INTO auth_passwords (user_id,password_hash,created_at,updated_at) VALUES ($1,$2,$3,$3)', [userId, passwordHash, now]);
+      const orgName = displayName ? `${displayName}'s Workspace` : 'My Workspace';
+      const orgSlug = `workspace-${userId.slice(0, 8)}`;
+      await client.query('INSERT INTO organizations (id,name,slug,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [orgId, orgName, orgSlug, 'active', now]);
+      await client.query('INSERT INTO organization_memberships (organization_id,user_id,role,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [orgId, userId, 'owner', 'active', now]);
+      await client.query('INSERT INTO stores (id,organization_id,name,slug,business_type,status,currency,locale,time_zone,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14)', [storeId, orgId, 'Main Store', 'main-store', 'general', 'active', 'USD', 'en', 'UTC', 'commerce', JSON.stringify(['commerce']), true, JSON.stringify({}), now]);
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
