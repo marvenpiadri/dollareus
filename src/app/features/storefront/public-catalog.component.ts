@@ -68,7 +68,7 @@ export class PublicCatalogComponent {
         this.api.request<any[]>(base + '/catalog')
       ]);
       this.store.set(store);
-      this.products.set(Array.isArray(products) ? products : []);
+      this.products.set(Array.isArray(products) ? products.map((product: any) => ({ ...product, imageUrl: Array.isArray(product.media) && product.media[0]?.contentUrl ? this.api.url(String(product.media[0].contentUrl)) : null, imageAlt: Array.isArray(product.media) && product.media[0]?.altText ? String(product.media[0].altText) : String(product.name ?? 'Product') })) : []);
       const name = String(store?.name ?? 'Store');
       const title = String(store?.seoTitle ?? ('Products from ' + name + ' | Dollareus')).slice(0, 180);
       this.title.setTitle(title);
