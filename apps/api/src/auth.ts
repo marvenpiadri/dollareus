@@ -84,9 +84,16 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     }
     request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
     request.apiCredential = { id: row.credential_id, organizationId: row.organization_id, scopes: row.scopes };
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const usage = await pool.query('SELECT count(*)::int AS request_count FROM api_usage_events WHERE credential_id=$1 AND created_at >= $2', [row.credential_id, dayStart]);
-    if (Number(usage.rows[0]?.request_count ?? 0) >= API_CREDENTIAL_DAILY_LIMIT) {
+    const utcDay = now.toISOString().slice(0, 10);
+    const quota = await pool.query(
+      'UPDATE api_credentials SET daily_request_count=CASE WHEN usage_day=$2::date THEN daily_request_count+1 ELSE 1 END,usage_day=$2::date,last_used_at=$3,updated_at=$3 WHERE id=$1 AND revoked_at IS NULL RETURNING daily_request_count',
+      [row.credential_id, utcDay, now]
+    );
+    if (!quota.rowCount) {
+      await reply.code(401).send({ error: { code: 'INVALID_API_CREDENTIAL', message: 'The API credential is invalid, revoked, expired, or no longer authorized.', requestId: request.id } });
+      return;
+    }
+    if (Number(quota.rows[0]?.daily_request_count ?? 0) > API_CREDENTIAL_DAILY_LIMIT) {
       const secondsUntilUtcReset = Math.max(1, Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000));
       reply.header('Retry-After', String(secondsUntilUtcReset));
       await reply.code(429).send({ error: { code: 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED', message: 'This API credential has reached its daily request quota. Retry after the UTC day resets.', requestId: request.id } });
@@ -100,7 +107,6 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       await reply.code(403).send({ error: { code: 'API_ROUTE_NOT_ALLOWED', message: 'Developer credentials are currently limited to the published organization catalog endpoint.', requestId: request.id } });
       return;
     }
-    await pool.query('UPDATE api_credentials SET last_used_at=$1,updated_at=$1 WHERE id=$2', [now, row.credential_id]);
     return;
   }
   if (!sessionToken) {
