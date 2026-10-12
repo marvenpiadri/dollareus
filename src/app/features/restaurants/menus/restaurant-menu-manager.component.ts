@@ -28,6 +28,8 @@ export class RestaurantMenuManagerComponent {
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
   protected readonly categoryBusy = signal(false);
+  protected readonly pendingMenuItemImage = signal<File | null>(null);
+  protected readonly menuImageBusy = signal(false);
   protected readonly commonAllergens = ['Milk', 'Eggs', 'Fish', 'Crustaceans', 'Peanuts', 'Tree nuts', 'Soy', 'Wheat', 'Sesame', 'Mustard', 'Celery', 'Sulphites', 'Lupin', 'Molluscs'];
   protected readonly commonDietaryLabels = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Halal', 'Kosher', 'Spicy'];
 
@@ -81,7 +83,9 @@ export class RestaurantMenuManagerComponent {
         categoryId: typeof item.categoryId === 'string' ? item.categoryId : null,
         allergens: Array.isArray(item.allergens) ? item.allergens.map(String) : [],
         dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
-        modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : []
+        modifierGroups: Array.isArray(item.metadata?.modifierGroups) ? item.metadata.modifierGroups as MenuModifierGroup[] : [],
+        metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : {},
+        imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null
       }))));
       if (!loadedMenus.some(menu => menu.id === this.selectedMenuId())) this.selectedMenuId.set(loadedMenus[0]?.id ?? '');
     } catch (error) {
@@ -241,6 +245,74 @@ export class RestaurantMenuManagerComponent {
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not update menu.'); }
     finally { this.menuBusy.set(false); }
   }
+  protected chooseMenuItemImage(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    if (!file) { this.pendingMenuItemImage.set(null); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      this.menuError.set('Choose a JPEG, PNG or WebP dish photo.'); input.value = ''; return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      this.menuError.set('The original photo must be 25 MB or smaller.'); input.value = ''; return;
+    }
+    this.menuError.set('');
+    this.pendingMenuItemImage.set(file);
+  }
+
+  private async uploadMenuItemImage(file: File, menuId: string, itemId: string): Promise<void> {
+    const bitmap = await createImageBitmap(file);
+    if (bitmap.width * bitmap.height > 40000000) { bitmap.close(); throw new Error('This photo has too many pixels. Choose a smaller original.'); }
+    const cropSide = Math.min(bitmap.width, bitmap.height);
+    const cropX = Math.floor((bitmap.width - cropSide) / 2);
+    const cropY = Math.floor((bitmap.height - cropSide) / 2);
+    const outputSide = Math.min(1200, cropSide);
+    const canvas = document.createElement('canvas');
+    canvas.width = outputSide; canvas.height = outputSide;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) { bitmap.close(); throw new Error('Your browser could not prepare the photo.'); }
+    context.fillStyle = '#ffffff'; context.fillRect(0, 0, outputSide, outputSide);
+    context.drawImage(bitmap, cropX, cropY, cropSide, cropSide, 0, 0, outputSide, outputSide);
+    bitmap.close();
+    let optimized: Blob | null = null;
+    for (const quality of [0.82, 0.76, 0.70, 0.64, 0.58, 0.52, 0.46, 0.40]) {
+      optimized = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+      if (optimized && optimized.size <= 1024 * 1024) break;
+    }
+    if (!optimized || optimized.size > 4 * 1024 * 1024) throw new Error('The photo could not be compressed to an uploadable size.');
+    const path = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image';
+    const response = await fetch(this.apiClient.url(path), {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': file.name.replace(/\.[^.]+$/, '').slice(0, 500) },
+      body: optimized
+    });
+    if (!response.ok) {
+      let message = 'The photo could not be uploaded.';
+      try { const payload = await response.json(); message = payload?.error?.message || message; } catch {}
+      throw new Error(message);
+    }
+  }
+
+  protected async uploadEditedMenuItemImage(event: Event): Promise<void> {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    const item = this.editingMenuItem();
+    if (!file || !item) return;
+    this.menuImageBusy.set(true);
+    this.menuError.set('');
+    try {
+      await this.uploadMenuItemImage(file, item.menuId, item.id);
+      await this.load();
+      const updated = this.menuItems().find(row => row.id === item.id);
+      if (updated) this.editingMenuItem.set(updated);
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Dish photo saved.');
+    } catch (error) {
+      this.menuError.set(error instanceof Error ? error.message : 'Could not upload dish photo.');
+    } finally {
+      this.menuImageBusy.set(false);
+      (event.currentTarget as HTMLInputElement).value = '';
+    }
+  }
+
   protected async createMenuItem(event: Event): Promise<void> {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
@@ -258,10 +330,18 @@ export class RestaurantMenuManagerComponent {
     }
     this.menuBusy.set(true); this.menuError.set('');
     try {
-      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
+      const created = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items', {
         method: 'POST', body: JSON.stringify({ slug, name, description: description || null, priceAmountMinor: Math.round(price * 100), currency: this.currency(), status: 'draft', categoryId, allergens, dietaryLabels, availability: 'available', metadata: {} })
       });
-      await this.load(); this.dataChanged.emit(); form.reset(); this.notifyRequested.emit('Menu item saved as a draft.');
+      const pendingImage = this.pendingMenuItemImage();
+      let imageFailure = '';
+      if (pendingImage && created?.id) {
+        try { await this.uploadMenuItemImage(pendingImage, menuId, String(created.id)); }
+        catch (error) { imageFailure = error instanceof Error ? error.message : 'The photo could not be uploaded.'; }
+      }
+      await this.load(); this.dataChanged.emit(); form.reset(); this.pendingMenuItemImage.set(null);
+      if (imageFailure) this.menuError.set('Dish saved, but the photo was not uploaded: ' + imageFailure);
+      else this.notifyRequested.emit(pendingImage ? 'Dish and square photo saved as drafts.' : 'Menu item saved as a draft.');
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
     finally { this.menuBusy.set(false); }
   }
