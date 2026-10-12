@@ -55,6 +55,8 @@ export class PublicCatalogComponent {
     return slug ? categories.filter(category => category.slug === slug) : categories;
   }
 
+  protected visibleProductCount(): number { return this.visibleCategories().reduce((count, category) => count + category.products.length, 0); }
+
   protected selectedProduct(): any | null {
     const slug = this.selectedProductSlug();
     return slug ? this.products().find(product => product.slug === slug) ?? null : null;
