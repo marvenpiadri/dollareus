@@ -2,7 +2,7 @@
               <div class="panel-heading"><div><h2>Restaurant menus</h2><p>Create menus, publish them, and control item availability. Changes are saved to the organization API.</p></div></div>
               <form class="customer-form" (submit)="createMenu($event)">
                 <label>Menu name<input name="name" required maxlength="180" placeholder="e.g. Lunch menu"></label>
-                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label><label>Service periods<input name="servicePeriods" maxlength="800" placeholder="all-day or lunch, dinner" value="all-day"></label>
+                <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label><fieldset class="menu-choice-field service-period-field"><legend>When is this menu served?</legend><div class="menu-choice-options">@for(period of commonServicePeriods;track period.value){<label><input type="checkbox" name="servicePeriod" [value]="period.value" [checked]="period.value === 'all-day'"> {{period.label}}</label>}</div><label>Other periods (optional)<input name="otherServicePeriods" maxlength="800" placeholder="e.g. Weekend specials"></label></fieldset>
                 <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
               </form>
               <div class="panel-heading"><div><h2>Menu categories</h2><p>Use categories to keep the menu easy to browse.</p></div></div>
