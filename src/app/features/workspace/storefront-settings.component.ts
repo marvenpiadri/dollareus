@@ -1,4 +1,4 @@
-import { Component, input, signal } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 
 @Component({
@@ -15,6 +15,9 @@ export class StorefrontSettingsComponent {
   protected readonly saving = signal(false);
   protected readonly error = signal('');
   protected readonly notice = signal('');
+  protected readonly creatingLocation = signal(false);
+  protected readonly locationCreateError = signal('');
+  readonly locationCreated = output<string>();
 
   constructor(private readonly api: ApiClientService) {}
 
@@ -75,6 +78,64 @@ export class StorefrontSettingsComponent {
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Could not save storefront settings.');
     } finally { this.saving.set(false); }
+  }
+
+  protected async createLocation(event: Event): Promise<void> {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget as HTMLFormElement);
+    const locationSlug = String(values.get('newLocationSlug') ?? '').trim().toLowerCase();
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(locationSlug)) {
+      this.locationCreateError.set('Use lowercase letters, numbers and hyphens for the new location address.');
+      return;
+    }
+    const current = this.settings();
+    if (!current) return;
+    this.creatingLocation.set(true);
+    this.locationCreateError.set('');
+    this.notice.set('');
+    try {
+      const handle = String(current.publicHandle ?? '');
+      const created = await this.api.request<any>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: String(current.name ?? 'Store'),
+          description: current.description ?? null,
+          slug: locationSlug,
+          publicHandle: handle,
+          locationSlug,
+          businessType: current.businessType ?? 'general',
+          status: 'active',
+          currency: current.defaultCurrency ?? 'MAD',
+          locale: current.locale ?? 'en',
+          timeZone: current.timeZone ?? 'Africa/Casablanca',
+          defaultExperience: current.defaultExperience ?? 'catalog',
+          enabledExperiences: current.enabledExperiences ?? ['catalog'],
+          published: false,
+          theme: current.theme ?? {}
+        })
+      });
+      if (!created?.id) throw new Error('The location was created but its ID could not be read.');
+      await this.api.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(String(created.id)) + '/storefront', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          publicHandle: handle,
+          locationSlug,
+          published: false,
+          defaultExperience: current.defaultExperience ?? 'catalog',
+          enabledExperiences: current.enabledExperiences ?? ['catalog'],
+          seoTitle: null,
+          seoDescription: current.description ?? null,
+          locationName: String(values.get('newLocationName') ?? '').trim() || null,
+          city: String(values.get('newCity') ?? '').trim() || null,
+          addressLine: String(values.get('newAddressLine') ?? '').trim() || null,
+          countryCode: String(values.get('newCountryCode') ?? '').trim().toUpperCase() || null
+        })
+      });
+      this.locationCreated.emit(String(created.id));
+      this.notice.set('Location created. It is now selected in your workspace and remains unpublished until you enable it.');
+    } catch (error) {
+      this.locationCreateError.set(error instanceof Error ? error.message : 'Could not create this location.');
+    } finally { this.creatingLocation.set(false); }
   }
 
   private async load(): Promise<void> {
