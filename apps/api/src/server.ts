@@ -858,7 +858,7 @@ app.get<{ Params: { organizationId: string; menuId: string } }>('/api/v1/organiz
   const menu = await pool.query('SELECT id FROM restaurant_menus WHERE id=$1 AND organization_id=$2', [menuId, organizationId]);
   if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
   const result = await pool.query('SELECT * FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,name LIMIT 500', [menuId, organizationId]);
-  return { data: camelize(result.rows), requestId: request.id };
+  return { data: camelize(result.rows).map((item: any) => ({ ...item, imageUrl: item.metadata?.restaurantImage ? '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(String(item.id)) + '/image' : null })), requestId: request.id };
 });
 
 app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
@@ -884,6 +884,50 @@ app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>(
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'MENU_ITEM_SLUG_TAKEN', 'A menu item with this slug already exists in the selected menu.');
     throw error;
   }
+});
+
+
+app.post<{ Params: { organizationId: string; menuId: string; itemId: string }; Body: Buffer }>('/api/v1/organizations/:organizationId/menus/:menuId/items/:itemId/image', { preHandler: authenticate, bodyLimit: IMAGE_UPLOAD_LIMIT }, async (request, reply) => {
+  const { organizationId, menuId, itemId } = request.params;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  if (!Buffer.isBuffer(request.body) || request.body.length < 16 || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'MENU_IMAGE_SIZE_INVALID', 'Upload a square WebP image no larger than 4 MB.');
+  const body = request.body;
+  if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'MENU_IMAGE_TYPE_INVALID', 'Only WebP images are accepted.');
+  const dimensions = readWebpDimensions(body);
+  if (!dimensions || dimensions.width !== dimensions.height || dimensions.width > 2400) return fail(reply, request, 400, 'MENU_IMAGE_DIMENSIONS_INVALID', 'Dish photos must be square and no larger than 2400 × 2400 pixels.');
+  const item = await pool.query('SELECT id,metadata FROM restaurant_menu_items WHERE id=$1 AND menu_id=$2 AND organization_id=$3', [itemId, menuId, organizationId]);
+  if (!item.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The menu item does not exist in this menu.');
+  if (!process.env.AWS_S3_BUCKET || !process.env.AWS_ENDPOINT_URL_S3 || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return fail(reply, request, 503, 'MEDIA_STORAGE_NOT_CONFIGURED', 'S3-compatible media storage is not configured on the server.');
+  const storageKey = 'organizations/' + organizationId + '/restaurant-menu-items/' + itemId + '/image.webp';
+  const stored = await s3Request('PUT', storageKey, body);
+  if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The dish photo could not be saved.');
+  const image = { storageKey, contentType: 'image/webp', width: dimensions.width, height: dimensions.height, byteSize: body.length, altText: String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500) || String((item.rows[0].metadata as Record<string, unknown> | null)?.name ?? 'Dish photo') };
+  await pool.query("UPDATE restaurant_menu_items SET metadata=metadata || jsonb_build_object('restaurantImage',$1::jsonb),updated_at=$2 WHERE id=$3 AND menu_id=$4 AND organization_id=$5", [JSON.stringify(image), new Date(), itemId, menuId, organizationId]);
+  return reply.code(201).send({ data: { imageUrl: '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image', width: dimensions.width, height: dimensions.height }, requestId: request.id });
+});
+
+app.get<{ Params: { organizationId: string; menuId: string; itemId: string } }>('/api/v1/organizations/:organizationId/menus/:menuId/items/:itemId/image', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId, itemId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const result = await pool.query("SELECT metadata->'restaurantImage'->>'storageKey' AS storage_key FROM restaurant_menu_items WHERE id=$1 AND menu_id=$2 AND organization_id=$3", [itemId, menuId, organizationId]);
+  const storageKey = result.rows[0]?.storage_key;
+  if (!storageKey) return fail(reply, request, 404, 'MENU_IMAGE_NOT_FOUND', 'This dish does not have a photo yet.');
+  const stored = await s3Request('GET', String(storageKey));
+  if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The dish photo could not be loaded.');
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  reply.header('Content-Type', 'image/webp'); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'private, max-age=300'); reply.header('X-Content-Type-Options', 'nosniff');
+  return reply.send(bytes);
+});
+
+app.get<{ Params: { itemId: string } }>('/api/v1/public/menu-items/:itemId/image', async (request, reply) => {
+  const result = await pool.query("SELECT i.metadata->'restaurantImage'->>'storageKey' AS storage_key FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id JOIN stores s ON s.id=i.store_id AND s.organization_id=i.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE i.id=$1 AND i.status='active' AND i.availability<>'unavailable' AND m.status='active' AND s.status='active' AND f.published=true AND 'menu'=ANY(f.enabled_experiences) LIMIT 1", [request.params.itemId]);
+  const storageKey = result.rows[0]?.storage_key;
+  if (!storageKey) return fail(reply, request, 404, 'MENU_IMAGE_NOT_FOUND', 'This published dish does not have a photo.');
+  const stored = await s3Request('GET', String(storageKey));
+  if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The dish photo could not be loaded.');
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  reply.header('Content-Type', 'image/webp'); reply.header('Content-Length', String(bytes.length)); reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400'); reply.header('X-Content-Type-Options', 'nosniff');
+  return reply.send(bytes);
 });
 
 const MenuPatchInput = z.object({
@@ -1065,7 +1109,7 @@ app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/men
   const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true AND 'menu'=ANY(f.enabled_experiences) LIMIT 1", [request.params.storeSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   const result = await pool.query(
-    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'categoryName',(SELECT c.name FROM categories c WHERE c.id=i.category_id AND c.organization_id=i.organization_id AND c.store_id=i.store_id AND c.status='active'),'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'modifierGroups',COALESCE(i.metadata->'modifierGroups','[]'::jsonb),'availability',i.availability ,'position',i.position) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
+    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'categoryName',(SELECT c.name FROM categories c WHERE c.id=i.category_id AND c.organization_id=i.organization_id AND c.store_id=i.store_id AND c.status='active'),'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'modifierGroups',COALESCE(i.metadata->'modifierGroups','[]'::jsonb),'imageUrl',CASE WHEN i.metadata ? 'restaurantImage' THEN '/api/v1/public/menu-items/' || i.id || '/image' ELSE NULL END,'availability',i.availability ,'position',i.position) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
     [store.rows[0].id, store.rows[0].organization_id]
   );
   return { data: camelize(result.rows), requestId: request.id };
