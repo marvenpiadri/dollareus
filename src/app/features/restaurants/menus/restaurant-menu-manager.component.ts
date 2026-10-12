@@ -366,6 +366,23 @@ export class RestaurantMenuManagerComponent {
     }
   }
 
+  protected async removeEditedMenuItemImage(): Promise<void> {
+    const item = this.editingMenuItem();
+    if (!item?.imageUrl) return;
+    this.menuImageBusy.set(true);
+    this.menuError.set('');
+    try {
+      await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(item.menuId) + '/items/' + encodeURIComponent(item.id) + '/image', { method: 'DELETE' });
+      await this.load();
+      const updated = this.menuItems().find(row => row.id === item.id);
+      if (updated) this.editingMenuItem.set(updated);
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Dish photo removed.');
+    } catch (error) {
+      this.menuError.set(error instanceof Error ? error.message : 'Could not remove dish photo.');
+    } finally { this.menuImageBusy.set(false); }
+  }
+
   protected async uploadEditedMenuItemImage(event: Event): Promise<void> {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     const item = this.editingMenuItem();
