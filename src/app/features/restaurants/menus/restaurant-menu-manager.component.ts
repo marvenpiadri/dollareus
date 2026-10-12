@@ -291,7 +291,7 @@ export class RestaurantMenuManagerComponent {
     this.pendingMenuItemImage.set(file);
   }
 
-  private async uploadMenuItemImage(file: File, menuId: string, itemId: string): Promise<void> {
+  private async uploadMenuItemImage(file: File, menuId: string, itemId: string, altText = ''): Promise<void> {
     const bitmap = await createImageBitmap(file);
     if (bitmap.width * bitmap.height > 40000000) { bitmap.close(); throw new Error('This photo has too many pixels. Choose a smaller original.'); }
     const cropSide = Math.min(bitmap.width, bitmap.height);
@@ -314,7 +314,7 @@ export class RestaurantMenuManagerComponent {
     const path = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image';
     const response = await fetch(this.apiClient.url(path), {
       method: 'POST', credentials: 'include',
-      headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': file.name.replace(/\.[^.]+$/, '').slice(0, 500) },
+      headers: { 'Content-Type': 'image/webp', 'X-Image-Alt': (altText.trim() || file.name.replace(/\.[^.]+$/, '')).slice(0, 500) },
       body: optimized
     });
     if (!response.ok) {
@@ -331,7 +331,7 @@ export class RestaurantMenuManagerComponent {
     this.menuImageBusy.set(true);
     this.menuError.set('');
     try {
-      await this.uploadMenuItemImage(file, item.menuId, item.id);
+      await this.uploadMenuItemImage(file, item.menuId, item.id, item.name);
       await this.load();
       const updated = this.menuItems().find(row => row.id === item.id);
       if (updated) this.editingMenuItem.set(updated);
@@ -368,7 +368,7 @@ export class RestaurantMenuManagerComponent {
       const pendingImage = this.pendingMenuItemImage();
       let imageFailure = '';
       if (pendingImage && created?.id) {
-        try { await this.uploadMenuItemImage(pendingImage, menuId, String(created.id)); }
+        try { await this.uploadMenuItemImage(pendingImage, menuId, String(created.id), name); }
         catch (error) { imageFailure = error instanceof Error ? error.message : 'The photo could not be uploaded.'; }
       }
       await this.load(); this.dataChanged.emit(); form.reset(); this.pendingMenuItemImage.set(null);
