@@ -945,10 +945,10 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const now = new Date();
   try {
     await client.query('BEGIN');
-    const replay = await client.query('SELECT id,order_id,variant_id,quantity_delta,quantity_after,location_id FROM inventory_movements WHERE organization_id=$1 AND idempotency_key=$2 FOR UPDATE', [organizationId, parsed.data.idempotencyKey]);
+    const replay = await client.query('SELECT id,reference_id,reference_type,variant_id,quantity_delta,quantity_after,location_id FROM inventory_movements WHERE organization_id=$1 AND idempotency_key=$2 FOR UPDATE', [organizationId, parsed.data.idempotencyKey]);
     if (replay.rowCount) {
       const row = replay.rows[0]!;
-      if (String(row.reference_id) !== parsed.data.orderId || String(row.variant_id) !== parsed.data.variantId || Number(row.quantity_delta) !== parsed.data.quantity) {
+      if (String(row.reference_type) !== 'order_return' || String(row.reference_id) !== parsed.data.orderId || String(row.variant_id) !== parsed.data.variantId || String(row.location_id) !== parsed.data.locationId || Number(row.quantity_delta) !== parsed.data.quantity) {
         await client.query('ROLLBACK');
         return fail(reply, request, 409, 'INVENTORY_RETURN_IDEMPOTENCY_CONFLICT', 'This idempotency key was already used for a different inventory return.');
       }
@@ -1773,10 +1773,32 @@ app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }
       return fail(reply, request, 409, 'REFUND_REQUIRED', 'A paid or authorized order must go through the refund workflow before cancellation.');
     }
     const now = new Date();
+    const activeReservations = (to === 'cancelled' || to === 'completed')
+      ? await client.query('SELECT id,location_id,variant_id,quantity FROM inventory_reservations WHERE organization_id=$1 AND order_id=$2 AND status=$3 ORDER BY variant_id,id FOR UPDATE', [organizationId, orderId, 'reserved'])
+      : { rows: [] as Array<{ id: string; location_id: string; variant_id: string; quantity: number }>, rowCount: 0 };
+    for (const reservation of activeReservations.rows) {
+      const level = await client.query('SELECT quantity_on_hand,quantity_reserved FROM inventory_levels WHERE organization_id=$1 AND location_id=$2 AND variant_id=$3 FOR UPDATE', [organizationId, reservation.location_id, reservation.variant_id]);
+      if (!level.rowCount || Number(level.rows[0].quantity_reserved) < Number(reservation.quantity)) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'RESERVATION_INTEGRITY_ERROR', 'The stock level no longer matches the active order reservation. Inventory needs reconciliation.');
+      }
+      if (to === 'cancelled') {
+        await client.query('UPDATE inventory_levels SET quantity_reserved=quantity_reserved-$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5', [reservation.quantity, now, organizationId, reservation.location_id, reservation.variant_id]);
+        await client.query('UPDATE inventory_reservations SET status=$1,released_at=$2,updated_at=$2 WHERE id=$3 AND organization_id=$4', ['released', now, reservation.id, organizationId]);
+      } else {
+        if (Number(level.rows[0].quantity_on_hand) < Number(reservation.quantity)) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'RESERVATION_INTEGRITY_ERROR', 'Reserved stock is not available on hand. Inventory needs reconciliation.');
+        }
+        const updatedLevel = await client.query('UPDATE inventory_levels SET quantity_on_hand=quantity_on_hand-$1,quantity_reserved=quantity_reserved-$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5 RETURNING quantity_on_hand', [reservation.quantity, now, organizationId, reservation.location_id, reservation.variant_id]);
+        await client.query('INSERT INTO inventory_movements (id,organization_id,location_id,variant_id,movement_type,quantity_delta,quantity_after,reference_type,reference_id,note,actor_user_id,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [randomUUID(), organizationId, reservation.location_id, reservation.variant_id, 'sale', -Number(reservation.quantity), Number(updatedLevel.rows[0].quantity_on_hand), 'order', orderId, 'Reserved order stock consumed on completion', request.identity!.uid, now]);
+        await client.query('UPDATE inventory_reservations SET status=$1,consumed_at=$2,updated_at=$2 WHERE id=$3 AND organization_id=$4', ['consumed', now, reservation.id, organizationId]);
+      }
+    }
     const updated = await client.query('UPDATE orders SET status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4 RETURNING id,status,payment_status,updated_at', [to, now, orderId, organizationId]);
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
-      [randomUUID(), organizationId, request.identity!.uid, 'order.status_changed', 'order', orderId, request.id, JSON.stringify({ from, to }), now]
+      [randomUUID(), organizationId, request.identity!.uid, 'order.status_changed', 'order', orderId, request.id, JSON.stringify({ from, to, inventoryReservations: activeReservations.rows.map(row => row.id) }), now]
     );
     await client.query('COMMIT');
     return { data: camelize(updated.rows[0]), requestId: request.id };
