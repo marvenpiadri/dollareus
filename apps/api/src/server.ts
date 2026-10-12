@@ -51,8 +51,10 @@ app.setErrorHandler((error, request, reply) => {
 async function requireMembership(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
   if (request.apiCredential) {
     if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
-    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
-    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+    if (!['GET', 'HEAD'].includes(request.method.toUpperCase())) {
+      return fail(reply, request, 403, 'API_WRITE_SCOPE_NOT_SUPPORTED', 'Developer credentials are read-only until resource-specific write permissions are available.');
+    }
+    if (!request.apiCredential.scopes.includes('read')) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required read scope.');
   }
   if (!request.identity) {
     await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
@@ -69,8 +71,7 @@ async function requireMembership(request: FastifyRequest, reply: FastifyReply, o
 async function requireManagerRole(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
   if (request.apiCredential) {
     if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
-    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
-    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+    return fail(reply, request, 403, 'API_INTERACTIVE_SESSION_REQUIRED', 'This privileged operation requires a signed-in merchant session.');
   }
   if (!request.identity) {
     await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
@@ -87,8 +88,7 @@ async function requireManagerRole(request: FastifyRequest, reply: FastifyReply, 
 async function requireOperatorRole(request: FastifyRequest, reply: FastifyReply, organizationId: string): Promise<boolean> {
   if (request.apiCredential) {
     if (request.apiCredential.organizationId !== organizationId) return fail(reply, request, 403, 'API_CREDENTIAL_ORGANIZATION_MISMATCH', 'This API credential cannot access another organization.');
-    const requiredScope = ['GET', 'HEAD'].includes(request.method.toUpperCase()) ? 'read' : 'write';
-    if (!request.apiCredential.scopes.includes(requiredScope)) return fail(reply, request, 403, 'API_SCOPE_FORBIDDEN', 'This API credential does not have the required scope.');
+    return fail(reply, request, 403, 'API_INTERACTIVE_SESSION_REQUIRED', 'This operational action requires a signed-in merchant session.');
   }
   if (!request.identity) {
     await reply.code(401).send({ error: { code: 'AUTH_REQUIRED', message: 'Authentication is required.', requestId: request.id } });
@@ -306,6 +306,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   const now = new Date();
   const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
   if (expiresAt && (expiresAt.getTime() <= now.getTime() || expiresAt.getTime() > now.getTime() + 366 * 24 * 60 * 60 * 1000)) return fail(reply, request, 400, 'API_CREDENTIAL_EXPIRY_INVALID', 'Expiry must be in the future and no more than 366 days away.');
+  if (parsed.data.scopes.includes('write')) return fail(reply, request, 400, 'API_WRITE_SCOPE_NOT_SUPPORTED', 'Write credentials are disabled until resource-specific permissions and quotas are available.');
   const token = 'dlr_live_' + randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
   const id = randomUUID();
   const nowPrefix = token.slice(0, 16);
