@@ -75,10 +75,16 @@ export class WorkspaceComponent {
       this.storeName.set('');
       this.storeSlug.set('');
       this.stores.set([]);
+      try { if (typeof localStorage !== 'undefined') localStorage.removeItem('dollareus:selected-store'); } catch { /* Ignore unavailable browser storage. */ }
       this.onboardingStage.set('organization');
     }
   }
-  private async loadWorkspace(selectedStoreId = this.storeId()): Promise<void> {
+  private preferredStoreId(): string {
+    try { return typeof localStorage !== 'undefined' ? localStorage.getItem('dollareus:selected-store') ?? '' : ''; }
+    catch { return ''; }
+  }
+
+  private async loadWorkspace(selectedStoreId = this.storeId() || this.preferredStoreId()): Promise<void> {
     this.workspaceLoading.set(true);
     this.workspaceError.set('');
     this.onboardingError.set('');
@@ -86,6 +92,7 @@ export class WorkspaceComponent {
       const snapshot = await this.workspaceData.load(selectedStoreId);
       this.organizationId.set(snapshot.organizationId);
       this.storeId.set(snapshot.storeId);
+      try { if (typeof localStorage !== 'undefined' && snapshot.storeId) localStorage.setItem('dollareus:selected-store', snapshot.storeId); } catch { /* Keep workspace usable when browser storage is unavailable. */ }
       this.storeCurrency.set(snapshot.storeCurrency);
       this.storeName.set(snapshot.storeName);
       this.storeSlug.set(snapshot.storeSlug);
