@@ -38,7 +38,7 @@ export class PublicStorefrontComponent {
     const store = this.store();
     if (!store) return '/';
     const experience = String(store.defaultExperience ?? 'catalog');
-    return this.storePath(experience === 'menu' ? '/menu' : experience === 'services' ? '/services' : '/products');
+    return this.storePath(experience === 'menu' ? '/menu' : experience === 'services' ? '#contact' : '/products');
   }
 
   protected primaryLabel(): string {
