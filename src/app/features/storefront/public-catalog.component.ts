@@ -93,7 +93,7 @@ export class PublicCatalogComponent {
       const offers = prices.length > 1 && currencies.length === 1
         ? { '@type': 'AggregateOffer', priceCurrency: offerCurrency, lowPrice: Math.min(...prices), highPrice: Math.max(...prices), offerCount: prices.length }
         : prices.length === 1
-          ? { '@type': 'Offer', priceCurrency: offerCurrency, price: prices[0], availability: 'https://schema.org/InStock' }
+          ? { '@type': 'Offer', priceCurrency: offerCurrency, price: prices[0] }
           : undefined;
       data = {
         '@context': 'https://schema.org',
