@@ -53,7 +53,7 @@ export class PublicMenuComponent {
         this.apiClient.request('/api/v1/public/stores/' + encodedSlug + '/menus')
       ]);
       this.publicMenuStore.set(store);
-      this.publicMenus.set(Array.isArray(menus) ? menus : []);
+      this.publicMenus.set(Array.isArray(menus) ? menus.map((menu: any) => ({ ...menu, items: (Array.isArray(menu.items) ? menu.items : []).map((item: any) => ({ ...item, imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null })) })) : []);
     } catch (error) {
       this.publicMenuError.set(error instanceof Error ? error.message : 'Could not load this restaurant menu.');
     } finally {
