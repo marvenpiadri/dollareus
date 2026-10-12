@@ -44,6 +44,7 @@
 .toast{position:fixed;right:24px;bottom:24px;z-index:10;display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 32px));padding:12px 14px;border:1px solid #bbf7d0;border-radius:9px;background:white;box-shadow:0 12px 35px #263b201c;color:#485345;font-size:14px;line-height:1.5}
 .toast>span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#f0fdf4;color:#238636}
 .toast button{margin-left:4px;border:0;background:none;color:#92998e;font-size:18px}
+ .sidebar{width:232px}
 .main{margin-left:232px}
 .content{padding:25px 23px 16px}
 .topbar{padding:0 23px}
