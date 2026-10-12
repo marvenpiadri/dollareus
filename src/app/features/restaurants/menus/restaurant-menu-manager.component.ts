@@ -22,6 +22,7 @@ export class RestaurantMenuManagerComponent {
   protected readonly menuItems = signal<MenuItemRow[]>([]);
   protected readonly categories = signal<CategoryRow[]>([]);
   protected readonly selectedMenuId = signal('');
+  protected readonly menuItemSearch = signal('');
   protected readonly editingMenuItem = signal<MenuItemRow | null>(null);
   protected readonly modifierDraft = signal<MenuModifierGroup[]>([]);
   protected readonly editingMenu = signal<MenuRow | null>(null);
@@ -155,6 +156,13 @@ export class RestaurantMenuManagerComponent {
   }
   protected selectedMenuItems(): MenuItemRow[] {
     return this.menuItems().filter(item => item.menuId === this.selectedMenuId());
+  }
+  protected filteredMenuItems(): MenuItemRow[] {
+    const query = this.menuItemSearch().trim().toLowerCase();
+    return this.selectedMenuItems().filter(item =>
+      !query || [item.name, item.description ?? '', this.categoryName(item.categoryId), ...(item.dietaryLabels ?? []), ...(item.allergens ?? [])]
+        .some(value => value.toLowerCase().includes(query))
+    );
   }
   protected openEditMenuItem(item: MenuItemRow): void {
     this.editingMenuItem.set(item);
