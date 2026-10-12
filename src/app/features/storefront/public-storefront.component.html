@@ -12,7 +12,6 @@
         @if (store()?.description) { <p class="description">{{store()?.description}}</p> }
         <div class="hero-actions">
           <a class="primary-action" [routerLink]="primaryLink()">{{primaryLabel()}} <span aria-hidden="true">↗</span></a>
-          @if (store()?.wifiSsid) { <a class="secondary-action" [routerLink]="storePath('/menu')">Guest Wi-Fi details</a> }
         </div>
         <p class="location-note">Prices and availability are maintained by this business.</p>
       </div>
