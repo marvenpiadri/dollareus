@@ -249,6 +249,15 @@ export class RestaurantMenuManagerComponent {
     } catch (error) { this.menuError.set(error instanceof Error ? error.message : 'Could not create menu item.'); }
     finally { this.menuBusy.set(false); }
   }
+  private uniqueModifierId(label: string, used: Set<string>, fallback: string): string {
+    const base = label.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || fallback;
+    let candidate = base;
+    let suffix = 2;
+    while (used.has(candidate)) candidate = `${base}-${suffix++}`;
+    return candidate;
+  }
+
   protected async saveMenuItemDetails(event: Event): Promise<void> {
     event.preventDefault();
     const item = this.editingMenuItem();
@@ -264,9 +273,7 @@ export class RestaurantMenuManagerComponent {
     const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
     let modifierGroups: MenuModifierGroup[];
     try {
-      const parsedModifiers: unknown = this.modifierDraft();
-      if (!Array.isArray(parsedModifiers)) throw new Error('Modifier groups must be a JSON array.');
-      const groups = parsedModifiers as unknown[];
+      const groups: unknown[] = this.modifierDraft();
       if (groups.length > 20) throw new Error('An item can have at most 20 modifier groups.');
       const groupIds = new Set<string>();
       modifierGroups = groups.map((rawGroup, groupIndex) => {
@@ -274,14 +281,17 @@ export class RestaurantMenuManagerComponent {
           throw new Error(`Modifier group ${groupIndex + 1} must be an object.`);
         }
         const group = rawGroup as Record<string, unknown>;
-        const id = typeof group.id === 'string' ? group.id.trim() : '';
         const groupName = typeof group.name === 'string' ? group.name.trim() : '';
+        let id = typeof group.id === 'string' ? group.id.trim() : '';
         const minSelections = group.minSelections;
         const maxSelections = group.maxSelections;
-        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || groupIds.has(id)) {
-          throw new Error(`Modifier group ${groupIndex + 1} needs a unique lowercase ID.`);
+        if (!groupName || groupName.length > 100) {
+          throw new Error(`Enter a name for choice group ${groupIndex + 1} (up to 100 characters).`);
         }
-        if (!groupName || groupName.length > 100 || typeof group.required !== 'boolean' ||
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || groupIds.has(id)) {
+          id = this.uniqueModifierId(groupName, groupIds, `choice-${groupIndex + 1}`);
+        }
+        if (typeof group.required !== 'boolean' ||
             !Number.isSafeInteger(minSelections) || !Number.isSafeInteger(maxSelections) ||
             (minSelections as number) < 0 || (minSelections as number) > 20 ||
             (maxSelections as number) < 1 || (maxSelections as number) > 20 ||
@@ -297,12 +307,14 @@ export class RestaurantMenuManagerComponent {
             throw new Error(`Option ${optionIndex + 1} in "${groupName}" must be an object.`);
           }
           const option = rawOption as Record<string, unknown>;
-          const optionId = typeof option.id === 'string' ? option.id.trim() : '';
           const optionName = typeof option.name === 'string' ? option.name.trim() : '';
-          if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(optionId) || optionIds.has(optionId) ||
-              !optionName || optionName.length > 100 || !Number.isSafeInteger(option.priceDeltaMinor) ||
+          let optionId = typeof option.id === 'string' ? option.id.trim() : '';
+          if (!optionName || optionName.length > 100 || !Number.isSafeInteger(option.priceDeltaMinor) ||
               (option.priceDeltaMinor as number) < 0 || (option.priceDeltaMinor as number) > Number.MAX_SAFE_INTEGER) {
-            throw new Error(`Option ${optionIndex + 1} in "${groupName}" needs a unique lowercase ID, name, and integer price delta.`);
+            throw new Error(`Enter a valid name and non-negative extra price for option ${optionIndex + 1} in "${groupName}".`);
+          }
+          if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(optionId) || optionIds.has(optionId)) {
+            optionId = this.uniqueModifierId(optionName, optionIds, `option-${optionIndex + 1}`);
           }
           optionIds.add(optionId);
           return { id: optionId, name: optionName, priceDeltaMinor: option.priceDeltaMinor as number };
@@ -313,7 +325,7 @@ export class RestaurantMenuManagerComponent {
         };
       });
     } catch (error) {
-      this.menuError.set(error instanceof Error ? error.message : 'Modifier groups must be valid JSON containing valid groups and options.');
+      this.menuError.set(error instanceof Error ? error.message : 'Check the choice groups and options, then try again.');
       return;
     }
     this.menuBusy.set(true); this.menuError.set('');
