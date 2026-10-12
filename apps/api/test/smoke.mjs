@@ -393,7 +393,15 @@ try {
   });
   const inventory = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
   if (!inventory.payload?.data?.some((item) => item.variantId === variantId && Number(item.quantityOnHand) === 12)) throw new Error('Inventory adjustment did not persist.');
-  checks.push('inventory locations and guarded stock levels');
+  const initialMovements = await request(`/api/v1/organizations/${organizationId}/inventory/movements?storeId=${encodeURIComponent(storeId)}`, 200, { headers: authHeaders });
+  if (!initialMovements.payload?.data?.some((movement) => movement.variantId === variantId && movement.movementType === 'adjustment' && Number(movement.quantityDelta) === 12 && Number(movement.quantityAfter) === 12)) throw new Error('Initial stock count did not create an inventory movement.');
+  await pool.query('UPDATE inventory_levels SET quantity_reserved=11 WHERE organization_id=$1 AND location_id=$2 AND variant_id=$3', [organizationId, location.payload?.data?.id, variantId]);
+  await request(`/api/v1/organizations/${organizationId}/inventory/levels`, 409, {
+    method: 'PUT', headers: authHeaders,
+    body: JSON.stringify({ locationId: location.payload?.data?.id, variantId, quantityOnHand: 10, reorderPoint: 3 })
+  });
+  await pool.query('UPDATE inventory_levels SET quantity_reserved=0 WHERE organization_id=$1 AND location_id=$2 AND variant_id=$3', [organizationId, location.payload?.data?.id, variantId]);
+  checks.push('inventory locations, reserved-stock guard, and auditable stock-count movements');
 
   const activeProduct = await request(`/api/v1/organizations/${organizationId}/products`, 201, {
     method: 'POST', headers: authHeaders,
@@ -506,7 +514,9 @@ try {
   const inventoryAfterPosSale = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
   const soldVariantStock = inventoryAfterPosSale.payload?.data?.find((item) => item.variantId === activeProduct.payload?.data?.variants?.[0]?.id && item.locationId === location.payload?.data?.id);
   if (Number(soldVariantStock?.quantityOnHand) !== 3) throw new Error('Completing a POS sale did not deduct tracked stock exactly once.');
-  checks.push('POS completion deducts tracked inventory at the register location');
+  const saleMovements = await request(`/api/v1/organizations/${organizationId}/inventory/movements?storeId=${encodeURIComponent(storeId)}&variantId=${encodeURIComponent(activeProduct.payload?.data?.variants?.[0]?.id)}`, 200, { headers: authHeaders });
+  if (!saleMovements.payload?.data?.some((movement) => movement.movementType === 'sale' && movement.referenceId === posOrder.payload?.data?.id && Number(movement.quantityDelta) === -2 && Number(movement.quantityAfter) === 3)) throw new Error('POS stock deduction was not recorded in the inventory movement ledger.');
+  checks.push('POS completion deducts tracked inventory at the register location and records sale movements');
 
   const posRaceOrder = await request(`${posBase}/orders`, 201, {
     method: 'POST', headers: authHeaders,
@@ -733,19 +743,26 @@ try {
 
   const variantIdForPatch = product.payload?.data?.variants?.[0]?.id;
   if (!variantIdForPatch) throw new Error('Product creation did not return its variant id.');
+  const originalVariant = product.payload?.data?.variants?.[0];
+  const addedVariantId = `variant-extra-${suffix}`;
   const updated = await request(`/api/v1/organizations/${organizationId}/products/${createdProductId}`, 200, {
     method: 'PATCH', headers: authHeaders,
     body: JSON.stringify({
       name: 'Updated CI Smoke Product', status: 'archived',
-      variant: { id: variantIdForPatch, sku: `SMOKE-UPDATED-${suffix}`, title: 'Updated CI Smoke Product', amountMinor: 2499, currency: 'MAD' }
+      variants: [
+        { id: variantIdForPatch, sku: `SMOKE-UPDATED-${suffix}`, title: 'Updated CI Smoke Product', options: originalVariant?.options ?? {}, amountMinor: 2499, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} },
+        { id: addedVariantId, sku: `SMOKE-EXTRA-${suffix}`, title: 'Large', options: { Size: 'L' }, amountMinor: 2799, currency: 'MAD', status: 'active', barcode: null, weightGrams: null, metadata: {} }
+      ]
     })
   });
-  const updatedVariant = updated.payload?.data?.variants?.[0];
+  const updatedVariant = updated.payload?.data?.variants?.find((variant) => variant.id === variantIdForPatch);
+  const addedVariant = updated.payload?.data?.variants?.find((variant) => variant.id === addedVariantId);
   if (updated.payload?.data?.name !== 'Updated CI Smoke Product' || updated.payload?.data?.status !== 'archived'
-      || Number(updatedVariant?.amountMinor) !== 2499 || updatedVariant?.sku !== `SMOKE-UPDATED-${suffix}`) {
-    throw new Error('Product details, variant price/SKU, or archived status did not persist.');
+      || Number(updatedVariant?.amountMinor) !== 2499 || updatedVariant?.sku !== `SMOKE-UPDATED-${suffix}`
+      || Number(addedVariant?.amountMinor) !== 2799 || addedVariant?.options?.Size !== 'L') {
+    throw new Error('Product details, multi-variant price/SKU, options, or archive status did not persist.');
   }
-  checks.push('product details, default variant price/SKU, and archive');
+  checks.push('product details, transactional multi-variant creation/update/options, and archive');
 
   await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
   await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 404);
