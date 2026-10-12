@@ -58,6 +58,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/dollareus
       NODE_ENV: test
       RATE_LIMIT_MAX: 1000
+      API_CREDENTIAL_DAILY_LIMIT: 8
       AUTH_PUBLIC_URL: http://localhost:4200
       AUTH_SUCCESS_REDIRECT_URL: http://localhost:4200
       CORS_ORIGINS: http://localhost:4200
