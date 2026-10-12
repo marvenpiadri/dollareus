@@ -37,8 +37,8 @@ Write access is intentionally unavailable. Before enabling it, add resource-spec
 
 - [ ] Route-by-route authorization and tenant-isolation review, including developer credentials.
 - [x] Conflicting-payload replay tests for order, POS, payment and refund idempotency keys; inventory-return idempotency is covered by API smoke tests. Continue extending idempotency coverage to any new mutating endpoints.
-- [ ] Documented pagination, filtering, rate limits, error codes, and compatibility policy.
+- [x] Documented bounded catalog result limits/filtering, rate limits, error codes, and an initial API compatibility policy in [the developer catalog API guide](../api/developer-catalog.md). Cursor pagination is not implemented.
 - [ ] Webhook signing, retries, delivery logs, and replay protection before claiming event-driven integrations.
 - [x] Configurable daily per-credential request quota and usage visibility are implemented and covered by API smoke tests. Public developer access still requires documentation, monitoring, abuse review and an explicit launch decision.
-- [ ] Migration drift check, staging migration, backup/restore rehearsal, and deployment rollback procedure.
+- [x] CI applies migrations and checks schema version/checksums for drift. [ ] Staging migration, backup/restore rehearsal, and deployment rollback procedure still require environment access and operational verification.
 - [ ] Browser-level acceptance and live database/object-storage verification before public launch.
