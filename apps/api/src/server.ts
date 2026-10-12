@@ -1657,9 +1657,18 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
       return fail(reply, request, 409, 'ORDER_NOT_PAYABLE', 'Payments cannot be recorded against a cancelled or refunded order.');
     }
     if (parsed.data.idempotencyKey) {
-      const existing = await client.query('SELECT id,order_id FROM payments WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
+      const existing = await client.query('SELECT id,order_id,amount_minor,status,provider_payload FROM payments WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
-        if (String(existing.rows[0].order_id) !== orderId) { await client.query('ROLLBACK'); return fail(reply, request, 409, 'PAYMENT_CONFLICT', 'This idempotency key was already used for a different order.'); }
+        const prior = existing.rows[0];
+        const priorPayload = prior.provider_payload && typeof prior.provider_payload === 'object' ? prior.provider_payload as Record<string, unknown> : {};
+        if (String(prior.order_id) !== orderId
+            || Number(prior.amount_minor) !== parsed.data.amountMinor
+            || String(prior.status) !== parsed.data.status
+            || String(priorPayload.method ?? '') !== parsed.data.method
+            || String(priorPayload.reference ?? '') !== String(parsed.data.reference ?? '')) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'PAYMENT_IDEMPOTENCY_CONFLICT', 'This idempotency key was already used for a different payment payload.');
+        }
         await client.query('COMMIT');
         const existingPayment = await pool.query('SELECT id,order_id,provider,status,amount_minor,currency,provider_payload,created_at,updated_at FROM payments WHERE id=$1 AND organization_id=$2', [existing.rows[0].id, organizationId]);
         return { data: camelize(existingPayment.rows[0]), requestId: request.id };
@@ -2380,7 +2389,10 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
         [organizationId, parsed.data.idempotencyKey]
       );
       if (existing.rowCount) {
-        if (String(existing.rows[0].order_id) !== orderId || String(existing.rows[0].payment_id) !== parsed.data.paymentId || Number(existing.rows[0].amount_minor) !== parsed.data.amountMinor) {
+        if (String(existing.rows[0].order_id) !== orderId
+            || String(existing.rows[0].payment_id) !== parsed.data.paymentId
+            || Number(existing.rows[0].amount_minor) !== parsed.data.amountMinor
+            || String(existing.rows[0].reason ?? '') !== String(parsed.data.reason ?? '')) {
           await client.query('ROLLBACK');
           return fail(reply, request, 409, 'REFUND_CONFLICT', 'This idempotency key was already used for a different refund.');
         }
