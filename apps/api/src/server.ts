@@ -940,6 +940,19 @@ app.get<{ Params: { organizationId: string; menuId: string; itemId: string } }>(
   return reply.send(bytes);
 });
 
+app.delete<{ Params: { organizationId: string; menuId: string; itemId: string } }>('/api/v1/organizations/:organizationId/menus/:menuId/items/:itemId/image', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, menuId, itemId } = request.params;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const current = await pool.query("SELECT metadata->'restaurantImage'->>'storageKey' AS storage_key FROM restaurant_menu_items WHERE id=$1 AND menu_id=$2 AND organization_id=$3", [itemId, menuId, organizationId]);
+  if (!current.rowCount) return fail(reply, request, 404, 'MENU_ITEM_NOT_FOUND', 'The menu item does not exist in this menu.');
+  const storageKey = current.rows[0]?.storage_key;
+  if (!storageKey) return fail(reply, request, 404, 'MENU_IMAGE_NOT_FOUND', 'This dish does not have a photo to remove.');
+  await pool.query("UPDATE restaurant_menu_items SET metadata=metadata - 'restaurantImage',updated_at=$1 WHERE id=$2 AND menu_id=$3 AND organization_id=$4", [new Date(), itemId, menuId, organizationId]);
+  const removed = await s3Request('DELETE', String(storageKey)).catch(() => null);
+  if (removed && !removed.ok) request.log.warn({ status: removed.status, itemId }, 'Dish photo metadata was removed but object cleanup failed');
+  return { data: { removed: true }, requestId: request.id };
+});
+
 app.get<{ Params: { itemId: string } }>('/api/v1/public/menu-items/:itemId/image', async (request, reply) => {
   const result = await pool.query("SELECT i.metadata->'restaurantImage'->>'storageKey' AS storage_key FROM restaurant_menu_items i JOIN restaurant_menus m ON m.id=i.menu_id AND m.organization_id=i.organization_id JOIN stores s ON s.id=i.store_id AND s.organization_id=i.organization_id JOIN store_frontends f ON f.store_id=s.id WHERE i.id=$1 AND i.status='active' AND i.availability<>'unavailable' AND m.status='active' AND s.status='active' AND f.published=true AND 'menu'=ANY(f.enabled_experiences) LIMIT 1", [request.params.itemId]);
   const storageKey = result.rows[0]?.storage_key;
