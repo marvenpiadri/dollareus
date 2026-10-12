@@ -23,7 +23,7 @@ export class PublicStorefrontComponent {
 
   protected initialLetter(): string { return String(this.store()?.name ?? 'S').slice(0, 1).toUpperCase(); }
 
-  protected locationLabel(): string { return String(this.store()?.locationSlug ?? '').replace(/-/g, ' '); }
+  protected locationLabel(): string { return String(this.store()?.locationName || this.store()?.city || this.store()?.locationSlug || '').replace(/-/g, ' '); }
 
   protected storePath(suffix = ''): string {
     const store = this.store();
