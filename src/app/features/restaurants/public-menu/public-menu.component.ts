@@ -48,7 +48,7 @@ export class PublicMenuComponent {
     if (!ssid) return;
     const encoder = (globalThis as typeof globalThis & { QRCode?: { toDataURL(text: string, options?: Record<string, unknown>): Promise<string> } }).QRCode;
     if (!encoder) return;
-    const escapeWifi = (value: string) => value.replace(/[\\\\;,:"]/g, character => '\\\\' + character);
+    const escapeWifi = (value: string) => value.replace(/[\\\\;,:"]/g, character => '\\' + character);
     const security = String(store?.wifiSecurity ?? 'WPA2');
     const type = security === 'none' ? 'nopass' : security;
     const password = typeof store?.wifiPassword === 'string' ? store.wifiPassword : '';
