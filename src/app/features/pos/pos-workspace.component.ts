@@ -19,6 +19,8 @@ export class PosWorkspaceComponent {
   readonly dataChanged = output<void>();
 
   protected readonly posSessions = signal<any[]>([]);
+  protected readonly posLocations = signal<Array<{ id: string; name: string }>>([]);
+  protected readonly selectedPosLocationId = signal('');
   protected readonly posOrders = signal<any[]>([]);
   protected readonly selectedPosSessionId = signal('');
   protected readonly posSessionLabel = signal('Main register');
@@ -87,8 +89,23 @@ export class PosWorkspaceComponent {
       if (sequence !== this.loadSequence) return;
       this.posSessions.set(Array.isArray(sessions) ? sessions : []);
       this.posOrders.set(Array.isArray(orders) ? orders : []);
-      const openSession = this.posSessions().find(session => session.status === 'open');
+      let openSession = this.posSessions().find(session => session.status === 'open');
       this.selectedPosSessionId.set(openSession ? String(openSession.id) : '');
+      try {
+        const inventory = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(organizationId) + '/inventory');
+        const locationRows = Array.isArray(inventory) ? inventory : [];
+        const unique = new Map<string, { id: string; name: string }>();
+        for (const row of locationRows as any[]) {
+          if (row.storeId !== storeId || row.locationStatus === 'archived' || !row.locationId) continue;
+          unique.set(String(row.locationId), { id: String(row.locationId), name: String(row.locationName ?? 'Stock location') });
+        }
+        this.posLocations.set([...unique.values()]);
+        const sessionLocation = openSession?.locationId ? String(openSession.locationId) : '';
+        this.selectedPosLocationId.set(sessionLocation || this.posLocations()[0]?.id || '');
+      } catch {
+        this.posLocations.set([]);
+        this.selectedPosLocationId.set(openSession?.locationId ? String(openSession.locationId) : '');
+      }
     } catch (error) {
       if (sequence === this.loadSequence) this.posError.set(error instanceof Error ? error.message : 'Could not load POS registers and orders.');
     } finally {
@@ -105,7 +122,7 @@ export class PosWorkspaceComponent {
     this.posBusy.set(true); this.posError.set('');
     try {
       const session = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/pos/sessions', {
-        method: 'POST', body: JSON.stringify({ label, terminalType: this.posTerminalType() })
+        method: 'POST', body: JSON.stringify({ label, terminalType: this.posTerminalType(), locationId: this.selectedPosLocationId() || null })
       });
       this.posSessions.update(rows => [session, ...rows.filter(row => row.id !== session.id)]);
       this.selectedPosSessionId.set(String(session.id));
