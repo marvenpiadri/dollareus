@@ -15,7 +15,7 @@ interface OrganizationRecord { id: string; }
 interface StoreRecord { id: string; name?: string | null; slug?: string | null; defaultCurrency?: string | null; }
 interface ProductVariantRecord { id?: string; sku?: string | null; title?: string | null; amountMinor?: number | string | null; currency?: string | null; }
 interface ProductRecord {
- id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null;
+ id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null; kind?: 'physical' | 'digital' | 'service' | 'food' | null;
  categoryIds?: string[]; variants?: ProductVariantRecord[]; media?: Array<{ contentUrl?: string | null }>;
 }
 interface OrderRecord { id: string; orderNumber?: string | number; customerEmail?: string | null; channel?: string | null; totalMinor?: number | string | null; currency?: string | null; status?: string | null; effectivePaymentStatus?: string | null; paymentStatus?: string | null; }
@@ -84,6 +84,7 @@ export class WorkspaceDataService {
           priceMinor: Number(variant?.amountMinor ?? 0),
           currency: String(variant?.currency ?? storeCurrency),
           stock: null,
+          kind: product.kind === 'physical' || product.kind === 'digital' || product.kind === 'service' || product.kind === 'food' ? product.kind : 'physical',
           variants: (Array.isArray(product.variants) ? product.variants : []).map((candidate: ProductVariantRecord) => ({
             id: String(candidate.id ?? ''),
             title: String(candidate.title ?? 'Default'),
