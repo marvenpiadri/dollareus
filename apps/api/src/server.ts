@@ -164,7 +164,10 @@ const StoreInput = z.object({
   enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1),
   published: z.boolean(), theme: z.record(z.string(), z.unknown()),
   wifiSsid: z.string().trim().max(120).nullable().optional(), wifiPassword: z.string().max(120).nullable().optional(),
-  wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional()
+  wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional(),
+  locationName: z.string().trim().max(180).nullable().optional(), addressLine: z.string().trim().max(300).nullable().optional(), city: z.string().trim().max(120).nullable().optional(),
+  countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(), phone: z.string().trim().max(40).nullable().optional(),
+  websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional()
 }).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
   published: z.boolean().optional(),
@@ -518,10 +521,10 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     const organization = await client.query('SELECT slug FROM organizations WHERE id=$1', [organizationId]);
     const publicHandle = parsed.data.publicHandle ?? String(organization.rows[0]?.slug ?? parsed.data.slug);
     const locationSlug = parsed.data.locationSlug ?? parsed.data.slug;
-    await client.query('INSERT INTO stores (id,organization_id,name,description,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,wifi_ssid,wifi_password,wifi_security,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$16)', [id, organizationId, parsed.data.name, parsed.data.description, locationSlug, publicHandle, locationSlug, parsed.data.businessType, parsed.data.status, parsed.data.currency, parsed.data.locale, parsed.data.timeZone, parsed.data.wifiSsid ?? null, parsed.data.wifiPassword ?? null, parsed.data.wifiSecurity ?? 'WPA2', now]);
+    await client.query('INSERT INTO stores (id,organization_id,name,description,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,wifi_ssid,wifi_password,wifi_security,location_name,address_line,city,country_code,phone,website_url,google_maps_url,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23)', [id, organizationId, parsed.data.name, parsed.data.description, locationSlug, publicHandle, locationSlug, parsed.data.businessType, parsed.data.status, parsed.data.currency, parsed.data.locale, parsed.data.timeZone, parsed.data.wifiSsid ?? null, parsed.data.wifiPassword ?? null, parsed.data.wifiSecurity ?? 'WPA2', parsed.data.locationName ?? null, parsed.data.addressLine ?? null, parsed.data.city ?? null, parsed.data.countryCode ?? null, parsed.data.phone ?? null, parsed.data.websiteUrl ?? null, parsed.data.googleMapsUrl ?? null, now]);
     await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$7)', [id, organizationId, parsed.data.defaultExperience, parsed.data.enabledExperiences, parsed.data.published, JSON.stringify(parsed.data.theme), now]);
     await client.query('COMMIT');
-    return reply.code(201).send({ data: { id, organizationId, ...parsed.data, publicHandle, locationSlug, wifiSsid: parsed.data.wifiSsid ?? null, wifiPassword: parsed.data.wifiPassword ?? null, wifiSecurity: parsed.data.wifiSecurity ?? 'WPA2', createdAt: now, updatedAt: now }, requestId: request.id });
+    return reply.code(201).send({ data: { id, organizationId, ...parsed.data, publicHandle, locationSlug, wifiSsid: parsed.data.wifiSsid ?? null, wifiPassword: parsed.data.wifiPassword ?? null, wifiSecurity: parsed.data.wifiSecurity ?? 'WPA2', locationName: parsed.data.locationName ?? null, addressLine: parsed.data.addressLine ?? null, city: parsed.data.city ?? null, countryCode: parsed.data.countryCode ?? null, phone: parsed.data.phone ?? null, websiteUrl: parsed.data.websiteUrl ?? null, googleMapsUrl: parsed.data.googleMapsUrl ?? null, createdAt: now, updatedAt: now }, requestId: request.id });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'STORE_SLUG_TAKEN', 'A store with this slug already exists in this organization.');
