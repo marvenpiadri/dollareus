@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { Component, computed, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
@@ -5,6 +6,7 @@ import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 @Component({
   selector: 'dlr-inventory-management',
   standalone: true,
+  imports: [DatePipe],
   templateUrl: './inventory-management.component.html',
   styleUrl: './inventory-management.component.css'
 })
