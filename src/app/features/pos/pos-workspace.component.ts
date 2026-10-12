@@ -39,6 +39,11 @@ export class PosWorkspaceComponent {
   protected readonly posError = signal('');
   protected readonly posCartError = signal('');
   protected readonly paymentMethod = signal('cash');
+  protected readonly paymentTarget = signal<any | null>(null);
+  protected readonly paymentAmount = signal('');
+  protected readonly paymentRecordStatus = signal<'pending' | 'succeeded'>('succeeded');
+  protected readonly paymentReference = signal('');
+  protected readonly paymentNote = signal('');
   private loadSequence = 0;
 
   constructor(private readonly apiClient: ApiClientService) {
@@ -292,8 +297,8 @@ export class PosWorkspaceComponent {
     this.posError.set('');
   }
 
-  protected async recordPosPayment(order: any): Promise<void> {
-    if (!order?.id || order.status === 'cancelled' || order.status === 'refunded' || order.paymentStatus === 'refunded') return;
+  protected async openPosPaymentForm(order: any): Promise<void> {
+    if (!order?.id || ['cancelled', 'refunded'].includes(String(order.status)) || order.paymentStatus === 'refunded') return;
     this.posSaveBusy.set(true); this.posError.set('');
     try {
       const endpoint = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.id) + '/payments';
@@ -304,26 +309,64 @@ export class PosWorkspaceComponent {
         this.notifyRequested.emit('This order is already fully paid.');
         return;
       }
+      this.paymentTarget.set(order);
+      this.paymentAmount.set((balance / 100).toFixed(2));
+      this.paymentRecordStatus.set('succeeded');
+      this.paymentReference.set('');
+      this.paymentNote.set('');
+    } catch (error) {
+      this.posError.set(error instanceof Error ? error.message : 'Could not load the payment balance.');
+    } finally {
+      this.posSaveBusy.set(false);
+    }
+  }
+
+  protected closePosPaymentForm(): void {
+    this.paymentTarget.set(null);
+    this.paymentAmount.set('');
+    this.paymentReference.set('');
+    this.paymentNote.set('');
+  }
+
+  protected async recordPosPayment(event: Event): Promise<void> {
+    event.preventDefault();
+    const order = this.paymentTarget();
+    if (!order?.id) return;
+    const amount = Number(this.paymentAmount());
+    const amountMinor = Math.round(amount * 100);
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMinor)) {
+      this.posError.set('Enter a valid payment amount greater than zero.');
+      return;
+    }
+    this.posSaveBusy.set(true); this.posError.set('');
+    try {
+      const endpoint = '/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/orders/' + encodeURIComponent(order.id) + '/payments';
       await this.apiClient.request(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           method: this.paymentMethod(),
-          status: 'succeeded',
-          amountMinor: balance,
-          note: 'Recorded from merchant POS',
-          idempotencyKey: 'pos-payment-' + order.id + '-' + balance + '-' + this.paymentMethod()
+          status: this.paymentRecordStatus(),
+          amountMinor,
+          reference: this.paymentReference().trim() || null,
+          note: this.paymentNote().trim() || 'Manually recorded by merchant',
+          idempotencyKey: 'pos-payment-' + order.id + '-' + crypto.randomUUID()
         })
       });
+      this.closePosPaymentForm();
       await this.loadPosData();
       this.dataChanged.emit();
-      this.notifyRequested.emit('Offline payment recorded. No external payment was processed.');
+      this.notifyRequested.emit(this.paymentRecordStatus() === 'pending'
+        ? 'Payment recorded as awaiting confirmation. No money was processed by Dollareus.'
+        : 'Payment manually marked as received. No money was processed by Dollareus.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not confirm the POS payment result.';
+      const message = error instanceof Error ? error.message : 'Could not record the payment.';
       const reconciled = await this.refreshPosOrders();
       this.posError.set(reconciled
-        ? message + ' The latest order/payment state was reloaded from the server; verify it before trying again.'
-        : message + ' The latest order/payment state could not be reloaded. Use Refresh POS data before retrying.');
-    } finally { this.posSaveBusy.set(false); }
+        ? message + ' The latest order/payment state was reloaded from the server; verify it before retrying.'
+        : message + ' The latest order/payment state could not be reloaded. Refresh POS data before retrying.');
+    } finally {
+      this.posSaveBusy.set(false);
+    }
   }
 
   protected async updatePosOrderStatus(order: any, status: string): Promise<void> {
