@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 
@@ -17,12 +17,13 @@ export class InventoryManagementComponent {
   readonly dataChanged = output<void>();
   protected readonly inventoryError = signal('');
   protected readonly inventoryBusy = signal(false);
+  protected readonly currentStoreInventory = computed(() => this.inventory().filter(item => item.storeId === this.storeId()));
 
   constructor(private readonly apiClient: ApiClientService) {}
 
   protected locationOptions(): { id: string; name: string }[] {
     const unique = new Map<string, string>();
-    for (const item of this.inventory()) unique.set(item.locationId, item.locationName);
+    for (const item of this.currentStoreInventory()) unique.set(item.locationId, item.locationName);
     return Array.from(unique, ([id, name]) => ({ id, name }));
   }
 
