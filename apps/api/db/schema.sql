@@ -657,4 +657,133 @@ ALTER TABLE refunds
   REFERENCES payments (id, organization_id, order_id)
   ON DELETE RESTRICT;
 
+
+
+-- Snapshot additions synchronized from the ordered migration chain (0003–0010).
+-- Source: apps/api/db/migrations/0003_store_public_identity_and_wifi.sql
+-- Public identity is separate from a store's display name and location label.
+-- Handles identify the business/owner namespace; location slugs identify individual branches.
+ALTER TABLE stores ADD COLUMN public_handle text;
+ALTER TABLE stores ADD COLUMN location_slug text;
+ALTER TABLE stores ADD COLUMN wifi_ssid text;
+ALTER TABLE stores ADD COLUMN wifi_password text;
+ALTER TABLE stores ADD COLUMN wifi_security text NOT NULL DEFAULT 'WPA2' CHECK (wifi_security IN ('none', 'WEP', 'WPA', 'WPA2', 'WPA3'));
+
+UPDATE stores s
+SET public_handle = COALESCE(
+  (SELECT o.slug FROM organizations o WHERE o.id = s.organization_id),
+  s.slug
+),
+location_slug = s.slug
+WHERE public_handle IS NULL OR location_slug IS NULL;
+
+ALTER TABLE stores ALTER COLUMN public_handle SET NOT NULL;
+ALTER TABLE stores ALTER COLUMN location_slug SET NOT NULL;
+ALTER TABLE stores ADD CONSTRAINT stores_public_handle_format CHECK (public_handle ~ '^[a-z0-9]+([_-][a-z0-9]+)*$');
+ALTER TABLE stores ADD CONSTRAINT stores_location_slug_format CHECK (location_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
+CREATE INDEX stores_public_identity_idx ON stores (public_handle, location_slug);
+CREATE INDEX stores_public_handle_idx ON stores (public_handle);
+
+CREATE UNIQUE INDEX stores_public_path_unique ON stores (public_handle, location_slug);
+
+-- Source: apps/api/db/migrations/0004_store_location_and_local_seo.sql
+ALTER TABLE stores ADD COLUMN location_name text;
+ALTER TABLE stores ADD COLUMN address_line text;
+ALTER TABLE stores ADD COLUMN city text;
+ALTER TABLE stores ADD COLUMN country_code char(2) CHECK (country_code IS NULL OR country_code ~ '^[A-Z]{2}$');
+ALTER TABLE stores ADD COLUMN phone text;
+ALTER TABLE stores ADD COLUMN website_url text;
+ALTER TABLE stores ADD COLUMN google_maps_url text;
+
+-- Source: apps/api/db/migrations/0005_add_cafe_business_type.sql
+ALTER TABLE stores DROP CONSTRAINT stores_business_type_check;
+ALTER TABLE stores ADD CONSTRAINT stores_business_type_check
+  CHECK (business_type IN ('retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general'));
+
+-- Source: apps/api/db/migrations/0006_organization_public_usernames.sql
+ALTER TABLE organizations ADD COLUMN public_handle text;
+UPDATE organizations SET public_handle = slug;
+ALTER TABLE organizations ALTER COLUMN public_handle SET NOT NULL;
+ALTER TABLE organizations ADD CONSTRAINT organizations_public_handle_format CHECK (public_handle ~ '^[a-z0-9]+([_-][a-z0-9]+)*$');
+CREATE UNIQUE INDEX organizations_public_handle_unique ON organizations (public_handle);
+
+UPDATE stores s
+SET public_handle = o.public_handle
+FROM organizations o
+WHERE o.id = s.organization_id;
+
+-- Source: apps/api/db/migrations/0007_inventory_movement_ledger.sql
+CREATE TABLE inventory_movements (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  location_id text NOT NULL,
+  variant_id text NOT NULL,
+  movement_type text NOT NULL CHECK (movement_type IN ('adjustment', 'sale', 'return', 'transfer_in', 'transfer_out', 'reservation_release')),
+  quantity_delta integer NOT NULL CHECK (quantity_delta <> 0),
+  quantity_after integer NOT NULL CHECK (quantity_after >= 0),
+  reference_type text,
+  reference_id text,
+  note text,
+  actor_user_id text,
+  created_at timestamptz NOT NULL,
+  FOREIGN KEY (location_id, organization_id) REFERENCES inventory_locations(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (variant_id, organization_id) REFERENCES product_variants(id, organization_id) ON DELETE RESTRICT
+);
+CREATE INDEX inventory_movements_org_recent_idx ON inventory_movements(organization_id, created_at DESC);
+CREATE INDEX inventory_movements_location_variant_idx ON inventory_movements(location_id, variant_id, created_at DESC);
+CREATE INDEX inventory_movements_reference_idx ON inventory_movements(reference_type, reference_id) WHERE reference_id IS NOT NULL;
+
+-- Source: apps/api/db/migrations/0008_inventory_reservations.sql
+ALTER TABLE order_items ADD CONSTRAINT order_items_id_organization_unique UNIQUE (id, organization_id);
+
+ALTER TABLE inventory_movements ADD COLUMN idempotency_key text;
+CREATE UNIQUE INDEX inventory_movements_org_idempotency_unique
+  ON inventory_movements (organization_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+CREATE TABLE inventory_reservations (
+  id text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT,
+  order_id text NOT NULL,
+  order_item_id text NOT NULL,
+  location_id text NOT NULL,
+  variant_id text NOT NULL,
+  quantity integer NOT NULL CHECK (quantity BETWEEN 1 AND 10000),
+  status text NOT NULL CHECK (status IN ('reserved', 'released', 'consumed')),
+  created_by text,
+  released_at timestamptz,
+  consumed_at timestamptz,
+  created_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL,
+  FOREIGN KEY (order_id, organization_id) REFERENCES orders(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (order_item_id, organization_id) REFERENCES order_items(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (location_id, organization_id) REFERENCES inventory_locations(id, organization_id) ON DELETE RESTRICT,
+  FOREIGN KEY (variant_id, organization_id) REFERENCES product_variants(id, organization_id) ON DELETE RESTRICT,
+  CHECK ((status = 'reserved' AND released_at IS NULL AND consumed_at IS NULL)
+      OR (status = 'released' AND released_at IS NOT NULL AND consumed_at IS NULL)
+      OR (status = 'consumed' AND consumed_at IS NOT NULL AND released_at IS NULL))
+);
+CREATE UNIQUE INDEX inventory_reservations_one_active_line_idx
+  ON inventory_reservations (order_item_id, location_id)
+  WHERE status = 'reserved';
+CREATE INDEX inventory_reservations_order_idx
+  ON inventory_reservations (organization_id, order_id, status);
+CREATE INDEX inventory_reservations_active_work_idx
+  ON inventory_reservations (status, updated_at) WHERE status = 'reserved';
+
+-- Source: apps/api/db/migrations/0009_idempotency_fingerprints.sql
+ALTER TABLE orders ADD COLUMN idempotency_fingerprint text;
+ALTER TABLE pos_orders ADD COLUMN idempotency_fingerprint text;
+
+ALTER TABLE orders ADD CONSTRAINT orders_idempotency_fingerprint_format_check
+  CHECK (idempotency_fingerprint IS NULL OR idempotency_fingerprint ~ '^[a-f0-9]{64}$');
+ALTER TABLE pos_orders ADD CONSTRAINT pos_orders_idempotency_fingerprint_format_check
+  CHECK (idempotency_fingerprint IS NULL OR idempotency_fingerprint ~ '^[a-f0-9]{64}$');
+
+-- Source: apps/api/db/migrations/0010_api_credential_daily_quotas.sql
+ALTER TABLE api_credentials
+  ADD COLUMN usage_day date,
+  ADD COLUMN daily_request_count integer NOT NULL DEFAULT 0
+    CHECK (daily_request_count >= 0);
+
 COMMIT;
