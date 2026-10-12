@@ -898,7 +898,19 @@ try {
   if (!Array.isArray(publicMenusByUsername.payload?.data)) throw new Error('The username/location public menu endpoint did not return menus.');
   const publicCatalogByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 200);
   if (!Array.isArray(publicCatalogByUsername.payload?.data)) throw new Error('The username/location public catalog endpoint did not return products.');
-  checks.push('username/location public menu and product catalog endpoints');
+  const catalogCredential = await request(`/api/v1/organizations/${organizationId}/api-credentials`, 201, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ name: 'CI published catalog client', scopes: ['read'] })
+  });
+  const catalogHeaders = { Authorization: `Bearer ${catalogCredential.payload?.data?.token}` };
+  const integrationCatalog = await request(`/api/v1/organizations/${organizationId}/integrations/catalog`, 200, { headers: catalogHeaders });
+  if (!integrationCatalog.payload?.data?.some((item) => item.id === activeProduct.payload?.data?.id)
+      || integrationCatalog.payload?.data?.some((item) => item.id === createdProductId)) {
+    throw new Error('The developer integration catalog must include published products and exclude drafts.');
+  }
+  await request(`/api/v1/organizations/${organizationId}/api-credentials/${catalogCredential.payload?.data?.id}`, 200, {
+    method: 'DELETE', headers: authHeaders, body: JSON.stringify({})
+  });
+  checks.push('username/location public catalog and read-only integration catalog exclude drafts');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/status`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
   });
