@@ -20,3 +20,5 @@ ALTER TABLE stores ADD CONSTRAINT stores_public_handle_format CHECK (public_hand
 ALTER TABLE stores ADD CONSTRAINT stores_location_slug_format CHECK (location_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$');
 CREATE INDEX stores_public_identity_idx ON stores (public_handle, location_slug);
 CREATE INDEX stores_public_handle_idx ON stores (public_handle);
+
+CREATE UNIQUE INDEX stores_public_path_unique ON stores (public_handle, location_slug);
