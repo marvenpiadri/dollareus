@@ -1,18 +1,38 @@
 <main class="catalog-page">
-  <header class="catalog-topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span>Dollareus</a><a class="back-link" [routerLink]="'/' + store()?.publicHandle + '/' + store()?.locationSlug">Store profile ↗</a></header>
+  <header class="catalog-topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span>Dollareus</a><a class="back-link" [routerLink]="storePath()">Store profile ↗</a></header>
   @if (loading()) { <section class="catalog-state"><p class="eyebrow">PRODUCT CATALOG</p><h1>Loading products…</h1></section> }
   @else if (error()) { <section class="catalog-state" role="alert"><p class="eyebrow">CATALOG UNAVAILABLE</p><h1>Products aren't available right now</h1><p>{{error()}}</p></section> }
-  @else {
-    <section class="catalog-hero"><p class="eyebrow">{{store()?.name}} · {{locationLabel()}}</p><h1>Products</h1><p>Explore the products and current prices published by this business.</p><span class="product-count">{{products().length}} {{products().length === 1 ? 'product' : 'products'}}</span></section>
-    @if (!products().length) { <section class="empty-catalog"><h2>Products coming soon</h2><p>This business hasn't published any products yet.</p></section> }
-    @for (category of categories(); track category.id) {
+  @else if (selectedProductSlug()) {
+    @if (selectedProduct(); as product) {
+      <section class="product-detail">
+        <a class="catalog-back" [routerLink]="storePath('/products')">← All products</a>
+        <div class="detail-layout">
+          <div class="detail-visual">@if(product.imageUrl){<img [src]="product.imageUrl" [alt]="product.imageAlt" width="720" height="720">} @else {<div class="detail-placeholder" aria-hidden="true">{{initialLetter(product)}}</div>}</div>
+          <div class="detail-copy"><p class="eyebrow">{{store()?.name}} · {{locationLabel()}}</p><h1>{{product.name}}</h1>@if(product.description){<p class="detail-description">{{product.description}}</p>}
+            @if(startingPrice(product); as price){<p class="detail-price">{{money(price.amount, price.currency)}}</p>}
+            @if(product.variants?.length){<div class="detail-variants"><h2>Available options</h2>@for(variant of product.variants;track variant.id || variant.title){<div class="variant-row"><span>{{variant.title}}</span><strong>{{money(variant.amountMinor, variant.currency)}}</strong></div>}</div>}
+            <p class="detail-note">For availability, variations or purchase details, contact {{store()?.name}} directly.</p>
+            @if(store()?.phone){<a class="primary-action" [href]="'tel:' + store()?.phone">Contact the store</a>}
+          </div>
+        </div>
+      </section>
+    } @else {
+      <section class="catalog-state"><p class="eyebrow">PRODUCT UNAVAILABLE</p><h1>We couldn't find that product</h1><p>This product may have been removed or is no longer published.</p><a class="primary-action" [routerLink]="storePath('/products')">Browse all products</a></section>
+    }
+  } @else {
+    <section class="catalog-hero"><p class="eyebrow">{{store()?.name}} · {{locationLabel()}}</p><h1>{{selectedCategorySlug() ? categoryTitle() : 'Products'}}</h1><p>{{selectedCategorySlug() ? 'Explore products in this category.' : 'Explore the products and current prices published by this business.'}}</p><span class="product-count">{{visibleCategories().reduce((count, category) => count + category.products.length, 0)}} products</span></section>
+    @if(selectedCategorySlug() && !visibleCategories().length){<section class="empty-catalog"><h2>Category unavailable</h2><p>This category may have been removed or is no longer published.</p><a [routerLink]="storePath('/products')">Browse all products</a></section>}
+    @else if (!products().length) { <section class="empty-catalog"><h2>Products coming soon</h2><p>This business hasn't published any products yet.</p></section> }
+    @for (category of visibleCategories(); track category.id) {
       <section class="category-section" [attr.id]="'category-' + category.id">
-        <div class="category-heading"><h2>{{category.name}}</h2><span>{{category.products.length}}</span></div>
+        <div class="category-heading"><h2><a [routerLink]="storePath('/category/' + category.slug)">{{category.name}}</a></h2><span>{{category.products.length}}</span></div>
         <div class="product-grid">
           @for (product of category.products; track product.id) {
             <article class="product-card">
-              @if(product.imageUrl){<img class="product-art product-photo" [src]="product.imageUrl" [alt]="product.imageAlt" loading="lazy" width="480" height="320">} @else {<div class="product-art" aria-hidden="true">{{initialLetter(product)}}</div>}
-              <div class="product-info"><h3>{{product.name}}</h3>@if(product.description){<p>{{product.description}}</p>}
+              <a class="product-image-link" [routerLink]="storePath('/products/' + product.slug)" [attr.aria-label]="'View ' + product.name">
+                @if(product.imageUrl){<img class="product-art product-photo" [src]="product.imageUrl" [alt]="product.imageAlt" loading="lazy" width="480" height="320">} @else {<div class="product-art" aria-hidden="true">{{initialLetter(product)}}</div>}
+              </a>
+              <div class="product-info"><h3><a [routerLink]="storePath('/products/' + product.slug)">{{product.name}}</a></h3>@if(product.description){<p>{{product.description}}</p>}
                 @if(startingPrice(product); as price){<strong>{{money(price.amount, price.currency)}}</strong>} @else {<span class="price-unavailable">Contact the store for pricing</span>}
                 @if(product.variants?.length > 1){<span class="variant-count">{{product.variants.length}} options</span>}
               </div>
@@ -21,6 +41,6 @@
         </div>
       </section>
     }
-    <footer class="catalog-footer">Prices and product details are provided by {{store()?.name}}. <a [routerLink]="'/' + store()?.publicHandle + '/' + store()?.locationSlug">View store profile</a></footer>
+    <footer class="catalog-footer">Prices and product details are provided by {{store()?.name}}. <a [routerLink]="storePath()">View store profile</a></footer>
   }
 </main>
