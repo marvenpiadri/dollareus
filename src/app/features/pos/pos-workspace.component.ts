@@ -24,7 +24,7 @@ export class PosWorkspaceComponent {
   protected readonly posSessionLabel = signal('Main register');
   protected readonly posTerminalType = signal('retail');
   protected readonly posVariantId = signal('');
-  protected readonly posSourceType = signal<'product' | 'menu_item'>('product');
+  protected readonly posSourceType = signal<'product' | 'service' | 'menu_item'>('product');
   protected readonly posModifiers = signal<Record<string, string[]>>({});
   protected readonly posCart = signal<PosCartLine[]>([]);
   protected readonly posQuantity = signal('1');
@@ -47,7 +47,7 @@ export class PosWorkspaceComponent {
     });
     effect(() => {
       const sourceType = this.posSourceType();
-      if (sourceType !== 'product') return;
+      if (sourceType !== 'product' && sourceType !== 'service') return;
       const products = this.products();
       const selected = this.posVariantId();
       const activeVariants = products.filter(product => product.status === 'Active').flatMap(product =>
@@ -136,15 +136,18 @@ export class PosWorkspaceComponent {
     const variantId = this.posVariantId();
     const quantity = Number(this.posQuantity());
     const sourceType = this.posSourceType();
-    const product = sourceType === 'product' ? this.products().find(row =>
-      row.status === 'Active' && (row.variants?.some(variant => variant.id === variantId) || row.variantId === variantId)
+    const productType = sourceType === 'product' || sourceType === 'service';
+    const product = productType ? this.products().find(row =>
+      row.status === 'Active' &&
+      (sourceType === 'service' ? row.kind === 'service' : row.kind !== 'service') &&
+      (row.variants?.some(variant => variant.id === variantId) || row.variantId === variantId)
     ) : null;
     const productVariant = product?.variants?.find(variant => variant.id === variantId) ?? (product ? {
       id: product.variantId, title: 'Default', sku: product.sku, priceMinor: product.priceMinor,
       currency: product.currency, stock: product.stock
     } : null);
     const menuItem = sourceType === 'menu_item' ? this.selectedPosMenuItem() : null;
-    if (!this.selectedPosSessionId() || (sourceType === 'product' ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 || (sourceType === 'menu_item' && !this.posModifiersValid())) {
+    if (!this.selectedPosSessionId() || (productType ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 || (sourceType === 'menu_item' && !this.posModifiersValid())) {
       this.posCartError.set('Choose an open register, a valid active item, quantity, and all required modifier options.');
       return;
     }
@@ -153,11 +156,11 @@ export class PosWorkspaceComponent {
       const group = menuItem?.modifierGroups?.find(candidate => candidate.id === selection.groupId);
       return sum + selection.optionIds.reduce((subtotal, optionId) => subtotal + Number(group?.options.find(option => option.id === optionId)?.priceDeltaMinor ?? 0), 0);
     }, 0);
-    const name = sourceType === 'product' ? product!.name : menuItem!.name;
-    const sourceItemId = sourceType === 'product' ? product!.id : menuItem!.id;
-    const sourceVariantId = sourceType === 'product' ? variantId : undefined;
-    const priceAmountMinor = sourceType === 'product' ? productVariant!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
-    const currency = sourceType === 'product' ? productVariant!.currency : menuItem!.currency;
+    const name = productType ? product!.name : menuItem!.name;
+    const sourceItemId = productType ? product!.id : menuItem!.id;
+    const sourceVariantId = productType ? variantId : undefined;
+    const priceAmountMinor = productType ? productVariant!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
+    const currency = productType ? productVariant!.currency : menuItem!.currency;
     const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
     const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
     this.posCartError.set('');
@@ -312,7 +315,7 @@ export class PosWorkspaceComponent {
 
   protected availablePosProducts(): ProductRow[] {
     const query = this.posItemSearch().trim().toLocaleLowerCase();
-    return this.products().filter(product => product.status === 'Active' && (!query ||
+    return this.products().filter(product => product.status === 'Active' && (this.posSourceType() === 'service' ? product.kind === 'service' : product.kind !== 'service') && (!query ||
       product.name.toLocaleLowerCase().includes(query) ||
       (product.variants ?? []).some(variant =>
         variant.sku.toLocaleLowerCase().includes(query) ||
