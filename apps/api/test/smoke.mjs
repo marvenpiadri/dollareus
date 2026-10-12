@@ -727,6 +727,8 @@ try {
   if (posClosed.payload?.data?.status !== 'closed') throw new Error('POS session did not close.');
   const closedSessionReplay = await request(`${posBase}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(posPayload) });
   if (closedSessionReplay.payload?.data?.id !== posOrder.payload?.data?.id) throw new Error('POS idempotency replay failed after the register was closed.');
+  const conflictingPosReplay = await request(`${posBase}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...posPayload, items: [{ ...posPayload.items[0], quantity: 1 }] }) });
+  if (conflictingPosReplay.payload?.error?.code !== 'POS_IDEMPOTENCY_CONFLICT') throw new Error('POS idempotency key reuse with a different payload did not return a conflict.');
   await request(`${posBase}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...posPayload, idempotencyKey: `smoke-pos-closed-${suffix}` }) });
   checks.push('POS sessions, canonical order/payment/refund integration, idempotency, audited status transitions and close guards');
 
@@ -735,6 +737,8 @@ try {
   if (Number(order.payload?.data?.totalMinor) !== 2598 || order.payload?.data?.status !== 'pending' || order.payload?.data?.items?.length !== 1) throw new Error('Order totals or immutable item snapshots are incorrect.');
   const replay = await request(`/api/v1/organizations/${organizationId}/orders`, 200, { method: 'POST', headers: authHeaders, body: JSON.stringify(orderPayload) });
   if (replay.payload?.data?.id !== order.payload?.data?.id) throw new Error('Order idempotency key did not return the existing order.');
+  const conflictingOrderReplay = await request(`/api/v1/organizations/${organizationId}/orders`, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...orderPayload, items: [{ ...orderPayload.items[0], quantity: 1 }] }) });
+  if (conflictingOrderReplay.payload?.error?.code !== 'ORDER_IDEMPOTENCY_CONFLICT') throw new Error('Order idempotency key reuse with a different payload did not return a conflict.');
   await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'confirmed' }) });
   await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'processing' }) });
   const completed = await request(`/api/v1/organizations/${organizationId}/orders/${order.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'completed' }) });
