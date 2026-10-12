@@ -25,7 +25,7 @@
     @else if (!products().length) { <section class="empty-catalog"><h2>Products coming soon</h2><p>This business hasn't published any products yet.</p></section> }
     @for (category of visibleCategories(); track category.id) {
       <section class="category-section" [attr.id]="'category-' + category.id">
-        <div class="category-heading"><h2><a [routerLink]="storePath('/category/' + category.slug)">{{category.name}}</a></h2><span>{{category.products.length}}</span></div>
+        <div class="category-heading"><h2><a [routerLink]="storePath('/products/category/' + category.slug)">{{category.name}}</a></h2><span>{{category.products.length}}</span></div>
         <div class="product-grid">
           @for (product of category.products; track product.id) {
             <article class="product-card">
