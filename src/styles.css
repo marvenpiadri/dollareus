@@ -1,44 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import './styles/_tokens.css';
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
-:root {
-  color-scheme: light;
-  --color-midnight-950: #07111f;
-  --color-midnight-900: #0b1626;
-  --color-midnight-800: #122033;
-  --color-midnight-700: #1e293b;
-  --color-midnight-600: #334155;
-  --color-money-green: #238636;
-  --color-money-green-dark: #1f6f2c;
-  --color-money-green-light: #f0fdf4;
-  --color-money-green-medium: #dcfce7;
-  --color-money-green-border: #bbf7d0;
-  --color-canvas: #f8fafc;
-  --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text-main: #0f172a;
-  --color-text-secondary: #40516a;
-  --color-text-muted: #64748b;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 17px;
-  color: var(--color-text-main);
-  background: var(--color-canvas);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-html, body { min-height: 100%; margin: 0; }
-body { min-width: 320px; font-size: 17px; line-height: 1.6; }
-button, input, select, textarea { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button { cursor: pointer; }
-h1, h2, h3, .brand { font-family: 'Manrope', 'DM Sans', sans-serif; }
-:focus-visible { outline: 3px solid var(--color-money-green); outline-offset: 3px; }
-
-/* Readability baseline: generous controls, legible helper text, and consistent focus. */
-input, select, textarea { min-height: 44px; }
-button { min-height: 40px; }
-@media (max-width: 700px) { body { font-size: 16px; } button { min-height: 44px; } }
-::selection { background: #dcfce7; color: #0f172a; }
+*,*::before,*::after{box-sizing:border-box}
+html,body{min-height:100%;margin:0;font-family:var(--font-sans);font-size:var(--text-base);color:var(--color-text-main);background:var(--color-canvas);line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit}button,a{-webkit-tap-highlight-color:transparent}button{cursor:pointer}a{color:inherit}
+:focus-visible{outline:3px solid var(--color-money-green);outline-offset:3px}
+input,select,textarea{min-height:44px;color:var(--color-input-text);background:var(--color-input-bg);border:1px solid var(--color-input-border);border-radius:var(--radius-md);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--color-border-focus);box-shadow:0 0 0 2px var(--color-money-green-light)}
+input::placeholder,textarea::placeholder{color:var(--color-input-placeholder)}input[type=checkbox],input[type=radio]{accent-color:var(--color-money-green)}
+::selection{background:var(--color-money-green-medium);color:var(--color-text-main)}

@@ -1,0 +1,242 @@
+/* ==========================================================================
+   x-facture Design Tokens System
+   ==========================================================================
+   Brand Palette:
+   - Midnight Blue (#0d1117): Primary structural authority (app canvas, surfaces, chrome)
+   - Money Green (#238636): Semantic positive indicator & brand primary accent
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"],
+.theme-light {
+  /* Brand: Midnight Blue References */
+  --color-midnight-950: #05080f;
+  --color-midnight-900: #090d16;
+  --color-midnight-850: #0a1120;
+  --color-midnight-800: #0f172a;
+  --color-midnight-700: #1e293b;
+  --color-midnight-600: #334155;
+  --color-midnight-500: #475569;
+
+  /* Brand: Money Green */
+  --color-money-green: #238636;
+  --color-money-green-dark: #1f6f2c;
+  --color-money-green-darker: #195822;
+  --color-money-green-light: #f0fdf4;
+  --color-money-green-medium: #dcfce7;
+  --color-money-green-border: #bbf7d0;
+
+  /* Neutrals & Surfaces (Light Mode) */
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-surface-hover: #e2e8f0;
+  --color-surface-active: #cbd5e1;
+  --color-surface-modal: #ffffff;
+  --color-border: #e2e8f0;
+  --color-border-dark: #cbd5e1;
+  --color-border-focus: #238636;
+
+  /* Form Controls (Light Mode) */
+  --color-input-bg: #ffffff;
+  --color-input-border: #cbd5e1;
+  --color-input-text: #0f172a;
+  --color-input-placeholder: #94a3b8;
+
+  /* Button and Header Tokens (Light Mode) */
+  --color-btn-dark-bg: #0f172a;
+  --color-btn-dark-hover: #1e293b;
+  --color-btn-dark-text: #ffffff;
+  --color-header-bg: #ffffff;
+  --color-header-border: #e2e8f0;
+  --color-header-text: #0f172a;
+  --color-header-subtext: #64748b;
+  --color-header-link: #334155;
+  --color-header-link-hover: #0f172a;
+  --color-header-link-hover-bg: #f1f5f9;
+  --color-header-link-active: #238636;
+  --color-header-link-active-bg: #f0fdf4;
+
+  /* Typography Colors (Light Mode) */
+  --color-text-main: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  /* Semantic Status Colors (Light Mode) */
+  --color-status-draft: #64748b;
+  --color-status-draft-bg: #f1f5f9;
+  --color-status-draft-border: #cbd5e1;
+
+  --color-status-sent: #2563eb;
+  --color-status-sent-bg: #eff6ff;
+  --color-status-sent-border: #bfdbfe;
+
+  --color-status-paid: #238636;
+  --color-status-paid-bg: #f0fdf4;
+  --color-status-paid-border: #bbf7d0;
+
+  --color-status-overdue: #dc2626;
+  --color-status-overdue-bg: #fef2f2;
+  --color-status-overdue-border: #fecaca;
+
+  --color-status-void: #475569;
+  --color-status-void-bg: #f1f5f9;
+  --color-status-void-border: #cbd5e1;
+
+  /* Spacing Scale */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Typography Scale */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: var(--font-sans);
+  --font-serif: var(--font-sans);
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14.5px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* Border Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Elevation Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 2px 4px 0 rgba(15, 23, 42, 0.04), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
+  --shadow-md: 0 4px 12px -1px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.1), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 20px 30px -6px rgba(15, 23, 42, 0.15), 0 8px 12px -4px rgba(15, 23, 42, 0.08);
+  --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  --shadow-sheet: 0 20px 40px -10px rgba(15, 23, 42, 0.15);
+
+  /* Transitions */
+  --transition-fast: 0.12s ease;
+  --transition-normal: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layer Stacking (Z-Index) */
+  --z-base: 1;
+  --z-sticky: 150;
+  --z-header: 300;
+  --z-dropdown: 500;
+  --z-drawer: 700;
+  --z-modal: 900;
+  --z-toast: 1100;
+}
+
+/* ==========================================================================
+   Midnight Blue Dark Mode Theme
+   Specially crafted with Midnight Blue (#0d1117) and Money Green (#238636).
+   Fully responsive overrides for :root[data-theme='dark'].
+   ========================================================================== */
+:root[data-theme="dark"],
+[data-theme="dark"],
+html[data-theme="dark"],
+body[data-theme="dark"],
+.theme-dark {
+  /* Dark Mode Neutrals & Surfaces (Midnight Blue Palette) */
+  --color-canvas: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-subtle: #0d1117;
+  --color-surface-hover: #21262d;
+  --color-surface-active: #30363d;
+  --color-surface-modal: #161b22;
+  --color-border: #30363d;
+  --color-border-dark: #484f58;
+  --color-border-focus: #238636;
+
+  /* Form Controls in Dark Mode */
+  --color-input-bg: #0d1117;
+  --color-input-border: #30363d;
+  --color-input-text: #f0f6fc;
+  --color-input-placeholder: #8b949e;
+
+  /* Button and Header Tokens in Dark Mode */
+  --color-btn-dark-bg: #21262d;
+  --color-btn-dark-hover: #30363d;
+  --color-btn-dark-text: #f0f6fc;
+  --color-header-bg: #0d1117;
+  --color-header-border: #30363d;
+  --color-header-text: #f0f6fc;
+  --color-header-subtext: #8b949e;
+  --color-header-link: #c9d1d9;
+  --color-header-link-hover: #ffffff;
+  --color-header-link-hover-bg: #21262d;
+  --color-header-link-active: #3fb950;
+  --color-header-link-active-bg: rgba(35, 134, 54, 0.2);
+
+  /* Typography Colors in Dark Mode */
+  --color-text-main: #f0f6fc;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #6e7681;
+  --color-text-inverse: #0d1117;
+
+  /* Brand: Money Green (#238636) in Dark Mode */
+  --color-money-green: #238636;
+  --color-money-green-dark: #1f6f2c;
+  --color-money-green-darker: #195822;
+  --color-money-green-light: rgba(35, 134, 54, 0.15);
+  --color-money-green-medium: rgba(35, 134, 54, 0.25);
+  --color-money-green-border: rgba(46, 160, 67, 0.4);
+
+  /* Midnight Blue Shades */
+  --color-midnight-950: #010409;
+  --color-midnight-900: #0d1117;
+  --color-midnight-850: #131821;
+  --color-midnight-800: #161b22;
+  --color-midnight-700: #21262d;
+  --color-midnight-600: #30363d;
+  --color-midnight-500: #484f58;
+
+  /* Status Colors in Dark Mode */
+  --color-status-draft: #8b949e;
+  --color-status-draft-bg: #21262d;
+  --color-status-draft-border: #30363d;
+
+  --color-status-sent: #58a6ff;
+  --color-status-sent-bg: rgba(56, 139, 253, 0.15);
+  --color-status-sent-border: rgba(56, 139, 253, 0.35);
+
+  --color-status-paid: #3fb950;
+  --color-status-paid-bg: rgba(35, 134, 54, 0.2);
+  --color-status-paid-border: rgba(46, 160, 67, 0.4);
+
+  --color-status-overdue: #f85149;
+  --color-status-overdue-bg: rgba(248, 81, 73, 0.15);
+  --color-status-overdue-border: rgba(248, 81, 73, 0.35);
+
+  --color-status-void: #8b949e;
+  --color-status-void-bg: #21262d;
+  --color-status-void-border: #30363d;
+
+  /* Elevation Shadows in Dark Mode */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 4px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px -1px rgba(0, 0, 0, 0.6), 0 2px 6px -1px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.75), 0 4px 8px -2px rgba(0, 0, 0, 0.45);
+  --shadow-xl: 0 20px 30px -6px rgba(0, 0, 0, 0.85), 0 8px 12px -4px rgba(0, 0, 0, 0.6);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.95);
+  --shadow-sheet: 0 20px 40px -10px rgba(0, 0, 0, 0.85);
+}
+
