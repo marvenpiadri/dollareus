@@ -709,7 +709,8 @@ try {
   }
   const posPayment = { payload: concurrentPaymentAttempts.find((attempt) => attempt.status === 201)?.payload };
   if (posPayment.payload?.data?.paymentStatus !== 'paid') throw new Error('POS order did not use the canonical manual payment workflow.');
-  checks.push('concurrent duplicate manual payment requests replay one idempotent payment record');
+  await request(posPaymentPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...JSON.parse(posPaymentBody), amountMinor: 2097 }) });
+  checks.push('concurrent duplicate manual payments replay one record and conflicting payment payloads are rejected');
   await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 403, {
     method: 'POST', headers: viewerHeaders,
     body: JSON.stringify({ paymentId: posPayment.payload?.data?.id, amountMinor: 100, reason: 'Viewer must not refund', idempotencyKey: `viewer-refund-${suffix}` })
@@ -778,6 +779,7 @@ try {
     body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Smoke test final refund', idempotencyKey: `smoke-refund-2-${suffix}` })
   });
   if (refundReplay.payload?.data?.id !== secondRefund.payload?.data?.id) throw new Error('Refund idempotency did not return the existing refund.');
+  await request(refundPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Changed reason must conflict', idempotencyKey: `smoke-refund-2-${suffix}` }) });
   const refundHistory = await request(refundPath, 200, { headers: authHeaders });
   if (!Array.isArray(refundHistory.payload?.data) || refundHistory.payload.data.length !== 2) throw new Error('Refund history did not return both refund records.');
   checks.push('audited partial/full manual refunds, over-refund guard, idempotency and history');
