@@ -121,7 +121,7 @@ export class PosWorkspaceComponent {
   }
   protected selectedPosSessionNeedsLocation(): boolean {
     const session = this.posSessions().find(row => String(row.id) === this.selectedPosSessionId());
-    const hasTrackedRetailItems = this.products().some(product => product.status === 'Active' && (product.kind === 'physical' || product.kind === 'food'));
+    const hasTrackedRetailItems = this.products().some(product => product.status === 'Active' && (product.kind === 'physical' || product.kind === 'food') && (product.stock !== null || product.variants?.some(variant => variant.stock !== null)));
     return !!session && !session.locationId && hasTrackedRetailItems;
   }
 
