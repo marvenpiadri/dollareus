@@ -230,7 +230,7 @@ export class PosWorkspaceComponent {
       const unit = Number(item.unitAmountMinor ?? item.priceAmountMinor ?? 0);
       const total = Number(item.lineTotalMinor ?? item.totalMinor ?? unit * quantity);
       const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
-      const modifiers = Array.isArray(metadata.modifiers) ? metadata.modifiers : [];
+      const modifiers = Array.isArray(metadata.modifierSnapshot) ? metadata.modifierSnapshot : Array.isArray(metadata.modifiers) ? metadata.modifiers : [];
       const modifierNames = modifiers.flatMap((group: any) =>
         Array.isArray(group.options) ? group.options.map((option: any) => String(option.name ?? '')) :
         Array.isArray(group.optionIds) ? group.optionIds.map(String) : []
