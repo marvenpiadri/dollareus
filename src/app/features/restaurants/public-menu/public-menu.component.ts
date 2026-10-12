@@ -50,7 +50,7 @@ export class PublicMenuComponent {
     if (!encoder) return;
     const escapeWifi = (value: string) => value.replace(/[\\\\;,:"]/g, character => '\\' + character);
     const security = String(store?.wifiSecurity ?? 'WPA2');
-    const type = security === 'none' ? 'nopass' : security;
+    const type = security === 'none' ? 'nopass' : security === 'WEP' ? 'WEP' : 'WPA';
     const password = typeof store?.wifiPassword === 'string' ? store.wifiPassword : '';
     const payload = 'WIFI:T:' + type + ';S:' + escapeWifi(ssid) + ';' + (type === 'nopass' ? '' : 'P:' + escapeWifi(password) + ';') + ';';
     try {
