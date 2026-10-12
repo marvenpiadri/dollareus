@@ -28,15 +28,15 @@ export class PublicCatalogComponent {
 
   protected initialLetter(product: any): string { return String(product?.name ?? 'P').slice(0, 1).toUpperCase(); }
 
-  protected locationLabel(): string { return String(this.store()?.locationSlug ?? '').replace(/-/g, ' '); }
+  protected locationLabel(): string { return String(this.store()?.locationName || this.store()?.city || this.store()?.locationSlug || '').replace(/-/g, ' '); }
 
   protected storePath(suffix = ''): string {
     const store = this.store();
     return '/' + encodeURIComponent(String(store?.publicHandle ?? '')) + '/' + encodeURIComponent(String(store?.locationSlug ?? '')) + suffix;
   }
 
-  protected categories(): { id: string; name: string; products: any[] }[] {
-    const groups = new Map<string, { id: string; name: string; products: any[] }>();
+  protected categories(): { id: string; name: string; slug: string; products: any[] }[] {
+    const groups = new Map<string, { id: string; name: string; slug: string; products: any[] }>();
     for (const product of this.products()) {
       const categories = Array.isArray(product.categories) && product.categories.length ? product.categories : [{ id: 'uncategorized', name: 'Other products' }];
       for (const category of categories) {
