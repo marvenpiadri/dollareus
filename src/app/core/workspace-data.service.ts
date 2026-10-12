@@ -12,7 +12,8 @@ import {
 } from '../shared/models/commerce.models';
 
 interface OrganizationRecord { id: string; }
-interface StoreRecord { id: string; name?: string | null; slug?: string | null; defaultCurrency?: string | null; }
+export interface StoreSummary { id: string; name?: string | null; slug?: string | null; locationSlug?: string | null; publicHandle?: string | null; locationName?: string | null; city?: string | null; defaultCurrency?: string | null; published?: boolean; }
+interface StoreRecord extends StoreSummary { businessType?: string | null; }
 interface ProductVariantRecord { id?: string; sku?: string | null; title?: string | null; amountMinor?: number | string | null; currency?: string | null; }
 interface ProductRecord {
  id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null; kind?: 'physical' | 'digital' | 'service' | 'food' | null;
@@ -32,6 +33,7 @@ export interface WorkspaceSnapshot {
   storeCurrency: string;
   storeName: string;
   storeSlug: string;
+  stores: StoreSummary[];
   products: ProductRow[];
   orders: OrderRow[];
   categories: CategoryRow[];
@@ -44,16 +46,17 @@ export interface WorkspaceSnapshot {
 export class WorkspaceDataService {
   constructor(private readonly apiClient: ApiClientService) {}
 
-  async load(): Promise<WorkspaceSnapshot> {
+  async load(selectedStoreId = ''): Promise<WorkspaceSnapshot> {
     const organizations = await this.apiClient.request<OrganizationRecord[]>('/api/v1/organizations');
     const organization = Array.isArray(organizations) ? organizations[0] : null;
     if (!organization) return this.emptySnapshot('organization');
 
     const organizationId = String(organization.id);
     const stores = await this.apiClient.request<StoreRecord[]>(`/api/v1/organizations/${encodeURIComponent(organizationId)}/stores`);
-    const store = Array.isArray(stores) ? stores[0] : null;
+    const storeRows = Array.isArray(stores) ? stores : [];
+    const store = storeRows.find(item => item.id === selectedStoreId) ?? storeRows[0] ?? null;
     if (!store) {
-      return { ...this.emptySnapshot('store'), organizationId };
+      return { ...this.emptySnapshot('store'), organizationId, stores: storeRows };
     }
 
     const storeId = String(store.id);
@@ -163,6 +166,7 @@ export class WorkspaceDataService {
       storeCurrency,
       storeName: String(store.name ?? ''),
       storeSlug: String(store.slug ?? ''),
+      stores: storeRows,
       products: productsWithStock,
       orders,
       categories,
@@ -180,6 +184,7 @@ export class WorkspaceDataService {
       storeCurrency: 'MAD',
       storeName: '',
       storeSlug: '',
+      stores: [],
       products: [],
       orders: [],
       categories: [],
