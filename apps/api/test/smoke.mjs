@@ -476,6 +476,7 @@ try {
   });
   const cancelledReservationPath = `/api/v1/organizations/${organizationId}/orders/${cancelledOrder.payload?.data?.id}/inventory-reservations`;
   await request(cancelledReservationPath, 201, { method: 'POST', headers: authHeaders, body: JSON.stringify({ locationId: location.payload?.data?.id }) });
+  await request(`/api/v1/organizations/${organizationId}/orders/${cancelledOrder.payload?.data?.id}`, 403, { method: 'PATCH', headers: viewerHeaders, body: JSON.stringify({ status: 'confirmed' }) });
   await request(`/api/v1/organizations/${organizationId}/orders/${cancelledOrder.payload?.data?.id}`, 200, { method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' }) });
   const inventoryAfterReservationCancellation = await request(`/api/v1/organizations/${organizationId}/inventory`, 200, { headers: authHeaders });
   const releasedLevel = inventoryAfterReservationCancellation.payload?.data?.find((item) => item.variantId === reservationVariantId);
