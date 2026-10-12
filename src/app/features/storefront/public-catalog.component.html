@@ -11,7 +11,7 @@
         <div class="product-grid">
           @for (product of category.products; track product.id) {
             <article class="product-card">
-              <div class="product-art" aria-hidden="true">{{initialLetter(product)}}</div>
+              @if(product.imageUrl){<img class="product-art product-photo" [src]="product.imageUrl" [alt]="product.imageAlt" loading="lazy" width="480" height="320">} @else {<div class="product-art" aria-hidden="true">{{initialLetter(product)}}</div>}
               <div class="product-info"><h3>{{product.name}}</h3>@if(product.description){<p>{{product.description}}</p>}
                 @if(startingPrice(product); as price){<strong>{{money(price.amount, price.currency)}}</strong>} @else {<span class="price-unavailable">Contact the store for pricing</span>}
                 @if(product.variants?.length > 1){<span class="variant-count">{{product.variants.length}} options</span>}
