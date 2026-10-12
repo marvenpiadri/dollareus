@@ -709,7 +709,8 @@ try {
   }
   const posPayment = { payload: concurrentPaymentAttempts.find((attempt) => attempt.status === 201)?.payload };
   if (posPayment.payload?.data?.paymentStatus !== 'paid') throw new Error('POS order did not use the canonical manual payment workflow.');
-  await request(posPaymentPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...JSON.parse(posPaymentBody), amountMinor: 2097 }) });
+  const conflictingPaymentReplay = await request(posPaymentPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ ...JSON.parse(posPaymentBody), amountMinor: 2097 }) });
+  if (conflictingPaymentReplay.payload?.error?.code !== 'PAYMENT_IDEMPOTENCY_CONFLICT') throw new Error('Payment idempotency key reuse with a different payload did not return a conflict.');
   checks.push('concurrent duplicate manual payments replay one record and conflicting payment payloads are rejected');
   await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}/refunds`, 403, {
     method: 'POST', headers: viewerHeaders,
@@ -779,7 +780,8 @@ try {
     body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Smoke test final refund', idempotencyKey: `smoke-refund-2-${suffix}` })
   });
   if (refundReplay.payload?.data?.id !== secondRefund.payload?.data?.id) throw new Error('Refund idempotency did not return the existing refund.');
-  await request(refundPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Changed reason must conflict', idempotencyKey: `smoke-refund-2-${suffix}` }) });
+  const conflictingRefundReplay = await request(refundPath, 409, { method: 'POST', headers: authHeaders, body: JSON.stringify({ paymentId: recordedPayment.payload?.data?.id, amountMinor: 1598, reason: 'Changed reason must conflict', idempotencyKey: `smoke-refund-2-${suffix}` }) });
+  if (conflictingRefundReplay.payload?.error?.code !== 'REFUND_CONFLICT') throw new Error('Refund idempotency key reuse with a different payload did not return a conflict.');
   const refundHistory = await request(refundPath, 200, { headers: authHeaders });
   if (!Array.isArray(refundHistory.payload?.data) || refundHistory.payload.data.length !== 2) throw new Error('Refund history did not return both refund records.');
   checks.push('audited partial/full manual refunds, over-refund guard, idempotency and history');
