@@ -7,7 +7,7 @@
   } @else {
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">{{store()?.businessType || 'Independent business'}} · {{store()?.locationSlug?.replaceAll('-', ' ')}}</span>
+        <span class="eyebrow">{{store()?.businessType || 'Independent business'}} · {{locationLabel()}}</span>
         <h1>{{store()?.name}}</h1>
         @if (store()?.description) { <p class="description">{{store()?.description}}</p> }
         <div class="hero-actions">
@@ -18,7 +18,7 @@
       </div>
       <aside class="identity-card">
         <span class="card-label">OFFICIAL STORE PAGE</span>
-        <div class="identity-icon">{{String(store()?.name ?? 'S').slice(0, 1).toUpperCase()}}</div>
+        <div class="identity-icon">{{initialLetter()}}</div>
         <h2>{{store()?.name}}</h2>
         <p>{{store()?.businessType || 'Business'}}</p>
         <span class="handle">@{{store()?.publicHandle}}</span>
