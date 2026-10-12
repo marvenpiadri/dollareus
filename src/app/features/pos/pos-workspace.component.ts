@@ -203,6 +203,48 @@ export class PosWorkspaceComponent {
     } finally { this.posSaveBusy.set(false); }
   }
 
+  protected printPosReceipt(order: any): void {
+    if (!order?.id || typeof window === 'undefined') return;
+    const receiptWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!receiptWindow) {
+      this.posError.set('The receipt window was blocked. Allow pop-ups for this site, then try printing again.');
+      return;
+    }
+    const escapeHtml = (value: unknown): string => String(value ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const currency = String(order.currency ?? this.storeCurrency());
+    const items = Array.isArray(order.items) ? order.items : [];
+    const lineRows = items.map((item: any) => {
+      const name = escapeHtml(item.name ?? item.productName ?? 'Item');
+      const quantity = Math.max(0, Number(item.quantity) || 0);
+      const unit = Number(item.unitAmountMinor ?? item.priceAmountMinor ?? 0);
+      const total = Number(item.lineTotalMinor ?? item.totalMinor ?? unit * quantity);
+      const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+      const modifiers = Array.isArray(metadata.modifiers) ? metadata.modifiers : [];
+      const modifierNames = modifiers.flatMap((group: any) =>
+        Array.isArray(group.options) ? group.options.map((option: any) => String(option.name ?? '')) :
+        Array.isArray(group.optionIds) ? group.optionIds.map(String) : []
+      ).filter(Boolean);
+      return '<div class="line"><div class="item-name">' + name + '</div>' +
+        (modifierNames.length ? '<div class="muted">' + escapeHtml(modifierNames.join(', ')) + '</div>' : '') +
+        '<div class="amount"><span>' + quantity + ' × ' + escapeHtml(this.money(unit, currency)) +
+        '</span><strong>' + escapeHtml(this.money(total, currency)) + '</strong></div></div>';
+    }).join('');
+    const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
+    const dateLabel = Number.isNaN(createdAt.getTime()) ? new Date().toLocaleString() : createdAt.toLocaleString();
+    const fulfillment = escapeHtml(this.orderStatusLabel(String(order.fulfillment ?? 'counter')));
+    const table = order.tableLabel ? '<p>Table: ' + escapeHtml(order.tableLabel) + '</p>' : '';
+    const payment = escapeHtml(this.orderStatusLabel(String(order.paymentStatus ?? 'unpaid')));
+    receiptWindow.document.open();
+    receiptWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Receipt #' + escapeHtml(order.orderNumber ?? order.id) + '</title><style>' +
+      '*{box-sizing:border-box}body{font:12px/1.45 Arial,sans-serif;color:#111;margin:0 auto;padding:5mm;width:72mm}h1{font-size:18px;text-align:center;margin:0 0 4px}p{margin:3px 0}.center{text-align:center}.muted{color:#555;font-size:10px}.rule{border:0;border-top:1px dashed #777;margin:10px 0}.line{padding:5px 0;border-bottom:1px dotted #ddd}.item-name{font-weight:700;overflow-wrap:anywhere}.amount{display:flex;justify-content:space-between;gap:8px;margin-top:3px}.totals{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:700}.footer{text-align:center;margin-top:14px}.actions{text-align:center;margin:0 0 12px}button{padding:8px 14px}@media print{body{width:72mm;padding:0}.actions{display:none}@page{size:80mm auto;margin:4mm}}' +
+      '</style></head><body><div class="actions"><button onclick="window.print()">Print receipt</button> <button onclick="window.close()">Close</button></div><h1>Sales receipt</h1><p class="center">POS · ' + escapeHtml(this.storeId()) + '</p><hr class="rule"><p><strong>Order #' + escapeHtml(order.orderNumber ?? order.id) + '</strong></p><p>' + escapeHtml(dateLabel) + '</p><p>Order: ' + escapeHtml(this.orderStatusLabel(String(order.status ?? 'pending'))) + '</p><p>Payment: ' + payment + '</p><p>Fulfillment: ' + fulfillment + '</p>' + table + '<hr class="rule">' + lineRows + '<hr class="rule"><div class="totals"><span>Total</span><span>' + escapeHtml(this.money(Number(order.totalMinor ?? 0), currency)) + '</span></div><p>Subtotal and tax are not itemized in this receipt.</p><hr class="rule"><div class="footer">Thank you for your purchase.</div><script>window.addEventListener("load",function(){setTimeout(function(){window.print()},250)});</script></body></html>');
+    receiptWindow.document.close();
+    receiptWindow.focus();
+    this.posError.set('');
+  }
+
   protected async recordPosPayment(order: any): Promise<void> {
     if (!order?.id || order.status === 'cancelled' || order.status === 'refunded' || order.paymentStatus === 'refunded') return;
     this.posSaveBusy.set(true); this.posError.set('');
