@@ -124,10 +124,12 @@ export class WorkspaceComponent {
     const values = new FormData(event.currentTarget as HTMLFormElement);
     this.onboardingBusy.set(true); this.onboardingError.set('');
     try {
+      const businessType = String(values.get('businessType') ?? 'retail');
+      const defaultExperience = businessType === 'restaurant' || businessType === 'cafe' ? 'menu' : businessType === 'freelancer' || businessType === 'services' ? 'services' : 'catalog';
       const store = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
         name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim(), description: null,
-        businessType: 'general', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
-        defaultExperience: 'commerce', enabledExperiences: ['commerce'], published: false, theme: {}
+        businessType, status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
+        defaultExperience, enabledExperiences: [defaultExperience], published: false, theme: {}
       }) });
       this.storeId.set(store.id); this.storeCurrency.set('MAD'); this.storeName.set(store.name); this.storeSlug.set(store.slug);
       this.onboardingStage.set('ready');
