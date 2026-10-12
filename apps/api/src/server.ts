@@ -397,6 +397,28 @@ app.get('/api/v1/organizations', { preHandler: authenticate }, async (request) =
   return { data: camelize(result.rows), requestId: request.id };
 });
 
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string } }>('/api/v1/organizations/:organizationId/integrations/catalog', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
+  const storeId = request.query.storeId?.trim() || null;
+  const result = await pool.query(
+    `SELECT p.id,p.store_id AS store_id,s.slug AS store_slug,s.name AS store_name,p.slug,p.name,p.description,p.kind,p.availability_status,p.availability_note,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at,v.id)
+        FROM product_variants v WHERE v.product_id=p.id AND v.organization_id=p.organization_id AND v.status='active'), '[]'::jsonb) AS variants
+     FROM products p
+     JOIN stores s ON s.id=p.store_id AND s.organization_id=p.organization_id AND s.status='active'
+     JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id AND f.published=true
+       AND ('commerce'=ANY(f.enabled_experiences) OR 'catalog'=ANY(f.enabled_experiences))
+     WHERE p.organization_id=$1 AND p.status='active' AND ($2::text IS NULL OR s.id=$2)
+       AND EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.organization_id=p.organization_id AND v.status='active')
+     ORDER BY p.updated_at DESC,p.id LIMIT $3`,
+    [organizationId, storeId, limit]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
 app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>('/api/v1/organizations/:organizationId/products', { preHandler: authenticate }, async (request, reply) => {
   const organizationId = request.params.organizationId;
   if (!await requireMembership(request, reply, organizationId)) return;
