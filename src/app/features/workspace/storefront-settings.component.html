@@ -29,7 +29,7 @@
         <div class="create-location-form">
           <div class="fields two-col">
             <label>New location name<input name="newLocationName" maxlength="180" placeholder="Downtown branch"></label>
-            <label>New location URL slug<input name="newLocationSlug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="kfc-casablanca-maarif"><small>URL preview: /{{settings()?.publicHandle}}/your-location-slug</small></label>
+            <label>New location URL slug<input name="newLocationSlug" maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="kfc-casablanca-maarif"><small>URL preview: /{{settings()?.publicHandle}}/your-location-slug</small></label>
             <label>City<input name="newCity" maxlength="120" placeholder="Casablanca"></label>
             <label>Country code<input name="newCountryCode" maxlength="2" pattern="[A-Za-z]{2}" placeholder="MA"></label>
             <label>Street address<input name="newAddressLine" maxlength="300" placeholder="Street, number, district"></label>
