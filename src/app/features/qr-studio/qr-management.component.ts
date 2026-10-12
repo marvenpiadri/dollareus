@@ -68,7 +68,11 @@ export class QrManagementComponent {
           const publicPoint = await this.apiClient.request('/api/v1/public/entry-points/' + encodeURIComponent(point.id));
           return { ...point, targetUrl: typeof publicPoint?.targetUrl === 'string' ? publicPoint.targetUrl : null, targetUrlPath: String(publicPoint?.targetUrlPath ?? '') };
         } catch {
-          return { ...point, targetUrl: null, targetUrlPath: '/' + this.storeSlug() + point.targetPath };
+          const handle = String(store?.publicHandle ?? this.storeSlug());
+          const locationSlug = String(store?.locationSlug ?? store?.slug ?? '');
+          const targetUrlPath = '/' + encodeURIComponent(handle) + '/' + encodeURIComponent(locationSlug) + (point.targetPath === '/' ? '' : point.targetPath);
+          const targetUrl = typeof window !== 'undefined' ? window.location.origin + targetUrlPath : null;
+          return { ...point, targetUrl, targetUrlPath };
         }
       }));
       if (sequence !== this.loadSequence) return;
