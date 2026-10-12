@@ -13,7 +13,7 @@ import {
 
 interface OrganizationRecord { id: string; }
 interface StoreRecord { id: string; name?: string | null; slug?: string | null; defaultCurrency?: string | null; }
-interface ProductVariantRecord { id?: string; sku?: string | null; amountMinor?: number | string | null; currency?: string | null; }
+interface ProductVariantRecord { id?: string; sku?: string | null; title?: string | null; amountMinor?: number | string | null; currency?: string | null; }
 interface ProductRecord {
  id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null;
  categoryIds?: string[]; variants?: ProductVariantRecord[]; media?: Array<{ contentUrl?: string | null }>;
@@ -84,6 +84,14 @@ export class WorkspaceDataService {
           priceMinor: Number(variant?.amountMinor ?? 0),
           currency: String(variant?.currency ?? storeCurrency),
           stock: null,
+          variants: (Array.isArray(product.variants) ? product.variants : []).map((candidate: ProductVariantRecord) => ({
+            id: String(candidate.id ?? ''),
+            title: String(candidate.title ?? 'Default'),
+            sku: String(candidate.sku ?? ''),
+            priceMinor: Number(candidate.amountMinor ?? 0),
+            currency: String(candidate.currency ?? storeCurrency),
+            stock: null
+          })),
           status,
           initials: name.split(/\\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
           tone: 'sage',
@@ -131,8 +139,20 @@ export class WorkspaceDataService {
     );
 
     const productsWithStock = products.map(product => {
-      const levels = inventory.filter(item => item.variantId === product.variantId && item.quantityOnHand !== null);
-      return { ...product, stock: levels.length ? levels.reduce((sum, item) => sum + Number(item.quantityOnHand ?? 0), 0) : null };
+      const stockForVariant = (variantId: string): number | null => {
+        const levels = inventory.filter(item => item.variantId === variantId && item.quantityOnHand !== null);
+        return levels.length ? levels.reduce((sum, item) => sum + Number(item.quantityOnHand ?? 0), 0) : null;
+      };
+      const variants = (product.variants ?? []).map(variant => ({ ...variant, stock: stockForVariant(variant.id) }));
+      const firstVariantStock = stockForVariant(product.variantId);
+      return {
+        ...product,
+        stock: firstVariantStock,
+        variants: variants.length ? variants : [{
+          id: product.variantId, title: 'Default', sku: product.sku,
+          priceMinor: product.priceMinor, currency: product.currency, stock: firstVariantStock
+        }]
+      };
     });
 
     return {
