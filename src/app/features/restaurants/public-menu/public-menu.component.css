@@ -1,1 +1,4 @@
 :host{display:block;min-height:100vh}
+
+.public-dish-photo{display:block;width:104px;height:104px;flex:0 0 104px;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#e8eee3;border:1px solid #e1e7dc}
+@media(max-width:520px){.public-dish-photo{width:76px;height:76px;flex-basis:76px}}
