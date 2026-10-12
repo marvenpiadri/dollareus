@@ -22,7 +22,7 @@ interface OrderRecord { id: string; orderNumber?: string | number; customerEmail
 interface MenuItemRecord {
  id: string; menuId?: string | null; slug?: string | null; name?: string | null; description?: string | null;
  priceAmountMinor?: number | string | null; currency?: string | null; status?: string | null; availability?: string | null;
- position?: number | string | null; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; metadata?: Record<string, unknown> | null;
+ position?: number | string | null; categoryId?: string | null; allergens?: string[]; dietaryLabels?: string[]; metadata?: Record<string, unknown> | null; imageUrl?: string | null;
 }
 
 export interface WorkspaceSnapshot {
@@ -124,7 +124,9 @@ export class WorkspaceDataService {
         categoryId: typeof item.categoryId === 'string' ? item.categoryId : null,
         allergens: Array.isArray(item.allergens) ? item.allergens.map(String) : [],
         dietaryLabels: Array.isArray(item.dietaryLabels) ? item.dietaryLabels.map(String) : [],
-        modifierGroups: Array.isArray(item.metadata?.['modifierGroups']) ? item.metadata?.['modifierGroups'] as MenuModifierGroup[] : []
+        modifierGroups: Array.isArray(item.metadata?.['modifierGroups']) ? item.metadata?.['modifierGroups'] as MenuModifierGroup[] : [],
+        metadata: item.metadata ?? {},
+        imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null
       }))
     );
 
