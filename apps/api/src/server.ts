@@ -972,7 +972,8 @@ app.get<{ Params: { organizationId: string; menuId: string } }>('/api/v1/organiz
   const menu = await pool.query('SELECT id FROM restaurant_menus WHERE id=$1 AND organization_id=$2', [menuId, organizationId]);
   if (!menu.rowCount) return fail(reply, request, 404, 'MENU_NOT_FOUND', 'The selected menu does not exist in this organization.');
   const result = await pool.query('SELECT * FROM restaurant_menu_items WHERE menu_id=$1 AND organization_id=$2 ORDER BY position,name LIMIT 500', [menuId, organizationId]);
-  return { data: camelize(result.rows).map((item: any) => ({ ...item, imageUrl: item.metadata?.restaurantImage ? '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(String(item.id)) + '/image' : null })), requestId: request.id };
+  const items = camelize(result.rows) as Array<Record<string, any>>;
+  return { data: items.map((item) => ({ ...item, imageUrl: item.metadata?.restaurantImage ? '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(String(item.id)) + '/image' : null })), requestId: request.id };
 });
 
 app.post<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/menus/:menuId/items', { preHandler: authenticate }, async (request, reply) => {
