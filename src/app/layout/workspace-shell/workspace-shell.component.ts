@@ -14,11 +14,14 @@ export class WorkspaceShellComponent {
   readonly channelNav = input.required<{ label: WorkspaceNavItem; symbol: string }[]>();
   readonly storeName = input('');
   readonly storeSlug = input('');
+  readonly stores = input<{ id: string; name?: string | null; slug?: string | null; locationSlug?: string | null; locationName?: string | null; city?: string | null }[]>([]);
+  readonly selectedStoreId = input('');
   readonly ordersCount = input(0);
   readonly search = input('');
   readonly toast = input('');
 
   readonly navRequested = output<WorkspaceNavItem>();
+  readonly storeChangeRequested = output<string>();
   readonly notifyRequested = output<string>();
   readonly signOutRequested = output<void>();
   readonly searchChangeRequested = output<string>();
