@@ -157,7 +157,7 @@ const StoreInput = z.object({
   name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable(), slug: Slug,
   publicHandle: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+([_-][a-z0-9]+)*$/).optional(),
   locationSlug: Slug.optional(),
-  businessType: z.enum(['retail', 'restaurant', 'freelancer', 'services', 'digital', 'general']),
+  businessType: z.enum(['retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general']),
   status: z.enum(['setup', 'active', 'paused', 'archived']), currency: z.string().regex(/^[A-Z]{3}$/),
   locale: z.enum(['en', 'fr', 'ar']), timeZone: z.string().min(1).max(100),
   defaultExperience: z.enum(['commerce', 'menu', 'catalog', 'services']),
