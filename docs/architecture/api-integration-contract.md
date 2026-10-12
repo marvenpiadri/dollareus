@@ -25,25 +25,20 @@ Status: architecture baseline for Phase 3. This document defines the boundary fu
 - Use server-authoritative pricing and inventory. Client totals are estimates only.
 - Mutations that may be retried need idempotency keys. Reusing a key for a different payload must return a conflict, not silently replay a different operation.
 - Public storefront routes must expose only intentionally published data. Private merchant/customer data must remain behind authorization.
-- API credentials must be scoped to the organization, stored hashed, revocable, and never shown again after issuance. Credential-management actions require an interactive merchant session. Do not expose broad administrative permissions to a publishing integration merely because it can read products.
+- API credentials must be scoped to the organization, stored hashed, revocable, and never shown again after issuance. Credential-management actions require an interactive merchant session. Current developer credentials are read-only and subject to a configurable per-credential daily quota (`API_CREDENTIAL_DAILY_LIMIT`, default 10,000 requests per UTC day). Write credentials are deliberately disabled until resource-specific scopes and action-level authorization are implemented.
 
 ## Future publishing integration
 
-A typical third-party blog/CMS integration should be able to:
-1. Obtain a merchant-authorized, read-only credential for selected commerce data.
-2. Read published product/catalog/menu data and save canonical IDs alongside its own article content.
-3. Refresh price/availability from Dollareus when rendering or synchronizing content.
-4. Subscribe to product/availability webhooks when webhook delivery is implemented; verify signatures and handle duplicate/retried events idempotently.
-5. Disconnect by revoking the credential without deleting editorial content or commerce records.
+A third-party blog/CMS integration can use the current read-only API to retrieve authorized commerce data and save canonical IDs alongside its own editorial content. It can refresh price/availability from Dollareus when rendering or synchronizing content. Signed product/availability webhooks remain future work; until then clients must poll conservatively. Disconnect by revoking the credential without deleting editorial content or commerce records.
 
-Write access must be opt-in and limited to the minimum resources/actions needed. Reading catalog data must not grant inventory adjustment, payment/refund, credential management, or organization administration.
+Write access is intentionally unavailable. Before enabling it, add resource-specific scopes and test that catalog integrations cannot change inventory, manage payments/refunds, manage credentials, or administer organizations.
 
 ## Phase 3 release gates
 
 - [ ] Route-by-route authorization and tenant-isolation review, including developer credentials.
-- [ ] Stable idempotency semantics and conflicting-payload tests for order, POS, payment, refund, and inventory mutations.
+- [x] Conflicting-payload replay tests for order, POS, payment and refund idempotency keys; inventory-return idempotency is covered by API smoke tests. Continue extending idempotency coverage to any new mutating endpoints.
 - [ ] Documented pagination, filtering, rate limits, error codes, and compatibility policy.
 - [ ] Webhook signing, retries, delivery logs, and replay protection before claiming event-driven integrations.
-- [ ] Quota enforcement and usage visibility before offering public developer access.
+- [x] Configurable daily per-credential request quota and usage visibility are implemented and covered by API smoke tests. Public developer access still requires documentation, monitoring, abuse review and an explicit launch decision.
 - [ ] Migration drift check, staging migration, backup/restore rehearsal, and deployment rollback procedure.
 - [ ] Browser-level acceptance and live database/object-storage verification before public launch.
