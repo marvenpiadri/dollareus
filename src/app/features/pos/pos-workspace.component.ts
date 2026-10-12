@@ -50,8 +50,11 @@ export class PosWorkspaceComponent {
       if (sourceType !== 'product') return;
       const products = this.products();
       const selected = this.posVariantId();
-      if (!selected || !products.some(product => product.variantId === selected && product.status === 'Active')) {
-        this.posVariantId.set(products.find(product => product.status === 'Active' && product.variantId)?.variantId ?? '');
+      const activeVariants = products.filter(product => product.status === 'Active').flatMap(product =>
+        (product.variants?.length ? product.variants : product.variantId ? [{ id: product.variantId }] : []).filter(variant => !!variant.id)
+      );
+      if (!selected || !activeVariants.some(variant => variant.id === selected)) {
+        this.posVariantId.set(activeVariants[0]?.id ?? '');
       }
     });
   }
@@ -133,7 +136,13 @@ export class PosWorkspaceComponent {
     const variantId = this.posVariantId();
     const quantity = Number(this.posQuantity());
     const sourceType = this.posSourceType();
-    const product = sourceType === 'product' ? this.products().find(row => row.variantId === variantId && row.status === 'Active') : null;
+    const product = sourceType === 'product' ? this.products().find(row =>
+      row.status === 'Active' && (row.variants?.some(variant => variant.id === variantId) || row.variantId === variantId)
+    ) : null;
+    const productVariant = product?.variants?.find(variant => variant.id === variantId) ?? (product ? {
+      id: product.variantId, title: 'Default', sku: product.sku, priceMinor: product.priceMinor,
+      currency: product.currency, stock: product.stock
+    } : null);
     const menuItem = sourceType === 'menu_item' ? this.selectedPosMenuItem() : null;
     if (!this.selectedPosSessionId() || (sourceType === 'product' ? !product : !menuItem) || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000 || (sourceType === 'menu_item' && !this.posModifiersValid())) {
       this.posCartError.set('Choose an open register, a valid active item, quantity, and all required modifier options.');
@@ -147,8 +156,8 @@ export class PosWorkspaceComponent {
     const name = sourceType === 'product' ? product!.name : menuItem!.name;
     const sourceItemId = sourceType === 'product' ? product!.id : menuItem!.id;
     const sourceVariantId = sourceType === 'product' ? variantId : undefined;
-    const priceAmountMinor = sourceType === 'product' ? product!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
-    const currency = sourceType === 'product' ? product!.currency : menuItem!.currency;
+    const priceAmountMinor = sourceType === 'product' ? productVariant!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
+    const currency = sourceType === 'product' ? productVariant!.currency : menuItem!.currency;
     const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
     const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
     this.posCartError.set('');
