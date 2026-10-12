@@ -62,7 +62,7 @@ export class PublicMenuComponent {
   }
 
   private async loadPublicMenu(storeSlug: string, publicIdentity: { storeHandle: string; locationSlug: string } | null = null): Promise<void> {
-    if (!storeSlug) {
+    if (!storeSlug && !publicIdentity) {
       this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
       return;
     }
