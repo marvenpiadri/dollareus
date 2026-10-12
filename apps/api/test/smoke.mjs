@@ -94,6 +94,14 @@ try {
   if (!rawApiToken?.startsWith('dlr_live_') || !apiCredentialId) throw new Error('API credential creation did not return its one-time token and id.');
   const apiHeaders = { Authorization: `Bearer ${rawApiToken}` };
   await request(`/api/v1/organizations/${organizationId}/products`, 200, { headers: apiHeaders });
+  const unsupportedWriteCredential = await request(`/api/v1/organizations/${organizationId}/api-credentials`, 400, {
+    method: 'POST', headers: authHeaders, body: JSON.stringify({ name: 'Write access must remain disabled', scopes: ['write'] })
+  });
+  if (unsupportedWriteCredential.payload?.error?.code !== 'API_WRITE_SCOPE_NOT_SUPPORTED') throw new Error('Developer write credentials were not explicitly disabled.');
+  const privilegedCredentialStoreAttempt = await request(`/api/v1/organizations/${organizationId}/stores`, 403, {
+    method: 'POST', headers: apiHeaders, body: JSON.stringify({ name: 'Must not create stores', slug: `api-key-store-${suffix}` })
+  });
+  if (privilegedCredentialStoreAttempt.payload?.error?.code !== 'API_INTERACTIVE_SESSION_REQUIRED') throw new Error('Developer credential unexpectedly passed the manager-only store creation gate.');
   await request(`/api/v1/organizations/${organizationId}/products`, 403, { method: 'POST', headers: apiHeaders, body: '{}' });
   await request(`/api/v1/organizations/${randomUUID()}/products`, 403, { headers: apiHeaders });
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 403, { method: 'DELETE', headers: apiHeaders });
@@ -101,7 +109,7 @@ try {
   if (Number(usageEvents.rows[0]?.count ?? 0) < 3) throw new Error('API credential usage was not metered.');
   await request(`/api/v1/organizations/${organizationId}/api-credentials/${apiCredentialId}`, 200, { method: 'DELETE', headers: authHeaders, body: JSON.stringify({}) });
   await request(`/api/v1/organizations/${organizationId}/products`, 401, { headers: apiHeaders });
-  checks.push('organization-scoped developer API credentials, read/write scopes, usage metering and revocation');
+  checks.push('organization-scoped read-only developer API credentials, privileged-route denial, usage metering and revocation');
 
   viewerUserId = randomUUID();
   viewerToken = randomUUID() + randomUUID();
