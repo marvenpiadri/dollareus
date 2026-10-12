@@ -579,7 +579,7 @@ app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/publ
 app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug/catalog', async (request, reply) => {
   const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true AND (('commerce'=ANY(f.enabled_experiences)) OR ('catalog'=ANY(f.enabled_experiences))) LIMIT 1", [request.params.storeHandle, request.params.locationSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store location does not exist.');
-  const products = await pool.query("SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), '[]'::jsonb) AS variants FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC", [store.rows[0].organization_id, store.rows[0].id, 'active']);
+  const products = await pool.query("SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), '[]'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'slug',c.slug) ORDER BY c.position,c.name) FROM product_categories pc JOIN categories c ON c.id=pc.category_id AND c.organization_id=pc.organization_id AND c.store_id=pc.store_id WHERE pc.product_id=p.id AND pc.organization_id=p.organization_id AND pc.store_id=p.store_id AND c.status='active'), '[]'::jsonb) AS categories FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC", [store.rows[0].organization_id, store.rows[0].id, 'active']);
   return { data: camelize(products.rows), requestId: request.id };
 });
 
@@ -594,7 +594,7 @@ app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/publ
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', async (request, reply) => {
-  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE (s.slug=$1 OR s.public_handle=$1) AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
+  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
   if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
