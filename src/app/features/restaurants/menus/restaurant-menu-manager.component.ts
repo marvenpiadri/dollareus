@@ -96,6 +96,28 @@ export class RestaurantMenuManagerComponent {
     }
   }
 
+  private readMenuLabels(values: FormData, presetField: string, otherField: string, commonLabels: string[]): string[] {
+    const canonical = new Map(commonLabels.map(label => [label.toLowerCase(), label]));
+    const labels = [...values.getAll(presetField).map(value => String(value)), ...String(values.get(otherField) ?? '').split(',')];
+    const unique = new Map<string, string>();
+    for (const raw of labels) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const label = canonical.get(trimmed.toLowerCase()) ?? trimmed;
+      if (!unique.has(label.toLowerCase())) unique.set(label.toLowerCase(), label);
+    }
+    return [...unique.values()];
+  }
+
+  protected hasCommonLabel(values: string[] | undefined, label: string): boolean {
+    return (values ?? []).some(value => value.trim().toLowerCase() === label.toLowerCase());
+  }
+
+  protected otherLabels(values: string[] | undefined, commonLabels: string[]): string {
+    const common = new Set(commonLabels.map(label => label.toLowerCase()));
+    return (values ?? []).filter(value => !common.has(value.trim().toLowerCase())).join(', ');
+  }
+
   protected toMinorUnits(value: string | number): number {
     const amount = Number(value);
     return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
@@ -353,8 +375,8 @@ export class RestaurantMenuManagerComponent {
     const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.selectedMenuItems().map(item => item.slug));
     const price = Number(values.get('price'));
     const description = String(values.get('description') ?? '').trim();
-    const allergens = [...new Set([...values.getAll('allergenPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('allergensOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
-    const dietaryLabels = [...new Set([...values.getAll('dietaryPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('dietaryOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
+    const allergens = this.readMenuLabels(values, 'allergenPreset', 'allergensOther', this.commonAllergens);
+    const dietaryLabels = this.readMenuLabels(values, 'dietaryPreset', 'dietaryOther', this.commonDietaryLabels);
     const categoryId = String(values.get('categoryId') ?? '').trim() || null;
     const menuId = this.selectedMenuId();
     if (!menuId || !name || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
@@ -397,8 +419,8 @@ export class RestaurantMenuManagerComponent {
     const description = String(values.get('description') ?? '').trim();
     const price = Number(values.get('price'));
     if (!name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) { this.menuError.set('Enter a valid item name, slug, and non-negative price.'); return; }
-    const allergens = [...new Set([...values.getAll('allergenPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('allergensOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
-    const dietaryLabels = [...new Set([...values.getAll('dietaryPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('dietaryOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
+    const allergens = this.readMenuLabels(values, 'allergenPreset', 'allergensOther', this.commonAllergens);
+    const dietaryLabels = this.readMenuLabels(values, 'dietaryPreset', 'dietaryOther', this.commonDietaryLabels);
     let modifierGroups: MenuModifierGroup[];
     try {
       const groups: unknown[] = this.modifierDraft();
