@@ -22,7 +22,8 @@
                   <section style="padding-top:10px">
                     <h3 style="margin:14px 0 2px;color:#46583d;font-size:12px;font-weight:850;letter-spacing:.1em;text-transform:uppercase">{{section.name}}</h3>
                     @for(item of section.items;track item.id){
-                      <article style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:17px 0;border-top:1px solid #e5e9e1">
+                      <article style="display:flex;align-items:flex-start;gap:14px;padding:17px 0;border-top:1px solid #e5e9e1">
+                        @if(item.imageUrl){<img class="public-dish-photo" [src]="item.imageUrl" [alt]="item.name" loading="lazy">}
                         <div style="min-width:0;flex:1">
                           <h4 style="margin:0;font-size:17px;font-weight:750">{{item.name}}</h4>
                           @if(item.description){<p style="margin:7px 0 0;color:#667260;font-size:14px;line-height:1.6">{{item.description}}</p>}
