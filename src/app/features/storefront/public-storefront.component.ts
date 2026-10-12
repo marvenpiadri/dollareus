@@ -1,4 +1,5 @@
-import { Component, signal } from '@angular/core';
+import { Component, Inject, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Meta, Title } from '@angular/platform-browser';
 import { ApiClientService } from '../../core/api/api-client.service';
@@ -15,7 +16,7 @@ export class PublicStorefrontComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal('');
 
-  constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta) {
+  constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, @Inject(DOCUMENT) private readonly document: Document) {
     const handle = route.snapshot.paramMap.get('storeHandle') ?? '';
     const location = route.snapshot.paramMap.get('locationSlug') ?? '';
     void this.load(handle, location);
@@ -52,6 +53,36 @@ export class PublicStorefrontComponent {
     return normalized;
   }
 
+  private updateStructuredData(store: any, handle: string, location: string): void {
+    const type = store?.businessType === 'restaurant' ? 'Restaurant'
+      : store?.businessType === 'freelancer' || store?.businessType === 'services' ? 'ProfessionalService'
+      : 'Store';
+    const address: Record<string, unknown> = { '@type': 'PostalAddress' };
+    if (store?.addressLine) address['streetAddress'] = store.addressLine;
+    if (store?.city) address['addressLocality'] = store.city;
+    if (store?.countryCode) address['addressCountry'] = store.countryCode;
+    const hasAddress = Object.keys(address).length > 1;
+    const data: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': type,
+      '@id': '/' + handle + '/' + location + '#business',
+      name: String(store?.name ?? ''),
+      description: String(store?.seoDescription ?? store?.description ?? ''),
+      ...(hasAddress ? { address } : {}),
+      ...(store?.phone ? { telephone: String(store.phone) } : {}),
+      ...(store?.websiteUrl ? { url: String(store.websiteUrl) } : {}),
+      ...(store?.googleMapsUrl ? { hasMap: String(store.googleMapsUrl) } : {})
+    };
+    if (store?.defaultExperience === 'menu') data['hasMenu'] = '/' + handle + '/' + location + '/menu';
+    const existing = this.document.getElementById('dollareus-store-jsonld');
+    existing?.parentNode?.removeChild(existing);
+    const script = this.document.createElement('script');
+    script.id = 'dollareus-store-jsonld';
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify(data).replace(/</g, '\\u003c');
+    this.document.head.appendChild(script);
+  }
+
   private async load(handle: string, location: string): Promise<void> {
     if (!handle || !location) {
       this.error.set('This store address is incomplete.');
@@ -61,6 +92,7 @@ export class PublicStorefrontComponent {
     try {
       const store = await this.api.request('/api/v1/public/storefronts/' + encodeURIComponent(handle) + '/' + encodeURIComponent(location));
       this.store.set(store);
+      this.updateStructuredData(store, handle, location);
       const name = String(store?.name ?? 'Store');
       const locationName = String(store?.locationSlug ?? location).replace(/-/g, ' ');
       const title = String(store?.seoTitle ?? (name + ' in ' + locationName + ' | Dollareus')).slice(0, 180);
