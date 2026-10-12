@@ -73,7 +73,7 @@ export class StorefrontSettingsComponent {
           googleMapsUrl: String(values.get('googleMapsUrl') ?? '').trim() || null
         })
       });
-      this.settings.set({ ...this.settings(), ...result });
+      this.settings.set({ ...(this.settings() ?? {}), ...result });
       this.notice.set('Storefront settings saved. Your public page uses the updated address and metadata.');
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Could not save storefront settings.');
