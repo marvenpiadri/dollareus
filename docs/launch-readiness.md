@@ -9,7 +9,7 @@ Last reviewed: 2026-10-12
 ## P0 — required before any public account signup
 
 ### Runtime and database
-- [x] Latest restaurant-focused GitHub Actions production build, API type-check, and PostgreSQL-backed HTTP API smoke suite passed on code commit `0e1571ba8cc7ca8542fa75d2a4cd676e81cdde5c`, including tenant/role checks, menu and dish editing, public menu/QR experience gating, product catalog experience gating, restaurant POS tickets with modifiers, tracked stock checks, and payment/refund rules. [Run 38170779156](https://github.com/marvenpiadri/dollareus/actions/runs/38170779156).
+- [x] Latest verified application-code CI passed on commit `2e64705c3b1054a959f0298f6d2c22ba2f78ba2f`: Angular production build, SSR HTML check, API TypeScript check, and PostgreSQL-backed HTTP API smoke suite (49 checks). It includes reservation oversell prevention, order/POS/payment/refund idempotency conflict checks, read-only developer credentials, privileged-route denial, daily credential quota enforcement, usage metering and revocation. [Run 38196242038](https://github.com/marvenpiadri/dollareus/actions/runs/38196242038).
 - [ ] Create/use the intended empty Neon PostgreSQL database and run `pnpm db:setup`; verify all tables and indexes directly in Neon.
 - [ ] Confirm the API deployment can connect to Neon using a server-side `DATABASE_URL`; do not expose the URL to the browser.
 - [ ] Configure the merchant app's API base URL or a same-origin reverse proxy; configure `CORS_ORIGINS` to the exact production origin.
