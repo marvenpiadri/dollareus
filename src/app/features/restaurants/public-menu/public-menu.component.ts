@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { Meta, Title } from '@angular/platform-browser';
 import { ApiClientService } from '../../../core/api/api-client.service';
 
 @Component({
@@ -16,7 +17,7 @@ export class PublicMenuComponent {
   protected readonly publicMenuError = signal('');
   protected readonly wifiQrDataUrl = signal('');
 
-  constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService) {
+  constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService, private readonly title: Title, private readonly meta: Meta) {
     const routeSlug = this.route.snapshot.paramMap.get('storeSlug') ?? '';
     const storeHandle = this.route.snapshot.paramMap.get('storeHandle') ?? '';
     const locationSlug = this.route.snapshot.paramMap.get('locationSlug') ?? '';
@@ -77,10 +78,21 @@ export class PublicMenuComponent {
         this.apiClient.request(publicPath + '/menus')
       ]);
       this.publicMenuStore.set(store);
+      const storeName = String(store?.name ?? 'Restaurant');
+      const seoTitle = String(store?.seoTitle ?? (storeName + ' Menu and Prices | Dollareus')).slice(0, 180);
+      const seoDescription = String(store?.seoDescription ?? store?.description ?? ('Explore the menu and prices at ' + storeName + '.')).slice(0, 320);
+      this.title.setTitle(seoTitle);
+      this.meta.updateTag({ name: 'description', content: seoDescription });
+      this.meta.updateTag({ property: 'og:title', content: seoTitle });
+      this.meta.updateTag({ property: 'og:description', content: seoDescription });
+      this.meta.updateTag({ property: 'og:type', content: 'website' });
+      this.meta.updateTag({ name: 'robots', content: 'index,follow' });
       await this.generateWifiQr(store);
       this.publicMenus.set(Array.isArray(menus) ? menus.map((menu: any) => ({ ...menu, items: (Array.isArray(menu.items) ? menu.items : []).map((item: any) => ({ ...item, imageUrl: item.imageUrl ? this.apiClient.url(String(item.imageUrl)) : null })) })) : []);
     } catch (error) {
       this.publicMenuError.set(error instanceof Error ? error.message : 'Could not load this restaurant menu.');
+      this.title.setTitle('Menu unavailable | Dollareus');
+      this.meta.updateTag({ name: 'robots', content: 'noindex,nofollow' });
     } finally {
       this.publicMenuLoading.set(false);
     }
