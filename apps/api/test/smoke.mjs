@@ -808,7 +808,7 @@ try {
   if (publicDish.categoryName !== category.payload?.data?.name || !publicDish.allergens?.includes('milk') || !publicDish.dietaryLabels?.includes('vegetarian')) throw new Error('Public restaurant menu must include the assigned category name, allergen information, and dietary labels for customer display.');
   checks.push('public restaurant menu exposes dish category, allergens, dietary labels, modifiers, and availability');
   const publicEntryPoint = await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 200);
-  if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
+  if (publicEntryPoint.payload?.data?.branding?.brandName !== 'Updated Restaurant' || publicEntryPoint.payload?.data?.targetUrlPath !== `/smoke-${suffix}/smoke-store-${suffix}/menu`) throw new Error('Published QR entry point did not expose the expected public menu destination and branding.');
   checks.push('storefront publishing, public restaurant menu access, and branded public QR destinations');
 
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
