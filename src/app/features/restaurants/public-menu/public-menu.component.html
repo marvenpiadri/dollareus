@@ -11,6 +11,18 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px"><span style="padding:6px 10px;border-radius:999px;background:#e8eee3;color:#46583d;font-size:12px;font-weight:700">{{publicMenuStore()?.defaultCurrency}}</span><span style="padding:6px 10px;border-radius:999px;background:#e8eee3;color:#46583d;font-size:12px;font-weight:700">Menu</span></div>
             }
           </header>
+          @if(!publicMenuLoading() && !publicMenuError() && publicMenuStore()?.wifiSsid){
+            <section class="wifi-card" aria-labelledby="guest-wifi-title">
+              <div class="wifi-icon" aria-hidden="true">⌁</div>
+              <div class="wifi-copy">
+                <p class="wifi-eyebrow">GUEST ACCESS</p>
+                <h2 id="guest-wifi-title">Connect to Wi-Fi</h2>
+                <p>Network: <strong>{{publicMenuStore()?.wifiSsid}}</strong></p>
+                @if(publicMenuStore()?.wifiPassword){<p>Password: <strong class="wifi-password">{{publicMenuStore()?.wifiPassword}}</strong></p>}
+                <p class="wifi-security">Security: {{publicMenuStore()?.wifiSecurity || 'WPA2'}}</p>
+              </div>
+            </section>
+          }
           @if(!publicMenuLoading() && !publicMenuError()){
             @for(menu of publicMenus();track menu.id){
               <section style="padding:26px 0;border-bottom:1px solid #dce2d7">
