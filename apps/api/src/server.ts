@@ -922,7 +922,10 @@ app.post<{ Params: { organizationId: string; menuId: string; itemId: string }; B
   const storageKey = 'organizations/' + organizationId + '/restaurant-menu-items/' + itemId + '/image.webp';
   const stored = await s3Request('PUT', storageKey, body);
   if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The dish photo could not be saved.');
-  const image = { storageKey, contentType: 'image/webp', width: dimensions.width, height: dimensions.height, byteSize: body.length, altText: String(request.headers['x-image-alt'] ?? '').trim().slice(0, 500) || String(item.rows[0].name ?? 'Dish photo') };
+  const rawAltText = String(request.headers['x-image-alt'] ?? '').trim();
+  let decodedAltText = rawAltText;
+  try { decodedAltText = decodeURIComponent(rawAltText); } catch { /* Keep the literal text if the header is not URI-encoded. */ }
+  const image = { storageKey, contentType: 'image/webp', width: dimensions.width, height: dimensions.height, byteSize: body.length, altText: decodedAltText.slice(0, 500) || String(item.rows[0].name ?? 'Dish photo') };
   await pool.query("UPDATE restaurant_menu_items SET metadata=metadata || jsonb_build_object('restaurantImage',$1::jsonb),updated_at=$2 WHERE id=$3 AND menu_id=$4 AND organization_id=$5", [JSON.stringify(image), new Date(), itemId, menuId, organizationId]);
   return reply.code(201).send({ data: { imageUrl: '/api/v1/organizations/' + encodeURIComponent(organizationId) + '/menus/' + encodeURIComponent(menuId) + '/items/' + encodeURIComponent(itemId) + '/image', width: dimensions.width, height: dimensions.height }, requestId: request.id });
 });
