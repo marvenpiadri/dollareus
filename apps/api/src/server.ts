@@ -203,6 +203,7 @@ const ProductPatchInput = z.object({
   slug: Slug.optional(), name: z.string().trim().min(1).max(180).optional(),
   description: z.string().max(10000).nullable().optional(), status: z.enum(['draft', 'active', 'archived']).optional(),
   categoryIds: z.array(z.string().min(1).max(100)).max(100).optional(),
+  variants: z.array(VariantInput).min(1).max(100).optional(),
   variant: z.object({
     id: z.string().min(1).max(100), sku: z.string().max(100).nullable(), title: z.string().trim().min(1).max(180),
     amountMinor: z.number().int().nonnegative(), currency: z.string().regex(/^[A-Z]{3}$/)
@@ -485,7 +486,33 @@ app.patch<{ Params: { organizationId: string; productId: string }; Body: unknown
         await client.query('INSERT INTO product_categories (product_id,category_id,organization_id,store_id,created_at) VALUES ($1,$2,$3,$4,$5)', [productId, categoryId, organizationId, current.store_id, now]);
       }
     }
-    if (parsed.data.variant) {
+    if (parsed.data.variants) {
+      const seenVariantIds = new Set<string>();
+      for (const variant of parsed.data.variants) {
+        if (seenVariantIds.has(variant.id)) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 400, 'DUPLICATE_VARIANT', 'A product variant may only appear once in an update.');
+        }
+        seenVariantIds.add(variant.id);
+        const existingVariant = await client.query('SELECT id FROM product_variants WHERE id=$1 AND product_id=$2 AND organization_id=$3 FOR UPDATE', [variant.id, productId, organizationId]);
+        if (existingVariant.rowCount) {
+          await client.query(
+            'UPDATE product_variants SET sku=$1,title=$2,options=$3::jsonb,price_amount_minor=$4,currency=$5,status=$6,barcode=$7,weight_grams=$8,metadata=$9::jsonb,updated_at=$10 WHERE id=$11 AND product_id=$12 AND organization_id=$13',
+            [variant.sku, variant.title, JSON.stringify(variant.options), variant.amountMinor, variant.currency, variant.status, variant.barcode, variant.weightGrams, JSON.stringify(variant.metadata), now, variant.id, productId, organizationId]
+          );
+        } else {
+          const idOwner = await client.query('SELECT id FROM product_variants WHERE id=$1 AND organization_id=$2', [variant.id, organizationId]);
+          if (idOwner.rowCount) {
+            await client.query('ROLLBACK');
+            return fail(reply, request, 409, 'VARIANT_ID_CONFLICT', 'A variant ID already belongs to another product.');
+          }
+          await client.query(
+            'INSERT INTO product_variants (id,organization_id,product_id,sku,title,options,price_amount_minor,currency,status,barcode,weight_grams,metadata,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12::jsonb,$13,$13)',
+            [variant.id, organizationId, productId, variant.sku, variant.title, JSON.stringify(variant.options), variant.amountMinor, variant.currency, variant.status, variant.barcode, variant.weightGrams, JSON.stringify(variant.metadata), now]
+          );
+        }
+      }
+    } else if (parsed.data.variant) {
       const variant = parsed.data.variant;
       const updatedVariant = await client.query(
         'UPDATE product_variants SET sku=$1,title=$2,price_amount_minor=$3,currency=$4,updated_at=$5 WHERE id=$6 AND product_id=$7 AND organization_id=$8 RETURNING id',
