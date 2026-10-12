@@ -255,7 +255,7 @@ export class RestaurantMenuManagerComponent {
     finally { this.menuBusy.set(false); }
   }
   private uniqueModifierId(label: string, used: Set<string>, fallback: string): string {
-    const base = label.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()
+    const base = label.toLowerCase()
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || fallback;
     let candidate = base;
     let suffix = 2;
