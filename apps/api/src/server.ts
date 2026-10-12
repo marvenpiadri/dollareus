@@ -170,6 +170,12 @@ const StoreInput = z.object({
   websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional()
 }).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
+  name: z.string().trim().min(1).max(180).optional(),
+  businessType: z.enum(['retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general']).optional(),
+  status: z.enum(['setup', 'active', 'paused', 'archived']).optional(),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+  locale: z.enum(['en', 'fr', 'ar']).optional(),
+  timeZone: z.string().trim().min(1).max(100).optional(),
   published: z.boolean().optional(),
   description: z.string().max(5000).nullable().optional(),
   publicHandle: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+([_-][a-z0-9]+)*$/).optional(),
@@ -577,7 +583,7 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = StorefrontPatchInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The storefront settings payload is invalid.');
-  const current = await pool.query('SELECT s.id,s.status,s.description,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
+  const current = await pool.query('SELECT s.id,s.name,s.business_type,s.status,s.default_currency,s.locale,s.time_zone,s.description,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
   if (!current.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
   const row = current.rows[0];
   const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
@@ -586,6 +592,12 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const name = parsed.data.name ?? row.name;
+    const businessType = parsed.data.businessType ?? row.business_type;
+    const status = parsed.data.status ?? row.status;
+    const currency = parsed.data.currency ?? String(row.default_currency).trim();
+    const locale = parsed.data.locale ?? row.locale;
+    const timeZone = parsed.data.timeZone ?? row.time_zone;
     const description = parsed.data.description === undefined ? row.description : parsed.data.description;
     const publicHandle = parsed.data.publicHandle ?? row.public_handle;
     const locationSlug = parsed.data.locationSlug ?? row.location_slug;
@@ -604,13 +616,13 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
     const phone = parsed.data.phone === undefined ? row.phone : parsed.data.phone;
     const websiteUrl = parsed.data.websiteUrl === undefined ? row.website_url : parsed.data.websiteUrl;
     const googleMapsUrl = parsed.data.googleMapsUrl === undefined ? row.google_maps_url : parsed.data.googleMapsUrl;
-    await client.query('UPDATE stores SET public_handle=$1,location_slug=$2,description=$3,wifi_ssid=$4,wifi_password=$5,wifi_security=$6,location_name=$7,address_line=$8,city=$9,country_code=$10,phone=$11,website_url=$12,google_maps_url=$13,updated_at=$14 WHERE id=$15 AND organization_id=$16', [publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl, new Date(), storeId, organizationId]);
+    await client.query('UPDATE stores SET name=$1,business_type=$2,status=$3,default_currency=$4,locale=$5,time_zone=$6,public_handle=$7,location_slug=$8,description=$9,wifi_ssid=$10,wifi_password=$11,wifi_security=$12,location_name=$13,address_line=$14,city=$15,country_code=$16,phone=$17,website_url=$18,google_maps_url=$19,updated_at=$20 WHERE id=$21 AND organization_id=$22', [name, businessType, status, currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl, new Date(), storeId, organizationId]);
     const result = await client.query(
       'UPDATE store_frontends SET default_experience=$1,enabled_experiences=$2,published=$3,seo_title=$4,seo_description=$5,theme=$6::jsonb,updated_at=$7 WHERE store_id=$8 AND organization_id=$9 RETURNING store_id,organization_id,default_experience,enabled_experiences,published,seo_title,seo_description,theme,updated_at',
       [defaultExperience, enabledExperiences, parsed.data.published ?? row.published, parsed.data.seoTitle === undefined ? row.seo_title : parsed.data.seoTitle, parsed.data.seoDescription === undefined ? row.seo_description : parsed.data.seoDescription, JSON.stringify(parsed.data.theme ?? row.theme ?? {}), new Date(), storeId, organizationId]
     );
     await client.query('COMMIT');
-    return { data: { ...camelize(result.rows[0]) as Record<string, unknown>, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl }, requestId: request.id };
+    return { data: { ...camelize(result.rows[0]) as Record<string, unknown>, name, businessType, status, defaultCurrency: currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl }, requestId: request.id };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'STORE_PUBLIC_PATH_TAKEN', 'That public store address is already in use. Choose another username or location address.');
