@@ -2,14 +2,12 @@
               <div class="panel-heading"><div><h2>Restaurant menus</h2><p>Create menus, publish them, and control item availability. Changes are saved to the organization API.</p></div></div>
               <form class="customer-form" (submit)="createMenu($event)">
                 <label>Menu name<input name="name" required maxlength="180" placeholder="e.g. Lunch menu"></label>
-                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="lunch-menu"></label>
                 <label>Description<input name="description" maxlength="5000" placeholder="Optional menu description"></label><label>Service periods<input name="servicePeriods" maxlength="800" placeholder="all-day or lunch, dinner" value="all-day"></label>
                 <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'＋ Create menu'}}</button>
               </form>
               <div class="panel-heading"><div><h2>Menu categories</h2><p>Use store categories to group restaurant dishes.</p></div></div>
               <form class="customer-form" (submit)="createCategory($event)">
                 <label>Category name<input name="name" required maxlength="120" placeholder="e.g. Starters"></label>
-                <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="starters"></label>
                 <button class="button secondary" type="submit" [disabled]="categoryBusy()">{{categoryBusy()?'Saving…':'＋ Add category'}}</button>
               </form>
               <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SLUG</th><th>STATUS</th></tr></thead><tbody>@for(category of categories();track category.id){<tr><td>{{category.name}}</td><td>{{category.slug}}</td><td>{{category.status}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No categories yet. Add one to group dishes.</td></tr>}</tbody></table></div>
@@ -22,7 +20,7 @@
                 <form class="customer-form" (submit)="saveMenu($event, menuToEdit)">
                   <div class="panel-heading"><div><h2>Edit menu</h2><p>Update the menu details shown to customers.</p></div><button class="button small" type="button" (click)="editingMenu.set(null)">Cancel</button></div>
                   <label>Menu name<input name="name" required maxlength="180" [value]="menuToEdit.name"></label>
-                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="menuToEdit.slug"></label>
+                  <input type="hidden" name="slug" [value]="menuToEdit.slug">
                   <label>Description<input name="description" maxlength="5000" [value]="menuToEdit.description || ''"></label>
                   <label>Service periods<input name="servicePeriods" required maxlength="800" [value]="menuToEdit.servicePeriods.join(', ')" placeholder="lunch, dinner"></label>
                   <button class="button primary" type="submit" [disabled]="menuBusy()">{{menuBusy()?'Saving…':'Save menu changes'}}</button>
@@ -32,7 +30,6 @@
                 <div class="panel-heading"><div><h2>Menu items</h2><p>Selected menu: {{selectedMenuName()}}</p></div></div>
                 <form class="customer-form" (submit)="createMenuItem($event)">
                   <label>Item name<input name="name" required maxlength="180" placeholder="e.g. Chicken sandwich"></label>
-                  <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="chicken-sandwich"></label>
                   <label>Price ({{currency()}})<input name="price" type="number" min="0" step="0.01" required placeholder="45.00"></label>
                   <label>Description<input name="description" maxlength="5000" placeholder="Optional description"></label>
                   <label>Category<select name="categoryId"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
@@ -48,7 +45,7 @@
                   <div class="panel-heading"><div><h2>Edit menu item details</h2><p>{{editingMenuItem()?.name}} · allergens and dietary labels should reflect the recipe and preparation process.</p></div><button type="button" (click)="editingMenuItem.set(null)">Cancel</button></div>
                   <form class="customer-form" (submit)="saveMenuItemDetails($event)">
                     <label>Item name<input name="name" required maxlength="180" [value]="editingMenuItem()?.name || ''"></label>
-                    <label>Slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="editingMenuItem()?.slug || ''"></label>
+                    <input type="hidden" name="slug" [value]="editingMenuItem()?.slug || ''">
                     <label>Description<input name="description" maxlength="5000" [value]="editingMenuItem()?.description || ''"></label>
                     <label>Price ({{currency()}})<input name="price" type="number" min="0" step="0.01" required [value]="(editingMenuItem()?.priceAmountMinor || 0) / 100"></label>
                     <label>Category<select name="categoryId" [value]="editingMenuItem()?.categoryId || ''"><option value="">Uncategorized</option>@for(category of categories();track category.id){@if(category.status === 'active'){<option [value]="category.id">{{category.name}}</option>}}</select></label>
