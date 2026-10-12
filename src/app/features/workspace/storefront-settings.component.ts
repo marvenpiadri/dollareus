@@ -111,26 +111,14 @@ export class StorefrontSettingsComponent {
           defaultExperience: current.defaultExperience ?? 'catalog',
           enabledExperiences: current.enabledExperiences ?? ['catalog'],
           published: false,
-          theme: current.theme ?? {}
-        })
-      });
-      if (!created?.id) throw new Error('The location was created but its ID could not be read.');
-      await this.api.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(String(created.id)) + '/storefront', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          publicHandle: handle,
-          locationSlug,
-          published: false,
-          defaultExperience: current.defaultExperience ?? 'catalog',
-          enabledExperiences: current.enabledExperiences ?? ['catalog'],
-          seoTitle: null,
-          seoDescription: current.description ?? null,
+          theme: current.theme ?? {},
           locationName: String(values.get('newLocationName') ?? '').trim() || null,
           city: String(values.get('newCity') ?? '').trim() || null,
           addressLine: String(values.get('newAddressLine') ?? '').trim() || null,
           countryCode: String(values.get('newCountryCode') ?? '').trim().toUpperCase() || null
         })
       });
+      if (!created?.id) throw new Error('The location was created but its ID could not be read.');
       this.locationCreated.emit(String(created.id));
       this.notice.set('Location created. It is now selected in your workspace and remains unpublished until you enable it.');
     } catch (error) {
