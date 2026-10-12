@@ -165,7 +165,7 @@ const StoreInput = z.object({
   published: z.boolean(), theme: z.record(z.string(), z.unknown()),
   wifiSsid: z.string().trim().max(120).nullable().optional(), wifiPassword: z.string().max(120).nullable().optional(),
   wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional()
-}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' });
+}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
   published: z.boolean().optional(),
   publicHandle: z.string().trim().toLowerCase().min(2).max(60).regex(/^[a-z0-9]+([_-][a-z0-9]+)*$/).optional(),
@@ -556,6 +556,7 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
     const wifiSsid = parsed.data.wifiSsid === undefined ? row.wifi_ssid : parsed.data.wifiSsid;
     const wifiPassword = parsed.data.wifiPassword === undefined ? row.wifi_password : parsed.data.wifiPassword;
     const wifiSecurity = parsed.data.wifiSecurity ?? row.wifi_security;
+    if (wifiSsid && wifiSecurity !== 'none' && !wifiPassword) { await client.query('ROLLBACK'); return fail(reply, request, 400, 'WIFI_PASSWORD_REQUIRED', 'A password is required for secured guest Wi-Fi.'); }
     const locationName = parsed.data.locationName === undefined ? row.location_name : parsed.data.locationName;
     const addressLine = parsed.data.addressLine === undefined ? row.address_line : parsed.data.addressLine;
     const city = parsed.data.city === undefined ? row.city : parsed.data.city;
