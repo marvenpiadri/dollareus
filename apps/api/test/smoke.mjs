@@ -893,6 +893,8 @@ try {
   for (const check of checks) console.log(`  ✓ ${check}`);
 } finally {
   if (organizationId) {
+    await pool.query('DELETE FROM inventory_reservations WHERE organization_id=$1', [organizationId]).catch(() => undefined);
+    await pool.query('DELETE FROM inventory_movements WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM pos_order_lines WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM pos_orders WHERE organization_id=$1', [organizationId]).catch(() => undefined);
     await pool.query('DELETE FROM pos_sessions WHERE organization_id=$1', [organizationId]).catch(() => undefined);
