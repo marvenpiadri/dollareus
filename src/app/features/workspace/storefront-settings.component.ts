@@ -59,6 +59,7 @@ export class StorefrontSettingsComponent {
           published: values.get('published') === 'on',
           defaultExperience,
           enabledExperiences,
+          description: String(values.get('storeDescription') ?? '').trim() || null,
           seoTitle: String(values.get('seoTitle') ?? '').trim() || null,
           seoDescription: String(values.get('seoDescription') ?? '').trim() || null,
           wifiSsid: String(values.get('wifiSsid') ?? '').trim() || null,
