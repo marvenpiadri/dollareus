@@ -33,6 +33,11 @@ export class ProductCatalogComponent {
   protected readonly imageUploadNote = signal('');
   protected readonly imageAltText = signal('');
   protected readonly pendingProductImage = signal<File | null>(null);
+  protected readonly categoryCreatorOpen = signal(false);
+  protected readonly categoryNameDraft = signal('');
+  protected readonly categoryCreateBusy = signal(false);
+  protected readonly categoryCreateError = signal('');
+  protected readonly newlySelectedCategoryIds = signal<string[]>([]);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -80,6 +85,10 @@ export class ProductCatalogComponent {
     this.imageUploadError.set('');
     this.imageUploadNote.set('');
     this.pendingProductImage.set(null);
+    this.categoryCreatorOpen.set(false);
+    this.categoryNameDraft.set('');
+    this.categoryCreateError.set('');
+    this.newlySelectedCategoryIds.set([]);
     this.productEditorOpen.set(true);
   }
   protected editProduct(product: ProductRow): void {
@@ -89,12 +98,18 @@ export class ProductCatalogComponent {
     this.imageUploadNote.set('');
     this.imageAltText.set('');
     this.pendingProductImage.set(null);
+    this.categoryCreatorOpen.set(false);
+    this.categoryNameDraft.set('');
+    this.categoryCreateError.set('');
+    this.newlySelectedCategoryIds.set([]);
     this.productEditorOpen.set(true);
   }
   protected closeProductEditor(): void {
     if (!this.productSaveBusy()) {
       this.productEditorOpen.set(false);
       this.editingProduct.set(null);
+      this.categoryCreatorOpen.set(false);
+      this.newlySelectedCategoryIds.set([]);
     }
   }
 
@@ -191,6 +206,37 @@ export class ProductCatalogComponent {
     let suffix = 2;
     while (used.has(slug)) slug = base + '-' + suffix++;
     return slug;
+  }
+
+  protected async createCategoryInline(): Promise<void> {
+    const name = this.categoryNameDraft().trim();
+    if (!name) {
+      this.categoryCreateError.set('Enter a category name.');
+      return;
+    }
+    const slugBase = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 150) || 'category';
+    const existing = new Set(this.categories().map(category => category.slug));
+    let slug = slugBase;
+    let suffix = 2;
+    while (existing.has(slug)) slug = slugBase + '-' + suffix++;
+    this.categoryCreateBusy.set(true);
+    this.categoryCreateError.set('');
+    try {
+      const created = await this.apiClient.request<{ id: string }>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/categories', {
+        method: 'POST',
+        body: JSON.stringify({ storeId: this.storeId(), name, slug, description: null, position: this.categories().length, status: 'active' })
+      });
+      if (!created?.id) throw new Error('Category was saved, but its details could not be loaded. Refresh categories and try again.');
+      this.newlySelectedCategoryIds.set([...new Set([...this.newlySelectedCategoryIds(), created.id])]);
+      this.categoryNameDraft.set('');
+      this.categoryCreatorOpen.set(false);
+      this.dataChanged.emit();
+      this.notifyRequested.emit('Category created and selected for this product.');
+    } catch (error) {
+      this.categoryCreateError.set(error instanceof Error ? error.message : 'Could not create category.');
+    } finally {
+      this.categoryCreateBusy.set(false);
+    }
   }
 
   protected async saveProduct(event: Event): Promise<void> {
