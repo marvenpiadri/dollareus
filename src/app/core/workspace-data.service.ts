@@ -14,7 +14,7 @@ import {
 interface OrganizationRecord { id: string; }
 export interface StoreSummary { id: string; name?: string | null; slug?: string | null; locationSlug?: string | null; publicHandle?: string | null; locationName?: string | null; city?: string | null; defaultCurrency?: string | null; published?: boolean; }
 interface StoreRecord extends StoreSummary { businessType?: string | null; }
-interface ProductVariantRecord { id?: string; sku?: string | null; title?: string | null; amountMinor?: number | string | null; currency?: string | null; }
+interface ProductVariantRecord { id?: string; sku?: string | null; title?: string | null; amountMinor?: number | string | null; currency?: string | null; status?: 'draft' | 'active' | 'archived'; options?: Record<string, string>; }
 interface ProductRecord {
  id: string; storeId?: string; name?: string | null; slug?: string | null; description?: string | null; status?: string | null; kind?: 'physical' | 'digital' | 'service' | 'food' | null;
  categoryIds?: string[]; variants?: ProductVariantRecord[]; media?: Array<{ contentUrl?: string | null }>;
@@ -94,7 +94,9 @@ export class WorkspaceDataService {
             sku: String(candidate.sku ?? ''),
             priceMinor: Number(candidate.amountMinor ?? 0),
             currency: String(candidate.currency ?? storeCurrency),
-            stock: null
+            stock: null,
+            status: candidate.status === 'archived' || candidate.status === 'draft' ? candidate.status : 'active',
+            options: candidate.options && typeof candidate.options === 'object' ? candidate.options : {}
           })),
           status,
           initials: name.split(/\\s+/).slice(0, 2).map((part: string) => part[0] ?? '').join('').toUpperCase(),
