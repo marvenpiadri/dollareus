@@ -3,6 +3,8 @@ import { Component, computed, effect, input, output, signal } from '@angular/cor
 import { ApiClientService } from '../../core/api/api-client.service';
 import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 
+type InventoryMovement = { id: string; locationName: string; productName: string; variantTitle: string; movementType: string; quantityDelta: number; quantityAfter: number; referenceType: string | null; referenceId: string | null; note: string | null; createdAt: string };
+
 @Component({
   selector: 'dlr-inventory-management',
   standalone: true,
@@ -10,8 +12,6 @@ import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
   templateUrl: './inventory-management.component.html',
   styleUrl: './inventory-management.component.css'
 })
-type InventoryMovement = { id: string; locationName: string; productName: string; variantTitle: string; movementType: string; quantityDelta: number; quantityAfter: number; referenceType: string | null; referenceId: string | null; note: string | null; createdAt: string };
-
 export class InventoryManagementComponent {
   readonly inventory = input.required<InventoryRow[]>();
   readonly products = input.required<ProductRow[]>();
