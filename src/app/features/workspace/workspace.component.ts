@@ -166,6 +166,17 @@ export class WorkspaceComponent {
     if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory','Settings'].includes(item)) this.notify(item + ' is planned for a future milestone.');
   }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
+  protected async previewStore(): Promise<void> {
+    try {
+      const stores = await this.apiClient.request<any[]>('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores');
+      const store = (Array.isArray(stores) ? stores : []).find((item: any) => item.id === this.storeId());
+      if (!store) throw new Error('The selected store could not be found.');
+      if (!store.published) { this.selectNav('Settings'); this.notify('Configure your public address and publish the store in Settings first.'); return; }
+      const handle = String(store.publicHandle ?? ''); const location = String(store.locationSlug ?? store.slug ?? '');
+      if (!handle || !location) throw new Error('Save a public username and location address in Settings first.');
+      await this.router.navigateByUrl('/' + encodeURIComponent(handle) + '/' + encodeURIComponent(location));
+    } catch (error) { this.notify(error instanceof Error ? error.message : 'Could not open the public store preview.'); }
+  }
   protected addProduct(): void { this.selectNav('Products'); this.openProductEditorRequest.update(value => value + 1); }
 
   protected openQrStudio(): void { if (typeof window !== 'undefined') window.location.assign('/qr'); }
