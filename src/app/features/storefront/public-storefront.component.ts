@@ -46,7 +46,10 @@ export class PublicStorefrontComponent {
   }
 
   protected availableExperiences(): string[] {
-    return (this.store()?.enabledExperiences ?? []).filter((value: string) => ['menu', 'catalog', 'commerce', 'services'].includes(value));
+    const enabled = this.store()?.enabledExperiences ?? [];
+    const normalized = enabled.filter((value: string) => ['menu', 'services'].includes(value));
+    if (enabled.includes('catalog') || enabled.includes('commerce')) normalized.unshift('catalog');
+    return normalized;
   }
 
   private async load(handle: string, location: string): Promise<void> {
