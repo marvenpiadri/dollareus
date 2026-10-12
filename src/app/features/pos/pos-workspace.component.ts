@@ -41,6 +41,7 @@ export class PosWorkspaceComponent {
   protected readonly paymentMethod = signal('cash');
   protected readonly paymentTarget = signal<any | null>(null);
   protected readonly paymentRecords = signal<any[]>([]);
+  protected readonly paymentBalanceMinor = signal(0);
   protected readonly paymentAmount = signal('');
   protected readonly paymentRecordStatus = signal<'pending' | 'succeeded'>('succeeded');
   protected readonly paymentReference = signal('');
@@ -306,11 +307,8 @@ export class PosWorkspaceComponent {
       const details = await this.apiClient.request(endpoint);
       const balance = Number(details?.balanceMinor);
       if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('The order payment balance could not be verified.');
-      if (balance === 0) {
-        this.notifyRequested.emit('This order is already fully paid.');
-        return;
-      }
       this.paymentTarget.set(order);
+      this.paymentBalanceMinor.set(balance);
       this.paymentRecords.set(Array.isArray(details?.payments) ? details.payments : []);
       this.paymentAmount.set((balance / 100).toFixed(2));
       this.paymentRecordStatus.set('succeeded');
@@ -326,6 +324,7 @@ export class PosWorkspaceComponent {
   protected closePosPaymentForm(): void {
     this.paymentTarget.set(null);
     this.paymentRecords.set([]);
+    this.paymentBalanceMinor.set(0);
     this.paymentAmount.set('');
     this.paymentReference.set('');
     this.paymentNote.set('');
@@ -342,7 +341,8 @@ export class PosWorkspaceComponent {
       const details = await this.apiClient.request('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) +
         '/orders/' + encodeURIComponent(order.id) + '/payments');
       this.paymentRecords.set(Array.isArray(details?.payments) ? details.payments : []);
-      this.paymentAmount.set((Math.max(0, Number(details?.balanceMinor) || 0) / 100).toFixed(2));
+      this.paymentBalanceMinor.set(Math.max(0, Number(details?.balanceMinor) || 0));
+      this.paymentAmount.set((this.paymentBalanceMinor() / 100).toFixed(2));
       await this.loadPosData();
       this.dataChanged.emit();
       this.notifyRequested.emit(status === 'succeeded'
@@ -361,8 +361,8 @@ export class PosWorkspaceComponent {
     if (!order?.id) return;
     const amount = Number(this.paymentAmount());
     const amountMinor = Math.round(amount * 100);
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMinor)) {
-      this.posError.set('Enter a valid payment amount greater than zero.');
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMinor) || amountMinor > this.paymentBalanceMinor()) {
+      this.posError.set('Enter a valid amount that does not exceed the remaining confirmed balance.');
       return;
     }
     this.posSaveBusy.set(true); this.posError.set('');
