@@ -589,8 +589,25 @@ app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/publ
 app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug/catalog', async (request, reply) => {
   const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true AND (('commerce'=ANY(f.enabled_experiences)) OR ('catalog'=ANY(f.enabled_experiences))) LIMIT 1", [request.params.storeHandle, request.params.locationSlug, 'active']);
   if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store location does not exist.');
-  const products = await pool.query("SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), '[]'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'slug',c.slug) ORDER BY c.position,c.name) FROM product_categories pc JOIN categories c ON c.id=pc.category_id AND c.organization_id=pc.organization_id AND c.store_id=pc.store_id WHERE pc.product_id=p.id AND pc.organization_id=p.organization_id AND pc.store_id=p.store_id AND c.status='active'), '[]'::jsonb) AS categories FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC", [store.rows[0].organization_id, store.rows[0].id, 'active']);
+  const products = await pool.query("SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), '[]'::jsonb) AS variants, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'slug',c.slug) ORDER BY c.position,c.name) FROM product_categories pc JOIN categories c ON c.id=pc.category_id AND c.organization_id=pc.organization_id AND c.store_id=pc.store_id WHERE pc.product_id=p.id AND pc.organization_id=p.organization_id AND pc.store_id=p.store_id AND c.status='active'), '[]'::jsonb) AS categories, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'altText',m.alt_text,'contentUrl','/api/v1/public/products/' || p.id || '/media/' || m.id) ORDER BY m.position,m.created_at) FROM product_media m WHERE m.product_id=p.id AND m.organization_id=p.organization_id), '[]'::jsonb) AS media FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC", [store.rows[0].organization_id, store.rows[0].id, 'active']);
   return { data: camelize(products.rows), requestId: request.id };
+});
+
+app.get<{ Params: { productId: string; mediaId: string } }>('/api/v1/public/products/:productId/media/:mediaId', async (request, reply) => {
+  const result = await pool.query(
+    "SELECT m.storage_key,m.alt_text FROM product_media m JOIN products p ON p.id=m.product_id AND p.organization_id=m.organization_id JOIN stores s ON s.id=p.store_id AND s.organization_id=p.organization_id JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE p.id=$1 AND m.id=$2 AND p.status='active' AND s.status='active' AND f.published=true AND (('catalog'=ANY(f.enabled_experiences)) OR ('commerce'=ANY(f.enabled_experiences))) LIMIT 1",
+    [request.params.productId, request.params.mediaId]
+  );
+  if (!result.rowCount) return fail(reply, request, 404, 'PRODUCT_MEDIA_NOT_FOUND', 'This product image is not publicly available.');
+  const stored = await s3Request('GET', String(result.rows[0].storage_key));
+  if (!stored.ok) return fail(reply, request, 502, 'MEDIA_STORAGE_FAILED', 'The product image could not be loaded.');
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  reply.header('Content-Type', 'image/webp');
+  reply.header('Content-Length', String(bytes.length));
+  reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+  reply.header('X-Content-Type-Options', 'nosniff');
+  if (result.rows[0].alt_text) reply.header('X-Image-Alt', String(result.rows[0].alt_text));
+  return reply.send(bytes);
 });
 
 app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug/menus', async (request, reply) => {
