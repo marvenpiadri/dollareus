@@ -1,0 +1,26 @@
+<main class="catalog-page">
+  <header class="catalog-topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span>Dollareus</a><a class="back-link" [routerLink]="'/' + store()?.publicHandle + '/' + store()?.locationSlug">Store profile ↗</a></header>
+  @if (loading()) { <section class="catalog-state"><p class="eyebrow">PRODUCT CATALOG</p><h1>Loading products…</h1></section> }
+  @else if (error()) { <section class="catalog-state" role="alert"><p class="eyebrow">CATALOG UNAVAILABLE</p><h1>Products aren't available right now</h1><p>{{error()}}</p></section> }
+  @else {
+    <section class="catalog-hero"><p class="eyebrow">{{store()?.name}} · {{store()?.locationSlug?.replaceAll('-', ' ')}}</p><h1>Products</h1><p>Explore the products and current prices published by this business.</p><span class="product-count">{{products().length}} {{products().length === 1 ? 'product' : 'products'}}</span></section>
+    @if (!products().length) { <section class="empty-catalog"><h2>Products coming soon</h2><p>This business hasn't published any products yet.</p></section> }
+    @for (category of categories(); track category.id) {
+      <section class="category-section" [attr.id]="'category-' + category.id">
+        <div class="category-heading"><h2>{{category.name}}</h2><span>{{category.products.length}}</span></div>
+        <div class="product-grid">
+          @for (product of category.products; track product.id) {
+            <article class="product-card">
+              <div class="product-art" aria-hidden="true">{{String(product.name ?? 'P').slice(0, 1).toUpperCase()}}</div>
+              <div class="product-info"><h3>{{product.name}}</h3>@if(product.description){<p>{{product.description}}</p>}
+                @if(startingPrice(product); as price){<strong>{{money(price.amount, price.currency)}}</strong>} @else {<span class="price-unavailable">Contact the store for pricing</span>}
+                @if(product.variants?.length > 1){<span class="variant-count">{{product.variants.length}} options</span>}
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+    }
+    <footer class="catalog-footer">Prices and product details are provided by {{store()?.name}}. <a [routerLink]="'/' + store()?.publicHandle + '/' + store()?.locationSlug">View store profile</a></footer>
+  }
+</main>
