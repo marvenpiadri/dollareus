@@ -38,7 +38,7 @@ The endpoint returns products only when the product is active, at least one vari
 
 Each product includes stable IDs, store ID/slug/name, product slug/name/description/kind, availability status/note, and active variants with IDs, titles, option pairs, price in minor currency units, and currency. Prices and availability can change; refresh the API data when rendering or synchronizing content. The endpoint does not currently expose inventory quantities or menu data.
 
-The `limit` parameter is a bounded page size, not cursor pagination. Consumers needing more than 100 products should use `storeId` filtering or request a future cursor-pagination feature; do not assume ordering alone is a durable synchronization cursor.
+The `limit` parameter is a bounded page size, not cursor pagination. The API also applies the deployment's IP-level rate limit (120 requests per minute by default, configurable through `RATE_LIMIT_MAX`) in addition to the credential quota. Consumers needing more than 100 products should use `storeId` filtering or request a future cursor-pagination feature; do not assume ordering alone is a durable synchronization cursor.
 
 ## Limits and error handling
 
@@ -54,6 +54,10 @@ Errors use a stable code and request ID:
 - `503 DATABASE_UNAVAILABLE` or another 5xx code: retry with backoff and include the request ID when contacting support.
 
 Do not branch on human-readable error messages. Treat the catalog response as a snapshot, handle missing/deactivated products gracefully, and use exponential backoff for transient failures.
+
+## Versioning and compatibility
+
+All supported integration routes use the `/api/v1` prefix. Additive response fields may be introduced without changing the version; clients should ignore unknown fields. Changes that remove or reinterpret existing fields, change authentication semantics, or break the request/response contract require a separately versioned API path and migration notice. This is the initial documented contract, not a guarantee that an SLA or deprecation window is already in place.
 
 ## Current limitations
 
