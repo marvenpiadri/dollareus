@@ -1376,7 +1376,7 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
       [paymentId, organizationId, orderId, 'manual', parsed.data.status, parsed.data.amountMinor, String(order.currency).trim(), parsed.data.idempotencyKey ?? null, JSON.stringify(payload), now]
     );
     const paidAfter = paidBefore + (parsed.data.status === 'succeeded' ? parsed.data.amountMinor : 0);
-    const nextPaymentStatus = paidAfter >= total ? 'paid' : 'unpaid';
+    const nextPaymentStatus = paidAfter >= total ? 'paid' : paidAfter > 0 ? 'partially_paid' : 'unpaid';
     await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [nextPaymentStatus, now, orderId, organizationId]);
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
