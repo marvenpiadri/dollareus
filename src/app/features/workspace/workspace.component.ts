@@ -164,7 +164,7 @@ export class WorkspaceComponent {
 
 
   protected activeCount(): number { return this.products().filter(p => p.status === 'Active').length; }
-  protected lowStockCount(): number { return this.inventory().filter((item) => item.quantityOnHand !== null && item.reorderPoint !== null && item.quantityOnHand <= item.reorderPoint).length; }
+  protected lowStockCount(): number { return this.inventory().filter((item) => item.storeId === this.storeId() && item.quantityOnHand !== null && item.reorderPoint !== null && item.quantityOnHand <= item.reorderPoint).length; }
   protected money(minor: number, currency: string): string { return new Intl.NumberFormat('en', {style:'currency',currency,maximumFractionDigits:2}).format(minor / 100); }
   protected categoryName(categoryId?: string | null): string { return this.categories().find(category => category.id === categoryId)?.name ?? '—'; }
   protected statusClass(status: string): string { const value = status.toLowerCase(); return value === 'confirmed' || value === 'processing' ? 'processing' : value === 'completed' || value === 'paid' ? 'paid' : value === 'cancelled' || value === 'refunded' ? 'draft' : 'pending'; }
