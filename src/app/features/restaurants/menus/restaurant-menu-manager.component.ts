@@ -28,6 +28,8 @@ export class RestaurantMenuManagerComponent {
   protected readonly menuBusy = signal(false);
   protected readonly menuError = signal('');
   protected readonly categoryBusy = signal(false);
+  protected readonly commonAllergens = ['Milk', 'Eggs', 'Fish', 'Crustaceans', 'Peanuts', 'Tree nuts', 'Soy', 'Wheat', 'Sesame', 'Mustard', 'Celery', 'Sulphites', 'Lupin', 'Molluscs'];
+  protected readonly commonDietaryLabels = ['Vegetarian', 'Vegan', 'Gluten-free', 'Dairy-free', 'Halal', 'Kosher', 'Spicy'];
 
   private loadSequence = 0;
 
@@ -247,8 +249,8 @@ export class RestaurantMenuManagerComponent {
     const slug = String(values.get('slug') ?? '').trim() || this.uniqueSlug(name, this.selectedMenuItems().map(item => item.slug));
     const price = Number(values.get('price'));
     const description = String(values.get('description') ?? '').trim();
-    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const allergens = [...new Set([...values.getAll('allergenPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('allergensOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
+    const dietaryLabels = [...new Set([...values.getAll('dietaryPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('dietaryOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
     const categoryId = String(values.get('categoryId') ?? '').trim() || null;
     const menuId = this.selectedMenuId();
     if (!menuId || !name || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) {
@@ -283,8 +285,8 @@ export class RestaurantMenuManagerComponent {
     const description = String(values.get('description') ?? '').trim();
     const price = Number(values.get('price'));
     if (!name || !slug || !Number.isFinite(price) || price < 0 || !Number.isSafeInteger(Math.round(price * 100))) { this.menuError.set('Enter a valid item name, slug, and non-negative price.'); return; }
-    const allergens = String(values.get('allergens') ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    const dietaryLabels = String(values.get('dietaryLabels') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const allergens = [...new Set([...values.getAll('allergenPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('allergensOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
+    const dietaryLabels = [...new Set([...values.getAll('dietaryPreset').map(value => String(value).trim()).filter(Boolean), ...String(values.get('dietaryOther') ?? '').split(',').map(value => value.trim()).filter(Boolean)])];
     let modifierGroups: MenuModifierGroup[];
     try {
       const groups: unknown[] = this.modifierDraft();
