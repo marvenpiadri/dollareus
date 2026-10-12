@@ -1028,6 +1028,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
   if (!await requireOperatorRole(request, reply, organizationId)) return;
   const parsed = OrderInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The order payload is invalid.');
+  const idempotencyFingerprint = parsed.data.idempotencyKey ? createHash('sha256').update(JSON.stringify(parsed.data)).digest('hex') : null;
   const client = await pool.connect();
   const now = new Date();
   const orderId = randomUUID();
@@ -1035,8 +1036,12 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [organizationId]);
     if (parsed.data.idempotencyKey) {
-      const existing = await client.query('SELECT id FROM orders WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
+      const existing = await client.query('SELECT id,idempotency_fingerprint FROM orders WHERE organization_id=$1 AND idempotency_key=$2', [organizationId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
+        if (!idempotencyFingerprint || String(existing.rows[0].idempotency_fingerprint ?? '') !== idempotencyFingerprint) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'ORDER_IDEMPOTENCY_CONFLICT', 'This idempotency key was already used for a different order payload. Use a new key for a new order.');
+        }
         await client.query('COMMIT');
         const order = await pool.query("SELECT o.*, COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'productId',i.product_id,'variantId',i.variant_id,'productName',i.product_name_snapshot,'variantTitle',i.variant_title_snapshot,'quantity',i.quantity,'unitAmountMinor',i.unit_amount_minor,'totalMinor',i.total_minor) ORDER BY i.created_at) FROM order_items i WHERE i.order_id=o.id), '[]'::jsonb) AS items FROM orders o WHERE o.id=$1 AND o.organization_id=$2", [existing.rows[0].id, organizationId]);
         return { data: camelize(order.rows[0]), requestId: request.id };
@@ -1071,8 +1076,8 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     const numberResult = await client.query('SELECT COALESCE(MAX(order_number),0)+1 AS order_number FROM orders WHERE organization_id=$1', [organizationId]);
     const orderNumber = Number(numberResult.rows[0].order_number);
     await client.query(
-      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,notes,metadata,idempotency_key,placed_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,0,0,$10,$11,$12,$13::jsonb,$14,$15,$15,$15)',
-      [orderId, organizationId, parsed.data.storeId, parsed.data.customerId ?? null, orderNumber, 'pending', 'unpaid', 'unfulfilled', store.rows[0].default_currency.trim(), subtotal, customerEmail, parsed.data.notes ?? null, JSON.stringify({}), parsed.data.idempotencyKey ?? null, now]
+      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,notes,metadata,idempotency_key,idempotency_fingerprint,placed_at,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,0,0,$10,$11,$12,$13::jsonb,$14,$15,$16,$16,$16)',
+      [orderId, organizationId, parsed.data.storeId, parsed.data.customerId ?? null, orderNumber, 'pending', 'unpaid', 'unfulfilled', store.rows[0].default_currency.trim(), subtotal, customerEmail, parsed.data.notes ?? null, JSON.stringify({}), parsed.data.idempotencyKey ?? null, idempotencyFingerprint, now]
     );
     for (const line of lineItems) {
       await client.query(
@@ -2086,6 +2091,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide a valid POS session, fulfillment type, and at least one valid item.');
   const duplicateKeys = parsed.data.items.map((item) => [item.sourceType, item.sourceItemId, item.sourceVariantId ?? '', item.sourceType === 'menu_item' ? JSON.stringify(item.metadata?.modifiers ?? []) : ''].join(':'));
   if (new Set(duplicateKeys).size !== duplicateKeys.length) return fail(reply, request, 400, 'DUPLICATE_POS_ITEMS', 'Combine duplicate items into a single line with a quantity.');
+  const idempotencyFingerprint = parsed.data.idempotencyKey ? createHash('sha256').update(JSON.stringify(parsed.data)).digest('hex') : null;
   const client = await pool.connect();
   const now = new Date();
   const orderId = randomUUID();
@@ -2095,8 +2101,12 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
     const store = await client.query('SELECT id,default_currency,business_type FROM stores WHERE id=$1 AND organization_id=$2 AND status IN ($3,$4) FOR SHARE', [storeId, organizationId, 'active', 'setup']);
     if (!store.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The store does not exist or is unavailable.'); }
     if (parsed.data.idempotencyKey) {
-      const existing = await client.query('SELECT id FROM pos_orders WHERE store_id=$1 AND idempotency_key=$2', [storeId, parsed.data.idempotencyKey]);
+      const existing = await client.query('SELECT id,idempotency_fingerprint FROM pos_orders WHERE store_id=$1 AND idempotency_key=$2', [storeId, parsed.data.idempotencyKey]);
       if (existing.rowCount) {
+        if (!idempotencyFingerprint || String(existing.rows[0].idempotency_fingerprint ?? '') !== idempotencyFingerprint) {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'POS_IDEMPOTENCY_CONFLICT', 'This idempotency key was already used for a different POS order payload. Use a new key for a new order.');
+        }
         await client.query('COMMIT');
         const prior = await pool.query(posOrderProjection + ' WHERE o.id=$1 AND o.organization_id=$2 AND o.store_id=$3', [existing.rows[0].id, organizationId, storeId]);
         return { data: camelize(prior.rows[0]), requestId: request.id };
@@ -2203,12 +2213,12 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: unknown }>
       tableLabel: parsed.data.tableLabel ?? null
     };
     await client.query(
-      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,billing_address_snapshot,shipping_address_snapshot,notes,metadata,idempotency_key,placed_at,created_at,updated_at) VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,0,0,0,$9,NULL,NULL,NULL,$10,$11::jsonb,$12,$13,$13,$13)',
-      [orderId, organizationId, storeId, orderNumber, 'confirmed', 'unpaid', 'unfulfilled', currency, subtotal, parsed.data.customerNote ?? null, JSON.stringify(canonicalMetadata), parsed.data.idempotencyKey ? 'pos:' + storeId + ':' + parsed.data.idempotencyKey : null, now]
+      'INSERT INTO orders (id,organization_id,store_id,customer_id,order_number,status,payment_status,fulfillment_status,currency,subtotal_minor,discount_minor,tax_minor,shipping_minor,total_minor,customer_email,billing_address_snapshot,shipping_address_snapshot,notes,metadata,idempotency_key,idempotency_fingerprint,placed_at,created_at,updated_at) VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,0,0,0,$9,NULL,NULL,NULL,$10,$11::jsonb,$12,$13,$14,$14,$14)',
+      [orderId, organizationId, storeId, orderNumber, 'confirmed', 'unpaid', 'unfulfilled', currency, subtotal, parsed.data.customerNote ?? null, JSON.stringify(canonicalMetadata), parsed.data.idempotencyKey ? 'pos:' + storeId + ':' + parsed.data.idempotencyKey : null, idempotencyFingerprint, now]
     );
     await client.query(
-      'INSERT INTO pos_orders (id,organization_id,store_id,session_id,order_number,status,channel,fulfillment,table_label,customer_note,currency,subtotal_minor,tax_minor,discount_minor,total_minor,created_by,status_history,idempotency_key,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,$12,$13,$14::jsonb,$15,$16,$16)',
-      [orderId, organizationId, storeId, parsed.data.sessionId, orderNumber, 'confirmed', parsed.data.channel, parsed.data.fulfillment, parsed.data.tableLabel ?? null, parsed.data.customerNote ?? null, currency, subtotal, request.identity!.uid, JSON.stringify(history), parsed.data.idempotencyKey ?? null, now]
+      'INSERT INTO pos_orders (id,organization_id,store_id,session_id,order_number,status,channel,fulfillment,table_label,customer_note,currency,subtotal_minor,tax_minor,discount_minor,total_minor,created_by,status_history,idempotency_key,idempotency_fingerprint,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,$12,$13,$14::jsonb,$15,$16,$17,$17)',
+      [orderId, organizationId, storeId, parsed.data.sessionId, orderNumber, 'confirmed', parsed.data.channel, parsed.data.fulfillment, parsed.data.tableLabel ?? null, parsed.data.customerNote ?? null, currency, subtotal, request.identity!.uid, JSON.stringify(history), parsed.data.idempotencyKey ?? null, idempotencyFingerprint, now]
     );
     for (const line of lines) {
       await client.query(
