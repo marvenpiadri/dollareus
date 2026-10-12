@@ -101,8 +101,9 @@ export class PublicCatalogComponent {
       this.title.setTitle(missingTarget ? (productSlug ? 'Product unavailable | ' : 'Category unavailable | ') + name : pageTitle);
       this.meta.updateTag({ name: 'description', content: String(product?.description ?? (category ? 'Browse ' + category.name + ' from ' + name + '.' : store?.seoDescription ?? ('Browse products and prices from ' + name + '.'))).slice(0, 320) });
       this.meta.updateTag({ name: 'robots', content: missingTarget ? 'noindex,nofollow' : 'index,follow' });
-      this.meta.updateTag({ property: 'og:title', content: title });
-      this.meta.updateTag({ property: 'og:type', content: 'website' });
+      this.meta.updateTag({ property: 'og:title', content: pageTitle });
+      this.meta.updateTag({ property: 'og:description', content: String(product?.description ?? (category ? 'Browse ' + category.name + ' from ' + name + '.' : store?.seoDescription ?? ('Browse products and prices from ' + name + '.'))).slice(0, 320) });
+      this.meta.updateTag({ property: 'og:type', content: product ? 'product' : 'website' });
       this.meta.updateTag({ name: 'robots', content: 'index,follow' });
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'The product catalog could not be loaded.');
