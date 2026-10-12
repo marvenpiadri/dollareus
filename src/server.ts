@@ -64,7 +64,7 @@ export const reqHandler = createNodeRequestHandler(requestHandler);
 export { AngularAppEngine };
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const port = Number(process.env['PORT'] ?? 3000);
+  const port = Number(process.env['PORT'] ?? 4000);
   createServer(requestHandler).listen(port, '0.0.0.0', () => {
     console.log(`Dollareus SSR listening on port ${port}`);
   });
