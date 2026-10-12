@@ -579,7 +579,7 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
 
 app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug', async (request, reply) => {
   const result = await pool.query(
-    'SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true LIMIT 1',
+    'SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true LIMIT 1',
     [request.params.storeHandle, request.params.locationSlug, 'active']
   );
   if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store location does not exist.');
@@ -604,7 +604,7 @@ app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/publ
 });
 
 app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', async (request, reply) => {
-  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
+  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
   if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
   return { data: camelize(result.rows[0]), requestId: request.id };
 });
