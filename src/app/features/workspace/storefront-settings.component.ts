@@ -82,7 +82,10 @@ export class StorefrontSettingsComponent {
 
   protected async createLocation(event: Event): Promise<void> {
     event.preventDefault();
-    const values = new FormData(event.currentTarget as HTMLFormElement);
+    event.preventDefault();
+    const form = (event.currentTarget as HTMLElement).closest('form');
+    if (!(form instanceof HTMLFormElement)) return;
+    const values = new FormData(form);
     const locationSlug = String(values.get('newLocationSlug') ?? '').trim().toLowerCase();
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(locationSlug)) {
       this.locationCreateError.set('Use lowercase letters, numbers and hyphens for the new location address.');
