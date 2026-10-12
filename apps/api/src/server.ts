@@ -700,6 +700,13 @@ const InventoryAdjustmentInput = z.object({
   quantityOnHand: z.number().int().nonnegative().max(2147483647),
   reorderPoint: z.number().int().nonnegative().max(2147483647).nullable().optional()
 }).strict();
+const InventoryReservationInput = z.object({ locationId: z.string().min(1).max(100) }).strict();
+const InventoryReturnInput = z.object({
+  orderId: z.string().min(1).max(100), locationId: z.string().min(1).max(100),
+  variantId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(10000),
+  idempotencyKey: z.string().trim().min(8).max(180),
+  note: z.string().trim().max(1000).nullable().optional()
+}).strict();
 const OrderInput = z.object({
   storeId: z.string().min(1).max(100), customerId: z.string().min(1).max(100).nullable().optional(),
   customerEmail: z.string().trim().email().max(254).nullable().optional(), notes: z.string().max(5000).nullable().optional(),
@@ -848,6 +855,143 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; sto
     [organizationId, request.query.storeId ?? null, request.query.variantId ?? null, limit]
   );
   return { data: camelize(result.rows), requestId: request.id };
+});
+
+app.get<{ Params: { organizationId: string; orderId: string } }>('/api/v1/organizations/:organizationId/orders/:orderId/inventory-reservations', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const order = await pool.query('SELECT id FROM orders WHERE id=$1 AND organization_id=$2', [orderId, organizationId]);
+  if (!order.rowCount) return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.');
+  const rows = await pool.query('SELECT id,order_id,order_item_id,location_id,variant_id,quantity,status,created_at,updated_at,released_at,consumed_at FROM inventory_reservations WHERE organization_id=$1 AND order_id=$2 ORDER BY created_at, id', [organizationId, orderId]);
+  return { data: camelize(rows.rows), requestId: request.id };
+});
+
+app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/orders/:orderId/inventory-reservations', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId, orderId } = request.params;
+  if (!await requireOperatorRole(request, reply, organizationId)) return;
+  const parsed = InventoryReservationInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Choose an inventory location for this order reservation.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const order = await client.query('SELECT id,store_id,status FROM orders WHERE id=$1 AND organization_id=$2 FOR UPDATE', [orderId, organizationId]);
+    if (!order.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    if (!['pending', 'confirmed', 'processing'].includes(String(order.rows[0].status))) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_RESERVABLE', 'Only pending, confirmed, or processing orders can reserve inventory.');
+    }
+    const location = await client.query('SELECT id,store_id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3 FOR SHARE', [parsed.data.locationId, organizationId, 'active']);
+    if (!location.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The selected inventory location does not exist or is inactive.'); }
+    if (String(location.rows[0].store_id ?? '') !== String(order.rows[0].store_id ?? '')) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 400, 'INVENTORY_STORE_MISMATCH', 'The reservation location must belong to the same store as the order.');
+    }
+    const existing = await client.query('SELECT id,location_id,variant_id,quantity,status FROM inventory_reservations WHERE organization_id=$1 AND order_id=$2 AND status=$3 ORDER BY variant_id FOR UPDATE', [organizationId, orderId, 'reserved']);
+    if (existing.rowCount) {
+      if (existing.rows.every(row => String(row.location_id) === parsed.data.locationId)) {
+        await client.query('COMMIT');
+        return { data: camelize(existing.rows), requestId: request.id };
+      }
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_ALREADY_RESERVED', 'Release the existing reservation before choosing another location.');
+    }
+    const lines = await client.query(
+      "SELECT oi.id AS order_item_id,oi.variant_id,oi.quantity,p.kind FROM order_items oi JOIN product_variants v ON v.id=oi.variant_id AND v.organization_id=oi.organization_id JOIN products p ON p.id=v.product_id AND p.organization_id=v.organization_id WHERE oi.order_id=$1 AND oi.organization_id=$2 AND p.kind IN ('physical','food') ORDER BY oi.variant_id,oi.id",
+      [orderId, organizationId]
+    );
+    const reservations: Array<Record<string, unknown>> = [];
+    for (const line of lines.rows) {
+      const allLevels = await client.query('SELECT location_id,quantity_on_hand,quantity_reserved FROM inventory_levels WHERE organization_id=$1 AND variant_id=$2 ORDER BY location_id FOR UPDATE', [organizationId, line.variant_id]);
+      if (!allLevels.rowCount) continue;
+      const level = allLevels.rows.find(row => String(row.location_id) === parsed.data.locationId);
+      if (!level) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'INVENTORY_LEVEL_MISSING', 'A tracked product has no stock level at the selected reservation location.');
+      }
+      const quantity = Number(line.quantity);
+      const available = Number(level.quantity_on_hand) - Number(level.quantity_reserved);
+      if (!Number.isSafeInteger(quantity) || available < quantity) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'INSUFFICIENT_STOCK', 'There is not enough available stock to reserve every tracked item in this order.');
+      }
+      await client.query('UPDATE inventory_levels SET quantity_reserved=quantity_reserved+$1,updated_at=$2 WHERE organization_id=$3 AND location_id=$4 AND variant_id=$5', [quantity, now, organizationId, parsed.data.locationId, line.variant_id]);
+      const inserted = await client.query(
+        'INSERT INTO inventory_reservations (id,organization_id,order_id,order_item_id,location_id,variant_id,quantity,status,created_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10) RETURNING id,order_id,order_item_id,location_id,variant_id,quantity,status,created_at,updated_at',
+        [randomUUID(), organizationId, orderId, line.order_item_id, parsed.data.locationId, line.variant_id, quantity, 'reserved', request.identity!.uid, now]
+      );
+      reservations.push(inserted.rows[0] as Record<string, unknown>);
+    }
+    if (!reservations.length) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'NO_TRACKED_INVENTORY', 'This order has no tracked physical or food items to reserve.');
+    }
+    await client.query('INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)', [randomUUID(), organizationId, request.identity!.uid, 'inventory.reserved', 'order', orderId, request.id, JSON.stringify({ locationId: parsed.data.locationId, reservations }), now]);
+    await client.query('COMMIT');
+    return reply.code(201).send({ data: camelize(reservations), requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'ORDER_ALREADY_RESERVED', 'This order already has an active reservation for one or more items.');
+    throw error;
+  } finally { client.release(); }
+});
+
+app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/inventory/returns', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  const parsed = InventoryReturnInput.safeParse(request.body);
+  if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'Provide the returned order, target location, variant, quantity, and idempotency key.');
+  const client = await pool.connect();
+  const now = new Date();
+  try {
+    await client.query('BEGIN');
+    const replay = await client.query('SELECT id,order_id,variant_id,quantity_delta,quantity_after,location_id FROM inventory_movements WHERE organization_id=$1 AND idempotency_key=$2 FOR UPDATE', [organizationId, parsed.data.idempotencyKey]);
+    if (replay.rowCount) {
+      const row = replay.rows[0]!;
+      if (String(row.reference_id) !== parsed.data.orderId || String(row.variant_id) !== parsed.data.variantId || Number(row.quantity_delta) !== parsed.data.quantity) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'INVENTORY_RETURN_IDEMPOTENCY_CONFLICT', 'This idempotency key was already used for a different inventory return.');
+      }
+      await client.query('COMMIT');
+      return { data: camelize(row), requestId: request.id };
+    }
+    const order = await client.query('SELECT id,store_id,status,fulfillment_status FROM orders WHERE id=$1 AND organization_id=$2 FOR SHARE', [parsed.data.orderId, organizationId]);
+    if (!order.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'ORDER_NOT_FOUND', 'The order does not exist in this organization.'); }
+    if (!['completed', 'refunded'].includes(String(order.rows[0].status)) && String(order.rows[0].fulfillment_status) !== 'returned') {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'ORDER_NOT_RETURNABLE', 'Only completed or refunded orders, or orders marked returned, can restock returned goods.');
+    }
+    const location = await client.query('SELECT id,store_id FROM inventory_locations WHERE id=$1 AND organization_id=$2 AND status=$3 FOR SHARE', [parsed.data.locationId, organizationId, 'active']);
+    if (!location.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'INVENTORY_LOCATION_NOT_FOUND', 'The selected inventory location does not exist or is inactive.'); }
+    if (String(location.rows[0].store_id ?? '') !== String(order.rows[0].store_id ?? '')) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 400, 'INVENTORY_STORE_MISMATCH', 'Returned goods must be restocked at a location belonging to the order’s store.');
+    }
+    const purchased = await client.query('SELECT COALESCE(SUM(quantity),0)::text AS quantity FROM order_items WHERE organization_id=$1 AND order_id=$2 AND variant_id=$3', [organizationId, parsed.data.orderId, parsed.data.variantId]);
+    const returned = await client.query("SELECT COALESCE(SUM(quantity_delta),0)::text AS quantity FROM inventory_movements WHERE organization_id=$1 AND reference_type='order_return' AND reference_id=$2 AND variant_id=$3 AND movement_type='return'", [organizationId, parsed.data.orderId, parsed.data.variantId]);
+    const purchasedQuantity = Number(purchased.rows[0]?.quantity ?? 0);
+    if (!purchasedQuantity || Number(returned.rows[0]?.quantity ?? 0) + parsed.data.quantity > purchasedQuantity) {
+      await client.query('ROLLBACK');
+      return fail(reply, request, 409, 'RETURN_QUANTITY_EXCEEDED', 'The returned quantity exceeds the quantity recorded on this order.');
+    }
+    const variant = await client.query('SELECT v.id FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=$1 AND v.organization_id=$2 AND p.store_id=$3', [parsed.data.variantId, organizationId, location.rows[0].store_id]);
+    if (!variant.rowCount) { await client.query('ROLLBACK'); return fail(reply, request, 404, 'VARIANT_NOT_FOUND', 'The returned variant does not belong to this store.'); }
+    const level = await client.query(
+      'INSERT INTO inventory_levels (organization_id,location_id,variant_id,quantity_on_hand,quantity_reserved,reorder_point,updated_at) VALUES ($1,$2,$3,$4,0,NULL,$5) ON CONFLICT (location_id,variant_id) DO UPDATE SET quantity_on_hand=inventory_levels.quantity_on_hand+EXCLUDED.quantity_on_hand,updated_at=EXCLUDED.updated_at RETURNING quantity_on_hand',
+      [organizationId, parsed.data.locationId, parsed.data.variantId, parsed.data.quantity, now]
+    );
+    const inserted = await client.query(
+      'INSERT INTO inventory_movements (id,organization_id,location_id,variant_id,movement_type,quantity_delta,quantity_after,reference_type,reference_id,note,actor_user_id,idempotency_key,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id,organization_id,location_id,variant_id,movement_type,quantity_delta,quantity_after,reference_type,reference_id,note,actor_user_id,idempotency_key,created_at',
+      [randomUUID(), organizationId, parsed.data.locationId, parsed.data.variantId, 'return', parsed.data.quantity, Number(level.rows[0].quantity_on_hand), 'order_return', parsed.data.orderId, parsed.data.note ?? 'Resellable goods physically returned', request.identity!.uid, parsed.data.idempotencyKey, now]
+    );
+    await client.query('INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)', [randomUUID(), organizationId, request.identity!.uid, 'inventory.return_restocked', 'order', parsed.data.orderId, request.id, JSON.stringify({ locationId: parsed.data.locationId, variantId: parsed.data.variantId, quantity: parsed.data.quantity, idempotencyKey: parsed.data.idempotencyKey }), now]);
+    await client.query('COMMIT');
+    return reply.code(201).send({ data: camelize(inserted.rows[0]), requestId: request.id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'INVENTORY_RETURN_CONFLICT', 'This inventory return has already been recorded.');
+    throw error;
+  } finally { client.release(); }
 });
 
 app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string } }>('/api/v1/organizations/:organizationId/orders', { preHandler: authenticate }, async (request, reply) => {
