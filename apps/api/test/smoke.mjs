@@ -764,6 +764,13 @@ try {
   if (publicStorefront.payload?.data?.publicHandle !== `smoke-${suffix}` || publicStorefront.payload?.data?.locationSlug !== `smoke-store-${suffix}` || publicStorefront.payload?.data?.wifiSsid !== 'Smoke Guest WiFi' || publicStorefront.payload?.data?.wifiPassword !== 'smoke-password-123' || publicStorefront.payload?.data?.city !== 'Casablanca' || publicStorefront.payload?.data?.countryCode !== 'MA') throw new Error('Username/location public identity or guest Wi-Fi settings did not persist.');
   await request(`/api/v1/public/storefronts/smoke-${suffix}/missing-location`, 404);
   checks.push('published storefront username/location routes, SEO fields, and guest Wi-Fi settings');
+  const secondLocation = await request(`/api/v1/organizations/${organizationId}/stores`, 201, {
+    headers: authHeaders,
+    body: JSON.stringify({ name: 'CI Smoke Store Second Location', slug: `smoke-store-second-${suffix}`, locationSlug: `smoke-store-second-${suffix}`, publicHandle: `smoke-${suffix}`, description: null, businessType: 'restaurant', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca', defaultExperience: 'menu', enabledExperiences: ['menu'], published: true, theme: {} })
+  });
+  const secondLocationPublic = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-second-${suffix}`, 200);
+  if (secondLocation.payload?.data?.publicHandle !== `smoke-${suffix}` || secondLocationPublic.payload?.data?.locationSlug !== `smoke-store-second-${suffix}`) throw new Error('A single username could not resolve multiple store locations.');
+  checks.push('multiple published store locations can share one public username');
   const publicMenusByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
   if (!Array.isArray(publicMenusByUsername.payload?.data)) throw new Error('The username/location public menu endpoint did not return menus.');
   const publicCatalogByUsername = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 200);
