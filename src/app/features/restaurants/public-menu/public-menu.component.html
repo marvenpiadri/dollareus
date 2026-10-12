@@ -14,6 +14,7 @@
           @if(!publicMenuLoading() && !publicMenuError() && publicMenuStore()?.wifiSsid){
             <section class="wifi-card" aria-labelledby="guest-wifi-title">
               <div class="wifi-icon" aria-hidden="true">⌁</div>
+              @if(wifiQrDataUrl()){<img class="wifi-qr" [src]="wifiQrDataUrl()" alt="Scan to connect to the guest Wi-Fi network" width="120" height="120" loading="lazy">}
               <div class="wifi-copy">
                 <p class="wifi-eyebrow">GUEST ACCESS</p>
                 <h2 id="guest-wifi-title">Connect to Wi-Fi</h2>
