@@ -87,7 +87,8 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const usage = await pool.query('SELECT count(*)::int AS request_count FROM api_usage_events WHERE credential_id=$1 AND created_at >= $2', [row.credential_id, dayStart]);
     if (Number(usage.rows[0]?.request_count ?? 0) >= API_CREDENTIAL_DAILY_LIMIT) {
-      reply.header('Retry-After', String(Math.max(1, Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000)));
+      const secondsUntilUtcReset = Math.max(1, Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000));
+      reply.header('Retry-After', String(secondsUntilUtcReset));
       await reply.code(429).send({ error: { code: 'API_CREDENTIAL_DAILY_QUOTA_EXCEEDED', message: 'This API credential has reached its daily request quota. Retry after the UTC day resets.', requestId: request.id } });
       return;
     }
