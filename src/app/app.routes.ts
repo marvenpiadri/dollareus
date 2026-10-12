@@ -14,6 +14,8 @@ export const routes: Routes = [
   { path: 'signup', component: AuthPageComponent },
   { path: 'menu', component: PublicMenuComponent },
   { path: ':storeHandle/:locationSlug/menu', component: PublicMenuComponent },
+  { path: ':storeHandle/:locationSlug/products/:productSlug', component: PublicCatalogComponent },
+  { path: ':storeHandle/:locationSlug/category/:categorySlug', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/catalog', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/products', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/services', component: PublicStorefrontComponent },
