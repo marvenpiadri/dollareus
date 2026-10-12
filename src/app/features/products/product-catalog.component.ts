@@ -33,8 +33,6 @@ export class ProductCatalogComponent {
   protected readonly imageUploadNote = signal('');
   protected readonly imageAltText = signal('');
   protected readonly pendingProductImage = signal<File | null>(null);
-  protected readonly imageMaxWidth = signal(1200);
-  protected readonly imageMaxHeight = signal(1200);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
@@ -121,10 +119,6 @@ export class ProductCatalogComponent {
     const product = this.editingProduct();
     if (!file || !product) return;
     this.imageUploadError.set(''); this.imageUploadNote.set('');
-    const maxWidth = Math.floor(this.imageMaxWidth()), maxHeight = Math.floor(this.imageMaxHeight());
-    if (!Number.isInteger(maxWidth) || !Number.isInteger(maxHeight) || maxWidth < 64 || maxHeight < 64 || maxWidth > 2400 || maxHeight > 2400) {
-      this.imageUploadError.set('Choose maximum width and height between 64 and 2400 pixels.'); inputElement.value = ''; return;
-    }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       this.imageUploadError.set('Choose a JPEG, PNG or WebP image.'); inputElement.value = ''; return;
     }
@@ -135,12 +129,19 @@ export class ProductCatalogComponent {
     try {
       const bitmap = await createImageBitmap(file);
       if (bitmap.width * bitmap.height > 40000000) { bitmap.close(); throw new Error('This image has too many pixels. Choose a smaller original.'); }
-      const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+      // Product photography uses a consistent 1:1 square crop throughout the catalog.
+      // Center-crop the source, then downscale to a maximum 1200 × 1200 output.
+      const cropSide = Math.min(bitmap.width, bitmap.height);
+      const cropX = Math.floor((bitmap.width - cropSide) / 2);
+      const cropY = Math.floor((bitmap.height - cropSide) / 2);
+      const outputSide = Math.min(1200, cropSide);
       const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      canvas.width = outputSide; canvas.height = outputSide;
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) { bitmap.close(); throw new Error('Your browser could not prepare the image.'); }
-      context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
+      context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, cropX, cropY, cropSide, cropSide, 0, 0, outputSide, outputSide);
+      bitmap.close();
       let optimized: Blob | null = null;
       for (const quality of [0.82, 0.76, 0.70, 0.64, 0.58, 0.52, 0.46, 0.40]) {
         optimized = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/webp', quality));
