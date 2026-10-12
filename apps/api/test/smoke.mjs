@@ -765,7 +765,7 @@ try {
   await request(`/api/v1/public/storefronts/smoke-${suffix}/missing-location`, 404);
   checks.push('published storefront username/location routes, SEO fields, and guest Wi-Fi settings');
   const secondLocation = await request(`/api/v1/organizations/${organizationId}/stores`, 201, {
-    headers: authHeaders,
+    method: 'POST', headers: authHeaders,
     body: JSON.stringify({ name: 'CI Smoke Store Second Location', slug: `smoke-store-second-${suffix}`, locationSlug: `smoke-store-second-${suffix}`, publicHandle: `smoke-${suffix}`, description: null, businessType: 'restaurant', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca', defaultExperience: 'menu', enabledExperiences: ['menu'], published: true, theme: {} })
   });
   const secondLocationPublic = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-second-${suffix}`, 200);
