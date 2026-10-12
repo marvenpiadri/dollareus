@@ -60,7 +60,14 @@ export class StorefrontSettingsComponent {
           seoDescription: String(values.get('seoDescription') ?? '').trim() || null,
           wifiSsid: String(values.get('wifiSsid') ?? '').trim() || null,
           wifiPassword: String(values.get('wifiPassword') ?? '') || null,
-          wifiSecurity: String(values.get('wifiSecurity') ?? 'WPA2')
+          wifiSecurity: String(values.get('wifiSecurity') ?? 'WPA2'),
+          locationName: String(values.get('locationName') ?? '').trim() || null,
+          addressLine: String(values.get('addressLine') ?? '').trim() || null,
+          city: String(values.get('city') ?? '').trim() || null,
+          countryCode: String(values.get('countryCode') ?? '').trim().toUpperCase() || null,
+          phone: String(values.get('phone') ?? '').trim() || null,
+          websiteUrl: String(values.get('websiteUrl') ?? '').trim() || null,
+          googleMapsUrl: String(values.get('googleMapsUrl') ?? '').trim() || null
         })
       });
       this.settings.set({ ...this.settings(), ...result });
