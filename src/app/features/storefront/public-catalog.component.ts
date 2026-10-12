@@ -15,10 +15,14 @@ export class PublicCatalogComponent {
   protected readonly products = signal<any[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  protected readonly selectedProductSlug = signal('');
+  protected readonly selectedCategorySlug = signal('');
 
   constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta) {
     const handle = route.snapshot.paramMap.get('storeHandle') ?? '';
     const location = route.snapshot.paramMap.get('locationSlug') ?? '';
+    this.selectedProductSlug.set(route.snapshot.paramMap.get('productSlug') ?? '');
+    this.selectedCategorySlug.set(route.snapshot.paramMap.get('categorySlug') ?? '');
     void this.load(handle, location);
   }
 
@@ -37,12 +41,27 @@ export class PublicCatalogComponent {
       const categories = Array.isArray(product.categories) && product.categories.length ? product.categories : [{ id: 'uncategorized', name: 'Other products' }];
       for (const category of categories) {
         const key = String(category.id);
-        const group = groups.get(key) ?? { id: key, name: String(category.name), products: [] };
+        const group = groups.get(key) ?? { id: key, name: String(category.name), slug: String(category.slug ?? 'other-products'), products: [] };
         group.products.push(product);
         groups.set(key, group);
       }
     }
     return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  protected visibleCategories(): { id: string; name: string; slug: string; products: any[] }[] {
+    const categories = this.categories();
+    const slug = this.selectedCategorySlug();
+    return slug ? categories.filter(category => category.slug === slug) : categories;
+  }
+
+  protected selectedProduct(): any | null {
+    const slug = this.selectedProductSlug();
+    return slug ? this.products().find(product => product.slug === slug) ?? null : null;
+  }
+
+  protected categoryTitle(): string {
+    return this.categories().find(category => category.slug === this.selectedCategorySlug())?.name ?? 'Category';
   }
 
   protected money(minor: number, currency: string): string {
@@ -71,8 +90,13 @@ export class PublicCatalogComponent {
       this.products.set(Array.isArray(products) ? products.map((product: any) => ({ ...product, imageUrl: Array.isArray(product.media) && product.media[0]?.contentUrl ? this.api.url(String(product.media[0].contentUrl)) : null, imageAlt: Array.isArray(product.media) && product.media[0]?.altText ? String(product.media[0].altText) : String(product.name ?? 'Product') })) : []);
       const name = String(store?.name ?? 'Store');
       const title = String(store?.seoTitle ?? ('Products from ' + name + ' | Dollareus')).slice(0, 180);
-      this.title.setTitle(title);
-      this.meta.updateTag({ name: 'description', content: String(store?.seoDescription ?? ('Browse products and prices from ' + name + '.')).slice(0, 320) });
+      const productSlug = this.selectedProductSlug();
+      const product = productSlug ? (Array.isArray(products) ? products.find((item: any) => item.slug === productSlug) : null) : null;
+      const categorySlug = this.selectedCategorySlug();
+      const category = categorySlug ? (Array.isArray(products) ? products.flatMap((item: any) => item.categories ?? []).find((item: any) => item.slug === categorySlug) : null) : null;
+      const pageTitle = product ? String(product.name) + ' | ' + name : category ? String(category.name) + ' | ' + name : title;
+      this.title.setTitle(pageTitle);
+      this.meta.updateTag({ name: 'description', content: String(product?.description ?? (category ? 'Browse ' + category.name + ' from ' + name + '.' : store?.seoDescription ?? ('Browse products and prices from ' + name + '.'))).slice(0, 320) });
       this.meta.updateTag({ property: 'og:title', content: title });
       this.meta.updateTag({ property: 'og:type', content: 'website' });
       this.meta.updateTag({ name: 'robots', content: 'index,follow' });
