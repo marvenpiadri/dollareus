@@ -76,7 +76,7 @@
   min-width: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 13px;
-  background: rgba(17, 16, 22, 0.92);
+  background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
@@ -138,7 +138,7 @@
 }
 
 .type-button:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-hover);
   color: var(--text-primary);
 }
 
@@ -194,7 +194,7 @@
 
 .control-pill:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--color-surface-hover);
 }
 
 .control-pill.active {
@@ -225,7 +225,7 @@
 
 .qr-canvas-holder.bg-mockup {
   background:
-    radial-gradient(circle at center, rgba(124, 92, 252, 0.09), transparent 45%),
+    radial-gradient(circle at center, var(--color-money-green-light), transparent 45%),
     var(--color-surface);
 }
 
@@ -288,7 +288,7 @@
   gap: 7px;
   border: 1px solid var(--border-subtle);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--color-surface-subtle);
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.69rem;
@@ -299,7 +299,7 @@
 .style-tile:hover {
   transform: translateY(-1px);
   border-color: var(--border-hover);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--color-surface-hover);
   color: var(--text-primary);
 }
 
@@ -353,9 +353,9 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  border: 1px dashed rgba(124, 92, 252, 0.45);
+  border: 1px dashed var(--color-money-green-border);
   border-radius: 10px;
-  background: rgba(124, 92, 252, 0.045);
+  background: var(--color-money-green-light);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: center;
@@ -381,7 +381,7 @@
   padding: 10px 11px;
   border: 1px solid var(--border-default);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--color-surface-subtle);
 }
 
 .score-badge {
@@ -405,7 +405,7 @@
   gap: 10px;
   border: 1px solid var(--border-default);
   border-radius: 9px;
-  background: rgba(124, 92, 252, 0.05);
+  background: var(--color-money-green-light);
 }
 
 .export-hub-card {
@@ -414,7 +414,7 @@
   border: 1px solid var(--brand-primary-border);
   border-radius: 11px;
   background:
-    linear-gradient(180deg, rgba(124, 92, 252, 0.07), rgba(124, 92, 252, 0.025)),
+    linear-gradient(180deg, var(--color-money-green-medium), var(--color-money-green-light)),
     var(--surface-panel);
 }
 
@@ -466,12 +466,12 @@
 
 .btn-raster-export {
   border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--color-surface-hover);
   color: var(--text-primary);
 }
 
 .export-btn-sub {
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--color-text-secondary);
   font-size: 0.64rem;
   line-height: 1.35;
 }
