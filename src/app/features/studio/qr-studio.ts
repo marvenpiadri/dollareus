@@ -120,11 +120,37 @@ export class QrStudio {
   ];
 
   constructor() {
-    // Check if loading existing project from route params or state
+    // Load saved projects first, then accept a one-time handoff from Dollareus QR management.
     this.route.queryParams.subscribe((params) => {
       const id = params['project'];
       if (id) {
         void this.loadProjectById(id);
+        return;
+      }
+
+      const rawContent = typeof params['content'] === 'string' ? params['content'].trim() : '';
+      if (rawContent) {
+        const isUrl = /^https?:\/\//i.test(rawContent);
+        this.selectedType.set(isUrl ? 'website' : 'text');
+        this.contentData.set(isUrl ? { url: rawContent } : { text: rawContent });
+
+        const foreground = this.normalizeHex(String(params['dark'] ?? ''));
+        const background = this.normalizeHex(String(params['light'] ?? ''));
+        const accent = this.normalizeHex(String(params['accent'] ?? ''));
+        const requestedFrame = String(params['frame'] ?? 'none');
+        const frameType: FrameType = requestedFrame === 'top-label' ? 'badge-top' : requestedFrame === 'bottom-label' ? 'badge-bottom' : 'none';
+        const label = String(params['label'] ?? params['brand'] ?? 'SCAN ME').slice(0, 80);
+        const rawLogo = String(params['logo'] ?? '');
+        const logoUrl = /^https:\/\//i.test(rawLogo) ? rawLogo : '';
+
+        this.design.update((design) => ({
+          ...design,
+          foreground: foreground ?? design.foreground,
+          background: background ?? design.background,
+          gradientColor2: accent ?? design.gradientColor2,
+          frame: { ...design.frame, type: frameType, text: label, color: accent ?? design.frame.color },
+          logo: { ...design.logo, enabled: Boolean(logoUrl), dataUrl: logoUrl, name: logoUrl ? 'Store logo' : '' }
+        }));
         return;
       }
 
