@@ -15,11 +15,77 @@ export class PublicStorefrontComponent {
   protected readonly store = signal<any | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  protected readonly reviewSummary = signal<{ averageRating: number; reviewCount: number; ratingDistribution: Record<number, number> }>({ averageRating: 0, reviewCount: 0, ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+  protected readonly reviews = signal<Array<{ id: string; rating: number; reviewText: string; createdAt: string; publishedAt: string }>>([]);
+  protected readonly reviewRating = signal(5);
+  protected readonly reviewEmail = signal('');
+  protected readonly reviewText = signal('');
+  protected readonly reviewBusy = signal(false);
+  protected readonly reviewMessage = signal('');
+  protected readonly reviewError = signal('');
+  private readonly initialReviewToken: string;
 
   constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, @Inject(DOCUMENT) private readonly document: Document) {
     const handle = route.snapshot.paramMap.get('storeHandle') ?? '';
     const location = route.snapshot.paramMap.get('locationSlug') ?? '';
     void this.load(handle, location);
+  }
+
+  protected heartString(rating: number): string { return '♥'.repeat(Math.max(0, Math.min(5, rating))); }
+
+  protected async submitReview(event: Event): Promise<void> {
+    event.preventDefault();
+    const store = this.store();
+    if (!store) return;
+    const email = this.reviewEmail().trim().toLowerCase();
+    const reviewText = this.reviewText().trim();
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      this.reviewError.set('Enter a valid email address.');
+      return;
+    }
+    if (reviewText.length < 3 || reviewText.length > 5000) {
+      this.reviewError.set('Write between 3 and 5,000 characters.');
+      return;
+    }
+    this.reviewBusy.set(true);
+    this.reviewError.set('');
+    this.reviewMessage.set('');
+    try {
+      const handle = encodeURIComponent(String(store.publicHandle ?? ''));
+      const location = encodeURIComponent(String(store.locationSlug ?? ''));
+      const result = await this.api.request<{ status: string; verificationEmailSent: boolean; message: string }>(
+        '/api/v1/public/storefronts/' + handle + '/' + location + '/reviews',
+        { method: 'POST', body: JSON.stringify({ email, rating: this.reviewRating(), reviewText }) }
+      );
+      this.reviewMessage.set(result?.message ?? 'Check your email to verify your review.');
+      this.reviewText.set('');
+    } catch (error) {
+      this.reviewError.set(error instanceof Error ? error.message : 'Your review could not be submitted.');
+    } finally {
+      this.reviewBusy.set(false);
+    }
+  }
+
+  private async loadReviews(handle: string, location: string): Promise<void> {
+    try {
+      const result = await this.api.request<{ averageRating: number; reviewCount: number; ratingDistribution: Record<number, number>; reviews: Array<{ id: string; rating: number; reviewText: string; createdAt: string; publishedAt: string }> }>(
+        '/api/v1/public/storefronts/' + encodeURIComponent(handle) + '/' + encodeURIComponent(location) + '/reviews'
+      );
+      this.reviewSummary.set({ averageRating: Number(result?.averageRating ?? 0), reviewCount: Number(result?.reviewCount ?? 0), ratingDistribution: result?.ratingDistribution ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+      this.reviews.set(result?.reviews ?? []);
+    } catch { /* Reviews should never prevent the public store page from rendering. */ }
+  }
+
+  private async verifyReviewToken(token: string, handle: string, location: string): Promise<void> {
+    try {
+      const result = await this.api.request<{ verified: boolean; message: string }>('/api/v1/public/reviews/verify', {
+        method: 'POST', body: JSON.stringify({ token })
+      });
+      this.reviewMessage.set(result?.message ?? 'Your review is verified and published.');
+      await this.loadReviews(handle, location);
+    } catch (error) {
+      this.reviewError.set(error instanceof Error ? error.message : 'This review verification link is invalid or expired.');
+    }
   }
 
   protected initialLetter(): string { return String(this.store()?.name ?? 'S').slice(0, 1).toUpperCase(); }
