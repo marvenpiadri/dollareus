@@ -195,13 +195,14 @@ export class StorefrontSettingsComponent {
       const context = canvas.getContext('2d'); if (!context) throw new Error('This image could not be prepared for upload.');
       context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('This image could not be prepared for upload.')), 'image/webp', 0.82));
-      const response = await fetch(this.api.url('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/profile-picture'), {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'image/webp', 'Authorization': 'Bearer ' + (localStorage.getItem('dollareus_token') ?? '') }, body: blob
-      });
+      const headers = new Headers({ 'Content-Type': 'image/webp' });
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('dollareus_token') : null;
+      if (token) headers.set('Authorization', 'Bearer ' + token);
+      const response = await fetch(this.api.url('/api/v1/organizations/' + encodeURIComponent(this.organizationId()) + '/stores/' + encodeURIComponent(this.storeId()) + '/profile-picture'), { method: 'POST', credentials: 'include', headers, body: blob });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload?.error?.message ?? 'Could not upload this picture.');
       const result = payload.data;
-      this.profilePicturePreview.set(result.profileImageUrl);
+      this.profilePicturePreview.set(this.api.url(result.profileImageUrl));
       this.settings.update(current => current ? { ...current, theme: { ...(current.theme ?? {}), profileImageUrl: result.profileImageUrl, profileImageStorageKey: result.storageKey } } : current);
     } catch (error) { this.profileUploadError.set(error instanceof Error ? error.message : 'Could not upload this picture.'); }
     finally { this.uploadingProfilePicture.set(false); input.value = ''; }
