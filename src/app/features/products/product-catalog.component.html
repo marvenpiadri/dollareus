@@ -87,10 +87,10 @@
             <td colspan="6">
               <dlr-empty-state
                 icon="◇"
-                title="No products match your criteria"
-                message="Try adjusting your search terms or clearing the current status filter."
-                actionLabel="Clear filter"
-                (action)="clearFilters()"
+                [title]="products().length === 0 ? 'Your catalog is empty' : 'No products match your criteria'"
+                [message]="products().length === 0 ? 'Add your first product to start building your catalog. You can add prices, variants, categories and images.' : 'Try a different search or clear the current status filter to see more products.'"
+                [actionLabel]="products().length === 0 ? 'Add your first product' : 'Clear filters'"
+                (action)="products().length === 0 ? addProduct() : clearFilters()"
               />
             </td>
           </tr>
