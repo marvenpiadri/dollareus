@@ -160,7 +160,7 @@ export class WorkspaceComponent {
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
     {label:'Overview',symbol:'dashboard'},{label:'Orders',symbol:'receipt_long'},{label:'POS',symbol:'point_of_sale'},{label:'Products',symbol:'inventory_2'},{label:'Menus',symbol:'restaurant_menu'},{label:'QR Studio',symbol:'qr_code_2'},{label:'Customers',symbol:'groups'},{label:'Inventory',symbol:'warehouse'}
   ];
-  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'hub'},{label:'Integrations',symbol:'extension'}];
+  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'hub'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly openProductEditorRequest = signal(0);
@@ -182,8 +182,8 @@ export class WorkspaceComponent {
   protected selectNav(item: NavItem): void {
     this.activeNav.set(item);
     if (item === 'API & channels') return;
-    if (item === 'Integrations') { this.notify('Integration connectors are being added after API access.'); return; }
-    if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory','Settings'].includes(item)) this.notify(item + ' is planned for a future milestone.');
+    if (item === 'Integrations') return;
+    if (!['Overview','Products','Menus','QR Studio','Orders','POS','Customers','Inventory','Settings','API & channels'].includes(item)) return;
   }
   protected refreshWorkspace(): void { void this.loadWorkspace(); }
   protected switchStore(storeId: string): void { if (storeId && storeId !== this.storeId()) void this.loadWorkspace(storeId); }
