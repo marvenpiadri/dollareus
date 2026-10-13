@@ -45,7 +45,7 @@ try {
     body: JSON.stringify({ email: signupEmail, password: signupPassword, displayName: 'Signup Smoke Test', username: `signup-${suffix}` })
   });
   signupUserId = signup.payload?.data?.id;
-  if (!signupUserId || signup.payload?.data?.email !== signupEmail || !signup.response.headers.get('set-cookie')?.includes('dollareus_session=')) {
+  if (!signupUserId || signup.payload?.data?.email !== signupEmail || signup.payload?.data?.username !== `signup-${suffix}` || !signup.response.headers.get('set-cookie')?.includes('dollareus_session=')) {
     throw new Error('Signup did not create an account and issue a session cookie without email-provider configuration.');
   }
   const signupCookie = signup.response.headers.get('set-cookie')?.match(/dollareus_session=([^;]+)/)?.[1];
@@ -61,11 +61,16 @@ try {
   if (!signupStore || signupStore.defaultExperience !== 'commerce' || signupStore.published !== false) {
     throw new Error('Signup did not create the expected unpublished default store and storefront settings.');
   }
+  const usernameAvailability = await request(`/api/v1/auth/usernames/signup-${suffix}/availability`, 200);
+  if (usernameAvailability.payload?.data?.available !== false) throw new Error('The username availability endpoint did not reject an already registered username.');
+  const availableUsername = await request(`/api/v1/auth/usernames/available-${suffix}/availability`, 200);
+  if (availableUsername.payload?.data?.available !== true) throw new Error('The username availability endpoint did not accept an unused username.');
+  checks.push('required unique username, availability lookup, and sign-in by username');
   checks.push('signup creates an organization, membership, store and storefront');
   await request('/api/v1/auth/logout', 200, { method: 'POST', headers: { cookie: `dollareus_session=${signupCookie}` } });
   const login = await request('/api/v1/auth/login', 200, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: signupEmail, password: signupPassword })
+    body: JSON.stringify({ email: `signup-${suffix}`, password: signupPassword })
   });
   if (!login.response.headers.get('set-cookie')?.includes('dollareus_session=')) throw new Error('Login did not issue a session cookie.');
   const loginCookie = login.response.headers.get('set-cookie')?.match(/dollareus_session=([^;]+)/)?.[1];
