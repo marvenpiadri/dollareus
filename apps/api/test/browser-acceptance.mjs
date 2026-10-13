@@ -12,6 +12,7 @@ const workspaceSlug = `browser-workspace-${suffix}`;
 let storeSlug = `browser-restaurant-${suffix}`;
 const menuName = `Browser lunch ${suffix}`;
 const dishName = `Test sandwich ${suffix}`;
+const categoryName = `Browser mains ${suffix}`;
 const password = `DollareusBrowser!${suffix}X9`;
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -86,9 +87,17 @@ try {
   await page.getByRole('button', { name: 'Manage items' }).first().click();
   await page.getByRole('heading', { name: 'Menu items' }).waitFor();
 
+  const categoryForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add category/ }) });
+  await categoryForm.locator('input[name="name"]').fill(categoryName);
+  await categoryForm.getByRole('button', { name: /Add category/ }).click();
+  await page.getByText(categoryName, { exact: true }).waitFor();
+
   const itemForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add item/ }) });
   await itemForm.locator('input[name="name"]').fill(dishName);
   await itemForm.locator('input[name="price"]').fill('45.00');
+  await itemForm.locator('select[name="categoryId"]').selectOption({ label: categoryName });
+  await itemForm.getByLabel('Milk', { exact: true }).check();
+  await itemForm.getByLabel('Vegetarian', { exact: true }).check();
   await itemForm.getByRole('button', { name: /Add item/ }).click();
   await page.getByText(dishName, { exact: true }).waitFor();
   // Dishes are created as drafts too; publish the dish before selling it in POS.
@@ -158,6 +167,9 @@ try {
   await publicPage.addInitScript((url) => { window.DOLLAREUS_API_URL = url; }, apiUrl);
   await publicPage.goto(`${baseUrl}/${bootstrap.storeHandle}/${bootstrap.locationSlug}/menu`, { waitUntil: 'domcontentloaded' });
   await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
+  await publicPage.getByText(categoryName, { exact: true }).waitFor({ timeout: 15000 });
+  await publicPage.getByText('Vegetarian', { exact: true }).waitFor({ timeout: 15000 });
+  await publicPage.getByText('Contains: Milk', { exact: true }).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
   assert.deepEqual(await publicPage.locator('body').evaluate((body, targetName) => body.innerText.includes(targetName), dishName), true);
 
