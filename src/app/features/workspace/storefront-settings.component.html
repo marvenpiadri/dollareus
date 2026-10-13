@@ -1,166 +1,99 @@
-@if (!authReady()) {
-      <main class="auth-loading"><span class="brand-mark">d.</span><p>Preparing your workspace…</p></main>
-    } @else if (!authenticated()) {
-      <dlr-auth-panel (signedIn)="onSignedIn()" />
-    } @else if (workspaceLoading()) {
-      <main class="auth-loading"><span class="brand-mark">d.</span><p>Loading your workspace…</p></main>
-    } @else if (workspaceError()) {
-      <main class="workspace-error-screen"><section class="workspace-error-card"><span class="brand-mark">d.</span><p class="eyebrow">WORKSPACE CONNECTION</p><h1>We couldn’t load your workspace</h1><p class="workspace-error-copy">{{ workspaceError() }}</p><button class="button primary" type="button" (click)="retryWorkspace()">Try again</button><button class="workspace-error-signout" type="button" (click)="signOut()">Sign out</button></section></main>
-    } @else if (onboardingStage() !== 'ready') {
-      <main class="onboarding-screen">
-        <section class="onboarding-card">
-          <a class="brand onboarding-brand" href="#" (click)="$event.preventDefault()"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
-          @if (onboardingStage() === 'organization') {
-            <p class="eyebrow">STEP 1 OF 2</p><h1 class="onboarding-title">Create your workspace</h1><p class="onboarding-copy">Start with your business or organization. You can configure more details later.</p>
-            <form class="onboarding-form" (submit)="createOrganization($event)"><label class="onboarding-label">Business name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" class="onboarding-input"></label>@if (onboardingError()) { <p class="onboarding-error" role="alert">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create workspace' }}</button></form>
-          } @else {
-            <p class="eyebrow">STEP 2 OF 2</p><h1 class="onboarding-title">Create your first store</h1><p class="onboarding-copy">Your workspace is ready. Give your first store a name and a unique URL slug.</p>
-            <form class="onboarding-form" (submit)="createStore($event)"><label class="onboarding-label">Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" class="onboarding-input"></label><label class="onboarding-label">Business type<select name="businessType" required class="onboarding-input"><option value="retail">Retail store</option><option value="restaurant">Restaurant</option><option value="cafe">Café / coffee shop</option><option value="freelancer">Freelancer</option><option value="services">Service business</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>@if (onboardingError()) { <p role="alert" class="onboarding-error">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></form>
-          }
-        </section>
-      </main>
-    } @else {
-    <dlr-workspace-shell
-      [activeNav]="activeNav()"
-      [primaryNav]="primaryNav"
-      [channelNav]="channelNav"
-      [storeName]="storeName()"
-      [storeSlug]="storeSlug()"
-      [stores]="stores()"
-      [selectedStoreId]="storeId()"
-      [ordersCount]="orders().length"
-      [search]="search()"
-      [toast]="toast()"
-      (navRequested)="selectNav($event)"
-      (storeChangeRequested)="switchStore($event)"
-      (addStoreRequested)="openCreateStore()"
-      (notifyRequested)="notify($event)"
-      (signOutRequested)="signOut()"
-      (searchChangeRequested)="search.set($event)"
-      (dismissToastRequested)="toast.set('')"
-    >
-      <dlr-page-header
-        eyebrow="COMMERCE WORKSPACE"
-        [title]="activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav()"
-        [subtitle]="activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription()"
-      >
-        <div header-actions>
-          <button class="button secondary" type="button" (click)="previewStore()">
-            ◉ Preview store
-          </button>
-          <button class="button primary" type="button" (click)="addProduct()">
-            ＋ Add product
-          </button>
+<section class="settings-page">
+  <div class="settings-intro"><p class="eyebrow">BUSINESS PROFILE</p><h2>How customers see your business</h2><p>Add a profile picture, a short bio, contact details, working hours, and your location. Your public page is created automatically.</p></div>
+  @if(loading()){<div class="settings-state">Loading storefront settings…</div>}
+  @else if(!settings()){<div class="settings-error" role="alert">{{error()}}</div>}
+  @else {
+    <form class="settings-form" (submit)="save($event)">
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">00</span><div><h3>Business identity and operations</h3><p>Manage the core business location independently from its public publishing settings.</p></div></div>
+        <div class="fields two-col">
+          <div class="profile-upload-field">
+            <label>Profile picture <span class="hint">Upload your logo or a clear photo</span><input type="file" accept="image/png,image/jpeg,image/webp" (change)="uploadProfilePicture($event)" [disabled]="uploadingProfilePicture()"><small>PNG, JPG or WebP. The image is optimized automatically.</small></label>
+            @if (profilePicturePreview() || settings()?.theme?.profileImageUrl) { <div class="profile-image-preview"><img [src]="profileImageSource()" alt="Business profile picture preview" loading="lazy"><span>{{ uploadingProfilePicture() ? 'Uploading picture…' : 'Profile picture' }}</span></div> }
+            @if (profileUploadError()) { <p class="settings-error" role="alert">{{profileUploadError()}}</p> }
+          </div>
+          <label>Business name<input name="storeName" required maxlength="180" [value]="settings()?.name || ''" placeholder="Business or branch name"></label>
+          <label>Business type<select name="businessType" [value]="settings()?.businessType || 'general'"><option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="cafe">Café</option><option value="freelancer">Freelancer</option><option value="services">Services</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>
+          <label>Business status<select name="storeStatus" [value]="settings()?.status || 'setup'"><option value="setup">Setup — not operational</option><option value="active">Active — operational</option><option value="paused">Paused — temporarily unavailable</option><option value="archived">Archived — retired location</option></select><small>Paused and archived stores are not available on public storefront routes.</small></label>
+          <label>Currency<select name="currency" required [value]="settings()?.defaultCurrency || 'MAD'"><option value="MAD">MAD — Moroccan dirham</option><option value="EUR">EUR — Euro</option><option value="USD">USD — US dollar</option><option value="GBP">GBP — British pound</option><option value="CAD">CAD — Canadian dollar</option><option value="AUD">AUD — Australian dollar</option><option value="AED">AED — UAE dirham</option><option value="SAR">SAR — Saudi riyal</option><option value="CHF">CHF — Swiss franc</option><option value="JPY">JPY — Japanese yen</option><option value="CNY">CNY — Chinese yuan</option><option value="XOF">XOF — West African CFA franc</option><option value="TND">TND — Tunisian dinar</option><option value="DZD">DZD — Algerian dinar</option><option value="EGP">EGP — Egyptian pound</option><option value="INR">INR — Indian rupee</option><option value="BRL">BRL — Brazilian real</option><option value="ZAR">ZAR — South African rand</option><option value="TRY">TRY — Turkish lira</option><option value="SEK">SEK — Swedish krona</option><option value="NOK">NOK — Norwegian krone</option><option value="DKK">DKK — Danish krone</option><option value="PLN">PLN — Polish złoty</option><option value="MXN">MXN — Mexican peso</option><option value="SGD">SGD — Singapore dollar</option><option value="NZD">NZD — New Zealand dollar</option></select></label>
+          <label>Interface language<select name="locale" [value]="settings()?.locale || 'en'"><option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option></select></label>
         </div>
-      </dlr-page-header>
-          @if (activeNav() === 'Overview') {
-            <dlr-overview-dashboard
-              [orders]="orders()"
-              [products]="products()"
-              [activeCount]="activeCount()"
-              [lowStockCount]="lowStockCount()"
-              (selectNavRequested)="selectNav($event)"
-              (notifyRequested)="notify($event)"
-              (qrRequested)="openQrStudio()"
-            />
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">01</span><div><h3>Your public page</h3><p>Your business name and location name automatically create the public address.</p></div></div>
+        <div class="fields two-col">
+          <input type="hidden" name="locationSlug" [value]="settings()?.locationSlug || settings()?.slug || ''"><input type="hidden" name="publicHandle" [value]="settings()?.publicHandle || ''"><p class="automatic-url-note">Your public address is created automatically from your business and location name. You don’t need to manage a slug.</p>
+        </div>
+        <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-username'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">02</span><div><h3>Location and contact</h3><p>Use accurate branch details so customers can recognize the right location and search engines can associate the page with the local business.</p></div></div>
+        <div class="fields two-col">
+          <label>Location display name<input name="locationName" maxlength="180" [value]="settings()?.locationName || ''" placeholder="Maarif branch"></label>
+          <label>City<input name="city" maxlength="120" [value]="settings()?.city || ''" placeholder="Casablanca"></label>
+          <label>Street address<input name="addressLine" maxlength="300" [value]="settings()?.addressLine || ''" placeholder="Street, number, district"></label>
+          <label>Country code<input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" [value]="settings()?.countryCode || ''" placeholder="MA"><small>Two-letter ISO country code, for example MA or FR.</small></label>
+          <label>Public phone<input name="phone" maxlength="40" [value]="settings()?.phone || ''" placeholder="+212 …"></label>
+          <label>Website URL<input name="websiteUrl" type="url" maxlength="500" [value]="settings()?.websiteUrl || ''" placeholder="https://example.com"></label>
+          <label>WhatsApp number<input name="whatsappNumber" inputmode="tel" maxlength="40" [value]="settings()?.whatsappNumber || settings()?.phone || ''" placeholder="+212 6 00 00 00 00"><small>Include your country code. Customers can message this number directly.</small></label>
+          <input type="hidden" name="googleMapsUrl" [value]="mapUrl() || settings()?.googleMapsUrl || ''">
+          <input type="hidden" name="latitude" [value]="mapLatitude() ?? settings()?.latitude ?? ''">
+          <input type="hidden" name="longitude" [value]="mapLongitude() ?? settings()?.longitude ?? ''">
+        </div>
+        <div class="map-picker">
+          <div class="map-picker-heading"><div><h4>Pin your business on the map</h4><p>Search your address and select the matching place to show customers where to find you.</p></div><button class="secondary-save" type="button" (click)="findMapLocation($event)" [disabled]="mapSearching()">{{mapSearching() ? 'Searching…' : 'Find on map'}}</button></div>
+          @if (mapError()) { <p class="settings-error" role="alert">{{mapError()}}</p> }
+          @if (mapResults().length) { <div class="map-results" role="listbox" aria-label="Map search results">@for (place of mapResults(); track place.place_id) { <button type="button" class="map-result" (click)="chooseMapLocation(place)"><span class="material-icons">location_on</span><span>{{place.display_name}}</span></button> }</div> }
+          @if (mapLatitude() !== null && mapLongitude() !== null) { <iframe class="location-map" title="Selected business location map" [src]="mapEmbedUrl()" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><p class="map-selected"><span class="material-icons">check_circle</span> Location selected <a [href]="mapUrl()" target="_blank" rel="noopener">Open map</a></p><small class="map-attribution">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></small> }
+        </div>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">03</span><div><h3>Working hours</h3><p>Set the normal weekly schedule for this business location. Leave a day blank if you do not have hours yet, or mark it closed.</p></div></div>
+        <div class="business-hours-editor">
+          @for (day of weekdays; track day.key) {
+            <div class="business-hours-row">
+              <strong>{{day.label}}</strong>
+              <label><span>Opens</span><input type="time" [name]="'hours-' + day.key + '-open'" [value]="settings()?.theme?.businessHours?.[day.key]?.open || ''"></label>
+              <label><span>Closes</span><input type="time" [name]="'hours-' + day.key + '-close'" [value]="settings()?.theme?.businessHours?.[day.key]?.close || ''"></label>
+              <label class="closed-day"><input type="checkbox" [name]="'hours-' + day.key + '-closed'" [checked]="settings()?.theme?.businessHours?.[day.key]?.closed === true"> Closed</label>
+            </div>
           }
-          @if (activeNav() === 'Overview' || activeNav() === 'Products') {
-            <dlr-product-catalog
-              [products]="products()"
-              [categories]="categories()"
-              [organizationId]="organizationId()"
-              [storeId]="storeId()"
-              [storeCurrency]="storeCurrency()"
-              [search]="search()"
-              [openEditorRequest]="openProductEditorRequest()"
-              (searchChangeRequested)="search.set($event)"
-              (selectNavRequested)="selectNav($event)"
-              (notifyRequested)="notify($event)"
-              (dataChanged)="refreshWorkspace()"
-            />
-          }
-          @if (activeNav() === 'Orders') {
-            <dlr-order-management
-              [organizationId]="organizationId()"
-              [orders]="orders()"
-              (ordersChange)="orders.set($event)"
-              (notifyRequested)="notify($event)"
-            />
-          }
-          @if (activeNav() === 'POS') {
-            <dlr-pos-workspace
-              [organizationId]="organizationId()"
-              [storeId]="storeId()"
-              [storeName]="storeName()"
-              [products]="products()"
-              [menus]="menus()"
-              [menuItems]="menuItems()"
-              [storeCurrency]="storeCurrency()"
-              (notifyRequested)="notify($event)"
-              (dataChanged)="refreshWorkspace()"
-            />
-          }
-          @if (activeNav() === 'QR Studio') {
-            <dlr-qr-management
-              [organizationId]="organizationId()"
-              [storeId]="storeId()"
-              [storeName]="storeName()"
-              [storeSlug]="storeSlug()"
-              (notifyRequested)="notify($event)"
-            />
-          }
-          @if (activeNav() === 'Customers') {
-            <dlr-customer-management
-              [organizationId]="organizationId()"
-              (notifyRequested)="notify($event)"
-            />
-          }
-          @if (activeNav() === 'Menus') {
-            <dlr-restaurant-menu-manager
-              [organizationId]="organizationId()"
-              [storeId]="storeId()"
-              [currency]="storeCurrency()"
-              [initialMenus]="menus()"
-              [initialMenuItems]="menuItems()"
-              [initialCategories]="categories()"
-              (notifyRequested)="notify($event)"
-              (dataChanged)="refreshWorkspace()"
-            />
-          }
-          @if (activeNav() === 'Inventory') {
-            <dlr-inventory-management
-              [inventory]="inventory()"
-              [products]="products()"
-              [organizationId]="organizationId()"
-              [storeId]="storeId()"
-              (notifyRequested)="notify($event)"
-              (dataChanged)="refreshWorkspace()"
-            />
-          }
-          @if (activeNav() === 'API & channels') {
-            <dlr-api-credentials
-              [organizationId]="organizationId()"
-              (notifyRequested)="notify($event)"
-            />
-          }
-          @if (activeNav() === 'Settings') {
-            <dlr-storefront-settings [organizationId]="organizationId()" [storeId]="storeId()" (locationCreated)="switchStore($event)" (settingsSaved)="refreshWorkspace()" />
-          }
-          <dlr-modal
-            [open]="showCreateStore()"
-            title="Create a store"
-            eyebrow="YOUR BUSINESS"
-            subtitle="Add another store to this workspace. You can switch between stores at any time."
-            maxWidth="500px"
-            (closed)="closeCreateStore()"
-          >
-            <form class="store-dialog-form" (submit)="createStore($event)">
-              <label>Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Café"></label>
-              <label>Business type<select name="businessType" required><option value="retail">Retail store</option><option value="restaurant">Restaurant</option><option value="cafe">Café / coffee shop</option><option value="freelancer">Freelancer</option><option value="services">Service business</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>
-              
-              @if (onboardingError()) { <p class="store-dialog-error" role="alert">{{ onboardingError() }}</p> }
-              <div class="store-dialog-actions"><button class="button secondary" type="button" [disabled]="onboardingBusy()" (click)="closeCreateStore()">Cancel</button><button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></div>
-            </form>
-          </dlr-modal>
-    </dlr-workspace-shell>
-    }
+        </div>
+        <p class="privacy-note">These are regular hours, not live availability. Appointment requests still go through WhatsApp, where the business confirms the booking.</p>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">04</span><div><h3>Add another location</h3><p>Keep one username for the business and give each branch its own location address. Each location can publish its own menu and product catalog.</p></div></div>
+        <div class="create-location-form">
+          <div class="fields two-col">
+            <label>New location name<input name="newLocationName" maxlength="180" placeholder="Downtown branch"></label>
+            <p class="automatic-url-note">The public address for this location will be generated from its name and city.</p>
+            <label>City<input name="newCity" maxlength="120" placeholder="Casablanca"></label>
+            <label>Country code<input name="newCountryCode" maxlength="2" pattern="[A-Za-z]{2}" placeholder="MA"></label>
+            <label>Street address<input name="newAddressLine" maxlength="300" placeholder="Street, number, district"></label>
+          </div>
+          @if(locationCreateError()){<p class="settings-error" role="alert">{{locationCreateError()}}</p>}
+          <button class="secondary-save" type="button" (click)="createLocation($event)" [disabled]="creatingLocation()">{{creatingLocation() ? 'Creating location…' : 'Create location'}}</button>
+        </div>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">05</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
+        <div class="experience-options">
+          <label><input type="checkbox" name="experiences" value="catalog" [checked]="enabled('catalog')"> <span><strong>Products and categories</strong><small>Public product catalog with categories and prices.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="commerce" [checked]="enabled('commerce')"> <span><strong>Shop</strong><small>Commerce-oriented product browsing.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="menu" [checked]="enabled('menu')"> <span><strong>Restaurant menu</strong><small>Menus, dish descriptions, dietary information and prices.</small></span></label>
+          <label><input type="checkbox" name="experiences" value="services" [checked]="enabled('services')"> <span><strong>Services</strong><small>For freelancers and service businesses.</small></span></label>
+        </div>
+        <label class="default-experience">Main button on your store page<select name="defaultExperience" [value]="settings()?.defaultExperience || 'catalog'"><option value="catalog">Browse products</option><option value="commerce">Shop products</option><option value="menu">See menu</option><option value="services">Explore services</option></select></label>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">06</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
+        <div class="fields two-col"><label>Network name (SSID)<input name="wifiSsid" maxlength="120" [value]="settings()?.wifiSsid || ''" placeholder="Cafe Guest Wi-Fi"></label><label>Network password<input name="wifiPassword" type="password" maxlength="120" [value]="settings()?.wifiPassword || ''" placeholder="Guest network password" autocomplete="new-password"></label><label>Security<select name="wifiSecurity" [value]="settings()?.wifiSecurity || 'WPA2'"><option value="none">Open network (no password)</option><option value="WPA">WPA</option><option value="WPA2">WPA2</option><option value="WPA3">WPA3</option><option value="WEP">WEP</option></select></label></div>
+        <p class="privacy-note">Wi-Fi details are public to anyone who can access your published menu. Use a guest network, not your private business network.</p>
+      </section>
+      <section class="publish-card"><div><h3>Publish your public business page</h3><p>Anyone with the link can visit a published business page. Public pages are separate from POS and internal business data.</p></div><label class="publish-toggle"><input type="checkbox" name="published" [checked]="settings()?.published === true"><span>Published and publicly accessible</span></label></section>
+      @if(error()){<p class="settings-error" role="alert">{{error()}}</p>}
+      @if(notice()){<p class="settings-notice" role="status">{{notice()}}</p>}
+      <div class="save-row"><span>Changes are saved to your store settings.</span><button type="submit" [disabled]="saving()">{{saving() ? 'Saving…' : 'Save storefront settings'}}</button></div>
+    </form>
+  }
+</section>
