@@ -228,6 +228,7 @@ function fail(reply: FastifyReply, request: FastifyRequest, status: number, code
 }
 
 const Slug = z.string().trim().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+function slugFromName(value: string): string { return value.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
 const OrganizationInput = z.object({ name: z.string().trim().min(1).max(180), slug: Slug }).strict();
 const StoreInput = z.object({
   name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable(), slug: Slug,
@@ -481,15 +482,20 @@ app.get('/api/v1/organizations', { preHandler: authenticate }, async (request) =
     const orgId = randomUUID();
     const storeId = randomUUID();
     const now = new Date();
-    const emailPrefix = request.identity!.email?.split('@')[0] ?? 'User';
-    const orgName = (request.identity!.displayName ?? emailPrefix) + "'s Workspace";
-    const orgSlug = 'workspace-' + orgId.slice(0, 8);
-    const username = request.identity!.username ?? 'user-' + orgId.slice(0, 6);
+    const emailPrefix = request.identity!.email?.split('@')[0] ?? 'My business';
+    const orgName = String(request.identity!.displayName ?? emailPrefix).trim() || 'My business';
+    const baseOrgSlug = slugFromName(orgName);
+    let orgSlug = baseOrgSlug;
+    let suffix = 2;
+    const timezoneHeader = request.headers['x-vercel-ip-timezone'] ?? request.headers['cf-timezone'];
+    const defaultTimeZone = typeof timezoneHeader === 'string' && timezoneHeader.length <= 100 ? timezoneHeader : 'Africa/Casablanca';
     try {
       await client.query('BEGIN');
-      await client.query('INSERT INTO organizations (id,name,slug,public_handle,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [orgId, orgName, orgSlug, username, 'active', now]);
+      while ((await client.query('SELECT 1 FROM organizations WHERE slug=$1 LIMIT 1', [orgSlug])).rowCount) { orgSlug = baseOrgSlug.slice(0, 180 - String(suffix).length - 1) + '-' + suffix; suffix += 1; }
+      const storeSlug = orgSlug;
+      await client.query('INSERT INTO organizations (id,name,slug,public_handle,status,created_at,updated_at) VALUES ($1,$2,$3,$3,$4,$5,$5)', [orgId, orgName, orgSlug, 'active', now]);
       await client.query('INSERT INTO organization_memberships (organization_id,user_id,role,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [orgId, request.identity!.uid, 'owner', 'active', now]);
-      await client.query('INSERT INTO stores (id,organization_id,name,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)', [storeId, orgId, 'Main Store', 'main-store', username, 'main-store', 'general', 'active', 'MAD', 'en', 'Africa/Casablanca', now]);
+      await client.query('INSERT INTO stores (id,organization_id,name,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)', [storeId, orgId, orgName, storeSlug, orgSlug, storeSlug, 'general', 'active', 'MAD', 'en', defaultTimeZone, now]);
       await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)', [storeId, orgId, 'commerce', ['commerce'], false, JSON.stringify({}), now]);
       await client.query('COMMIT');
     } catch {
