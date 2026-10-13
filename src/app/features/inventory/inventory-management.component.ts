@@ -5,10 +5,11 @@ import { InventoryRow, ProductRow } from '../../shared/models/commerce.models';
 
 type InventoryMovement = { id: string; locationName: string; productName: string; variantTitle: string; movementType: string; quantityDelta: number; quantityAfter: number; referenceType: string | null; referenceId: string | null; note: string | null; createdAt: string };
 
+import { Panel, EmptyState } from '../../shared/components';
+
 @Component({
   selector: 'dlr-inventory-management',
-  standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, Panel, EmptyState],
   templateUrl: './inventory-management.component.html',
   styleUrl: './inventory-management.component.css'
 })

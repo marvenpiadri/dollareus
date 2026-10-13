@@ -3,10 +3,11 @@ import { Component, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { FulfillmentStage, OrderRow, ShipmentDetails } from '../../shared/models/commerce.models';
 
+import { Panel, StatusBadge, EmptyState } from '../../shared/components';
+
 @Component({
   selector: 'dlr-order-management',
-  standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, Panel, StatusBadge, EmptyState],
   templateUrl: './order-management.component.html',
   styleUrl: './order-management.component.css'
 })

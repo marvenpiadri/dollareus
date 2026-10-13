@@ -2,9 +2,11 @@ import { Component, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { CustomerRow } from '../../shared/models/commerce.models';
 
+import { Panel, EmptyState } from '../../shared/components';
+
 @Component({
   selector: 'dlr-customer-management',
-  standalone: true,
+  imports: [Panel, EmptyState],
   templateUrl: './customer-management.component.html',
   styleUrl: './customer-management.component.css'
 })

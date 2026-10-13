@@ -1,9 +1,11 @@
 import { Component, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 
+import { Panel, StatusBadge, EmptyState } from '../../shared/components';
+
 @Component({
   selector: 'dlr-api-credentials',
-  standalone: true,
+  imports: [Panel, StatusBadge, EmptyState],
   templateUrl: './api-credentials.component.html',
   styleUrl: './api-credentials.component.css'
 })

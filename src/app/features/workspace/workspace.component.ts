@@ -20,10 +20,11 @@ type NavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio
 import { ProductStatus, ProductRow, OrderRow, CategoryRow, MenuRow, MenuModifierGroup, MenuItemRow, InventoryRow, FulfillmentStage, ShipmentDetails } from '../../shared/models/commerce.models';
 
 
+import { PageHeader, Modal } from '../../shared/components';
+
 @Component({
   selector: 'dlr-workspace',
-  standalone: true,
-  imports: [AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent, WorkspaceShellComponent, StorefrontSettingsComponent],
+  imports: [AuthPanelComponent, RestaurantMenuManagerComponent, CustomerManagementComponent, InventoryManagementComponent, OverviewDashboardComponent, OrderManagementComponent, ProductCatalogComponent, PosWorkspaceComponent, QrManagementComponent, ApiCredentialsComponent, WorkspaceShellComponent, StorefrontSettingsComponent, PageHeader, Modal],
   templateUrl: './workspace.component.html',
   styleUrl: './workspace.component.css'
 })

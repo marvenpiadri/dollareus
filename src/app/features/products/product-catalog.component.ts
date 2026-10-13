@@ -5,9 +5,11 @@ import { CategoryRow, ProductRow, ProductStatus } from '../../shared/models/comm
 type ProductFilter = 'All' | ProductStatus;
 type VariantDraft = { id: string; title: string; sku: string; price: string; currency: string; status: 'draft' | 'active' | 'archived'; optionsText: string };
 
+import { Panel, FilterTabs, StatusBadge, EmptyState, Modal, FilterTabOption } from '../../shared/components';
+
 @Component({
   selector: 'dlr-product-catalog',
-  standalone: true,
+  imports: [Panel, FilterTabs, StatusBadge, EmptyState, Modal],
   templateUrl: './product-catalog.component.html',
   styleUrl: './product-catalog.component.css'
 })
@@ -41,6 +43,15 @@ export class ProductCatalogComponent {
   protected readonly selectedCategoryIds = signal<string[]>([]);
   protected readonly variantDrafts = signal<VariantDraft[]>([]);
   protected readonly filters: ProductFilter[] = ['All', 'Active', 'Draft', 'Archived'];
+  protected readonly filterTabs = computed<FilterTabOption[]>(() => [
+    { id: 'All', label: 'All products', count: this.products().length },
+    { id: 'Active', label: 'Active', count: this.products().filter(p => p.status === 'Active').length },
+    { id: 'Draft', label: 'Draft', count: this.products().filter(p => p.status === 'Draft').length },
+    { id: 'Archived', label: 'Archived', count: this.products().filter(p => p.status === 'Archived').length }
+  ]);
+  protected changeFilter(tabId: string): void {
+    this.productFilter.set(tabId as ProductFilter);
+  }
   protected readonly filteredProducts = computed(() => {
     const query = this.search().trim().toLowerCase();
     const filter = this.productFilter();

@@ -39,7 +39,20 @@
       (searchChangeRequested)="search.set($event)"
       (dismissToastRequested)="toast.set('')"
     >
-      <section class="welcome"><div><p class="eyebrow">— &nbsp; YOUR BUSINESS WORKSPACE</p><h1>{{ activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav() }}</h1><p class="subtitle">{{ activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription() }}</p></div><div class="actions"><button class="button secondary" type="button" (click)="previewStore()">◉ &nbsp; Preview store</button><button class="button primary" type="button" (click)="addProduct()">＋ &nbsp; Add product</button></div></section>
+      <dlr-page-header
+        eyebrow="COMMERCE WORKSPACE"
+        [title]="activeNav() === 'Overview' ? 'Good morning, welcome back.' : activeNav()"
+        [subtitle]="activeNav() === 'Overview' ? 'Here’s what’s happening with your business today.' : pageDescription()"
+      >
+        <div header-actions>
+          <button class="button secondary" type="button" (click)="previewStore()">
+            ◉ Preview store
+          </button>
+          <button class="button primary" type="button" (click)="addProduct()">
+            ＋ Add product
+          </button>
+        </div>
+      </dlr-page-header>
           @if (activeNav() === 'Overview') {
             <dlr-overview-dashboard
               [orders]="orders()"
@@ -133,19 +146,21 @@
           @if (activeNav() === 'Settings') {
             <dlr-storefront-settings [organizationId]="organizationId()" [storeId]="storeId()" (locationCreated)="switchStore($event)" (settingsSaved)="refreshWorkspace()" />
           }
-          @if (showCreateStore()) {
-            <div class="store-dialog-backdrop" role="presentation" (click)="closeCreateStore()">
-              <section class="store-dialog" role="dialog" aria-modal="true" aria-labelledby="create-store-title" (click)="$event.stopPropagation()">
-                <div class="store-dialog-heading"><div><p class="eyebrow">YOUR BUSINESS</p><h2 id="create-store-title">Create a store</h2><p>Add another store to this workspace. You can switch between stores at any time.</p></div><button class="dialog-close" type="button" aria-label="Close" (click)="closeCreateStore()">×</button></div>
-                <form class="store-dialog-form" (submit)="createStore($event)">
-                  <label>Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Café"></label>
-                  <label>Business type<select name="businessType" required><option value="retail">Retail store</option><option value="restaurant">Restaurant</option><option value="cafe">Café / coffee shop</option><option value="freelancer">Freelancer</option><option value="services">Service business</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>
-                  <label>Store URL slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="atlas-cafe"><small>Lowercase letters, numbers and hyphens.</small></label>
-                  @if (onboardingError()) { <p class="store-dialog-error" role="alert">{{ onboardingError() }}</p> }
-                  <div class="store-dialog-actions"><button class="button secondary" type="button" [disabled]="onboardingBusy()" (click)="closeCreateStore()">Cancel</button><button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></div>
-                </form>
-              </section>
-            </div>
-          }
+          <dlr-modal
+            [open]="showCreateStore()"
+            title="Create a store"
+            eyebrow="YOUR BUSINESS"
+            subtitle="Add another store to this workspace. You can switch between stores at any time."
+            maxWidth="500px"
+            (closed)="closeCreateStore()"
+          >
+            <form class="store-dialog-form" (submit)="createStore($event)">
+              <label>Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Café"></label>
+              <label>Business type<select name="businessType" required><option value="retail">Retail store</option><option value="restaurant">Restaurant</option><option value="cafe">Café / coffee shop</option><option value="freelancer">Freelancer</option><option value="services">Service business</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>
+              <label>Store URL slug<input name="slug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="atlas-cafe"><small>Lowercase letters, numbers and hyphens.</small></label>
+              @if (onboardingError()) { <p class="store-dialog-error" role="alert">{{ onboardingError() }}</p> }
+              <div class="store-dialog-actions"><button class="button secondary" type="button" [disabled]="onboardingBusy()" (click)="closeCreateStore()">Cancel</button><button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></div>
+            </form>
+          </dlr-modal>
     </dlr-workspace-shell>
     }

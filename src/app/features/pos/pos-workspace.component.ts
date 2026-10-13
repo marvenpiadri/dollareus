@@ -2,9 +2,11 @@ import { Component, effect, input, output, signal } from '@angular/core';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { MenuItemRow, MenuRow, OrderRow, PosCartLine, ProductRow } from '../../shared/models/commerce.models';
 
+import { Panel, StatusBadge, EmptyState } from '../../shared/components';
+
 @Component({
   selector: 'dlr-pos-workspace',
-  standalone: true,
+  imports: [Panel, StatusBadge, EmptyState],
   templateUrl: './pos-workspace.component.html',
   styleUrl: './pos-workspace.component.css'
 })

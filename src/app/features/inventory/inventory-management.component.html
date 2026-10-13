@@ -1,5 +1,160 @@
-<section class="panel product-panel"><div class="panel-heading"><div><h2>Inventory</h2><p>Adjust stock by variant and location. Reserved quantities are protected.</p></div></div>
-              <form class="customer-form" (submit)="createInventoryLocation($event)"><label>New location<input name="name" required maxlength="180" placeholder="e.g. Main stockroom"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Add location'}}</button></form>
-              @if(inventoryError()){<p role="alert" style="padding:0 17px;color:#a44737;font-size:13px">{{inventoryError()}}</p>}
-              <form class="customer-form" (submit)="createInventoryLevel($event)"><label>Location<select name="locationId" required><option value="">Choose a location</option>@for(location of locationOptions();track location.id){<option [value]="location.id">{{location.name}}</option>}</select></label><label>Product variant<select name="variantId" required><option value="">Choose a product</option>@for(product of products();track product.variantId){@if(product.variantId){<option [value]="product.variantId">{{product.name}} · {{product.sku}}</option>}}</select></label><label>Quantity on hand<input name="quantityOnHand" type="number" min="0" required value="0"></label><label>Reorder point<input name="reorderPoint" type="number" min="0" placeholder="Optional"></label><button class="button primary" type="submit" [disabled]="inventoryBusy()">{{inventoryBusy()?'Saving…':'Set stock level'}}</button></form>
-              <div class="table-wrap"><table><thead><tr><th>LOCATION</th><th>PRODUCT</th><th>ON HAND</th><th>RESERVED</th><th>REORDER</th><th>ADJUST STOCK</th></tr></thead><tbody>@for(item of currentStoreInventory();track item.locationId + ':' + (item.variantId || 'empty')){<tr><td>{{item.locationName}}</td><td>{{item.productName || 'No stock assigned'}}</td><td>{{item.quantityOnHand ?? '—'}}</td><td>{{item.quantityReserved ?? '—'}}</td><td>{{item.reorderPoint ?? '—'}}</td><td>@if(item.variantId){<form class="inline-adjust" (submit)="adjustInventory($event, item)"><input name="quantityOnHand" type="number" min="0" required [value]="item.quantityOnHand ?? 0" aria-label="New on-hand quantity"><input name="reorderPoint" type="number" min="0" [value]="item.reorderPoint ?? ''" aria-label="Reorder point" placeholder="Reorder"><button type="submit" aria-label="Save stock adjustment">Save</button></form>} @else {<span class="muted">Add a variant first</span>}</td></tr>} @empty {<tr><td colspan="6" class="empty-state">Create a stock location to start tracking inventory.</td></tr>}</tbody></table></div><div class="panel-footer">Stock levels are persisted in PostgreSQL</div><div style="margin-top:24px;border-top:1px solid #e2e8f0;padding-top:20px"><div class="panel-heading"><div><h3 style="margin:0">Stock movement history</h3><p>Auditable stock-count adjustments and completed POS sales for this store.</p></div></div>@if(movementHistoryError()){<p role="alert" style="color:#a44737;font-size:13px">{{movementHistoryError()}}</p>}<div class="table-wrap"><table><thead><tr><th>WHEN</th><th>PRODUCT / VARIANT</th><th>LOCATION</th><th>MOVEMENT</th><th>CHANGE</th><th>ON HAND AFTER</th><th>REFERENCE</th></tr></thead><tbody>@for(movement of movementHistory();track movement.id){<tr><td>{{movement.createdAt | date:'medium'}}</td><td>{{movement.productName}}<small style="display:block;color:#64748b">{{movement.variantTitle}}</small></td><td>{{movement.locationName}}</td><td>{{movement.movementType}}</td><td [style.color]="movement.quantityDelta < 0 ? '#a44737' : '#23733a'">{{movement.quantityDelta > 0 ? '+' : ''}}{{movement.quantityDelta}}</td><td>{{movement.quantityAfter}}</td><td>{{movement.referenceType || '—'}}{{movement.referenceId ? ' · ' + movement.referenceId.slice(0,8) : ''}}</td></tr>}@empty{<tr><td colspan="7" class="empty-state">Stock changes will appear here as inventory is counted or sales are completed.</td></tr>}</tbody></table></div></div></section>
+<dlr-panel
+  title="Inventory"
+  subtitle="Manage stock on hand across storage locations, track reservations, and log adjustments."
+  [footerText]="'Showing inventory levels for this store'"
+>
+  @if (inventoryError()) {
+    <p class="inventory-alert-error" role="alert">{{ inventoryError() }}</p>
+  }
+
+  <div class="inventory-actions-bar">
+    <form class="inventory-quick-form" (submit)="createInventoryLocation($event)">
+      <label class="form-field">
+        <span>Add stock location</span>
+        <input name="name" required maxlength="180" placeholder="e.g. Main stockroom">
+      </label>
+      <button class="button primary small" type="submit" [disabled]="inventoryBusy()">
+        {{ inventoryBusy() ? 'Saving…' : '＋ Add location' }}
+      </button>
+    </form>
+
+    <form class="inventory-quick-form" (submit)="createInventoryLevel($event)">
+      <label class="form-field">
+        <span>Location</span>
+        <select name="locationId" required>
+          <option value="">Select location</option>
+          @for (location of locationOptions(); track location.id) {
+            <option [value]="location.id">{{ location.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="form-field">
+        <span>Variant</span>
+        <select name="variantId" required>
+          <option value="">Select variant</option>
+          @for (product of products(); track product.variantId) {
+            @if (product.variantId) {
+              <option [value]="product.variantId">{{ product.name }} · {{ product.sku }}</option>
+            }
+          }
+        </select>
+      </label>
+      <label class="form-field qty-field">
+        <span>On hand</span>
+        <input name="quantityOnHand" type="number" min="0" required value="0">
+      </label>
+      <label class="form-field qty-field">
+        <span>Reorder point</span>
+        <input name="reorderPoint" type="number" min="0" placeholder="Min">
+      </label>
+      <button class="button primary small" type="submit" [disabled]="inventoryBusy()">
+        {{ inventoryBusy() ? 'Saving…' : 'Set stock' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>LOCATION</th>
+          <th>PRODUCT / SKU</th>
+          <th>ON HAND</th>
+          <th>RESERVED</th>
+          <th>REORDER</th>
+          <th>QUICK ADJUST</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of currentStoreInventory(); track item.locationId + ':' + (item.variantId || 'empty')) {
+          <tr>
+            <td><strong>{{ item.locationName }}</strong></td>
+            <td>{{ item.productName || 'No stock assigned' }}</td>
+            <td class="stock-num">{{ item.quantityOnHand ?? '—' }}</td>
+            <td class="muted">{{ item.quantityReserved ?? '—' }}</td>
+            <td class="muted">{{ item.reorderPoint ?? '—' }}</td>
+            <td>
+              @if (item.variantId) {
+                <form class="inline-adjust-form" (submit)="adjustInventory($event, item)">
+                  <input name="quantityOnHand" type="number" min="0" required [value]="item.quantityOnHand ?? 0" aria-label="New quantity">
+                  <input name="reorderPoint" type="number" min="0" [value]="item.reorderPoint ?? ''" aria-label="Reorder point" placeholder="Reorder">
+                  <button type="submit" class="button secondary small" aria-label="Save adjustment">Save</button>
+                </form>
+              } @else {
+                <span class="muted text-xs">Add variant first</span>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6">
+              <dlr-empty-state
+                icon="📦"
+                title="No stock locations configured"
+                message="Create your first stockroom or storage area above to begin tracking quantities."
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</dlr-panel>
+
+<section class="movement-history-section">
+  <dlr-panel
+    title="Stock movement history"
+    subtitle="Auditable record of physical inventory counts, adjustments, and point-of-sale deductions."
+    [footerText]="'Showing ' + movementHistory().length + ' movement entries'"
+  >
+    @if (movementHistoryError()) {
+      <p class="inventory-alert-error" role="alert">{{ movementHistoryError() }}</p>
+    }
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>DATE</th>
+            <th>PRODUCT / VARIANT</th>
+            <th>LOCATION</th>
+            <th>MOVEMENT</th>
+            <th>CHANGE</th>
+            <th>ON HAND AFTER</th>
+            <th>REFERENCE</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (movement of movementHistory(); track movement.id) {
+            <tr>
+              <td>{{ movement.createdAt | date:'medium' }}</td>
+              <td>
+                <strong>{{ movement.productName }}</strong>
+                <small class="muted block">{{ movement.variantTitle }}</small>
+              </td>
+              <td>{{ movement.locationName }}</td>
+              <td><span class="movement-tag">{{ movement.movementType }}</span></td>
+              <td>
+                <strong [class.color-danger]="movement.quantityDelta < 0" [class.color-success]="movement.quantityDelta > 0">
+                  {{ movement.quantityDelta > 0 ? '+' : '' }}{{ movement.quantityDelta }}
+                </strong>
+              </td>
+              <td class="stock-num">{{ movement.quantityAfter }}</td>
+              <td class="muted">{{ movement.referenceType || '—' }}{{ movement.referenceId ? ' · ' + movement.referenceId.slice(0, 8) : '' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7">
+                <dlr-empty-state
+                  icon="📋"
+                  title="No movement history yet"
+                  message="Activity records will appear here automatically when items are counted or sold."
+                />
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </dlr-panel>
+</section>

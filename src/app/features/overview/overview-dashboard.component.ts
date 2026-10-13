@@ -1,11 +1,13 @@
-import { Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { OrderRow, ProductRow } from '../../shared/models/commerce.models';
+import { MetricCard, Panel, StatusBadge, EmptyState } from '../../shared/components';
 
-type OverviewDestination = 'Orders' | 'Products' | 'Integrations' | 'API & channels';
+type OverviewDestination = 'Orders' | 'Products' | 'Integrations' | 'API & channels' | 'POS' | 'QR Studio';
 
 @Component({
   selector: 'dlr-overview-dashboard',
-  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MetricCard, Panel, StatusBadge, EmptyState],
   templateUrl: './overview-dashboard.component.html',
   styleUrl: './overview-dashboard.component.css'
 })
@@ -18,14 +20,25 @@ export class OverviewDashboardComponent {
   readonly notifyRequested = output<string>();
   readonly qrRequested = output<void>();
 
+  protected readonly totalRevenue = computed(() => {
+    const validOrders = this.orders();
+    if (!validOrders.length) return '—';
+    const sum = validOrders
+      .filter(o => o.status === 'confirmed' || (o as any).status === 'completed' || (o as any).paymentStatus === 'paid')
+      .reduce((acc, o) => acc + (o.totalMinor || 0), 0);
+    const currency = validOrders[0]?.currency || 'MAD';
+    return this.money(sum, currency);
+  });
+
+  protected readonly averageOrderValue = computed(() => {
+    const list = this.orders();
+    if (!list.length) return '—';
+    const sum = list.reduce((acc, o) => acc + (o.totalMinor || 0), 0);
+    const currency = list[0]?.currency || 'MAD';
+    return this.money(Math.round(sum / list.length), currency);
+  });
+
   protected money(minor: number, currency: string): string {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
-  }
-  protected statusClass(status: string): string {
-    const value = status.toLowerCase();
-    return value === 'confirmed' || value === 'processing' ? 'processing' : value === 'completed' || value === 'paid' ? 'paid' : value === 'cancelled' || value === 'refunded' ? 'draft' : 'pending';
-  }
-  protected orderStatusLabel(status: string): string {
-    return status ? status.charAt(0).toUpperCase() + status.slice(1).replaceAll('_', ' ') : 'Unknown';
   }
 }

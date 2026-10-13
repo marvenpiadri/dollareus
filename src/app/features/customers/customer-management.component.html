@@ -1,3 +1,78 @@
-<section class="panel product-panel"><div class="panel-heading"><div><h2>Customers</h2><p>Customer records are saved to your organization.</p></div><button class="button primary small" type="button" (click)="toggleCustomerForm()">＋ Add customer</button></div>
-              @if(customerFormOpen()){<form class="customer-form" (submit)="createCustomer($event)"><label>Display name<input name="displayName" maxlength="180" placeholder="Customer name"></label><label>Email<input name="email" type="email" maxlength="254" placeholder="customer@example.com"></label><label>Phone<input name="phone" maxlength="80" placeholder="+212…"></label>@if(customerSaveError()){<p role="alert">{{customerSaveError()}}</p>}<button class="button primary" type="submit" [disabled]="customerSaveBusy()">{{customerSaveBusy()?'Saving…':'Save customer'}}</button></form>}
-              <div class="table-wrap"><table><thead><tr><th>CUSTOMER</th><th>EMAIL</th><th>PHONE</th></tr></thead><tbody>@for(customer of customers();track customer.id){<tr><td>{{customer.displayName || 'Unnamed customer'}}</td><td>{{customer.email || '—'}}</td><td>{{customer.phone || '—'}}</td></tr>} @empty {<tr><td colspan="3" class="empty-state">No customer records yet. Add a customer to get started.</td></tr>}</tbody></table></div><div class="panel-footer">Showing {{customers().length}} customers</div></section>
+<dlr-panel
+  title="Customers"
+  subtitle="Manage your merchant customer directory, contact records, and order history."
+  [footerText]="'Showing ' + customers().length + ' customer records'"
+>
+  <div panel-actions>
+    <button class="button primary small" type="button" (click)="toggleCustomerForm()">
+      {{ customerFormOpen() ? 'Cancel' : '＋ Add customer' }}
+    </button>
+  </div>
+
+  @if (customerFormOpen()) {
+    <form class="customer-create-form" (submit)="createCustomer($event)">
+      <div class="form-grid">
+        <label class="form-field">
+          <span>Customer name</span>
+          <input name="displayName" maxlength="180" placeholder="e.g. Amina Benali">
+        </label>
+        <label class="form-field">
+          <span>Email address</span>
+          <input name="email" type="email" maxlength="254" placeholder="amina@example.com">
+        </label>
+        <label class="form-field">
+          <span>Phone number</span>
+          <input name="phone" maxlength="80" placeholder="+212 600 000 000">
+        </label>
+      </div>
+
+      @if (customerSaveError()) {
+        <p class="form-error-text" role="alert">{{ customerSaveError() }}</p>
+      }
+
+      <div class="form-actions">
+        <button class="button secondary small" type="button" (click)="toggleCustomerForm()">
+          Cancel
+        </button>
+        <button class="button primary small" type="submit" [disabled]="customerSaveBusy()">
+          {{ customerSaveBusy() ? 'Saving…' : 'Save customer' }}
+        </button>
+      </div>
+    </form>
+  }
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>CUSTOMER</th>
+          <th>EMAIL</th>
+          <th>PHONE</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (customer of customers(); track customer.id) {
+          <tr>
+            <td class="customer-name-cell">
+              <strong>{{ customer.displayName || 'Unnamed customer' }}</strong>
+            </td>
+            <td>{{ customer.email || '—' }}</td>
+            <td>{{ customer.phone || '—' }}</td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="3">
+              <dlr-empty-state
+                icon="👥"
+                title="No customer records yet"
+                message="Add your first customer contact to keep their details connected to future sales."
+                actionLabel="＋ Add customer"
+                (action)="customerFormOpen.set(true)"
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</dlr-panel>
