@@ -262,3 +262,75 @@
     </div>
   </section>
 </dlr-panel>
+
+@if (paymentTarget(); as target) {
+  <div class="payment-modal-backdrop" (click)="closePosPaymentForm()">
+    <section class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title" (click)="$event.stopPropagation()">
+      <div class="payment-modal-heading">
+        <div>
+          <p class="payment-eyebrow">ORDER #{{target.orderNumber}}</p>
+          <h2 id="payment-modal-title">Record an external payment</h2>
+          <p>This records money you have already received outside Dollareus. Dollareus does not process the payment.</p>
+        </div>
+        <button class="payment-close" type="button" aria-label="Close payment form" (click)="closePosPaymentForm()">×</button>
+      </div>
+      <div class="payment-balance">
+        <span>Remaining balance</span>
+        <strong>{{money(paymentBalanceMinor(), target.currency || storeCurrency())}}</strong>
+      </div>
+      @if (paymentRecords().length) {
+        <div class="payment-history">
+          <h3>Payment history</h3>
+          @for (payment of paymentRecords(); track payment.id) {
+            <div class="payment-history-row">
+              <div><strong>{{money(payment.amountMinor, payment.currency || target.currency || storeCurrency())}}</strong><small>{{payment.method || 'External payment'}} · {{payment.status}}</small></div>
+              @if (payment.status === 'pending') {
+                <div class="payment-history-actions">
+                  <button type="button" class="button secondary small" [disabled]="posSaveBusy()" (click)="updatePosPaymentStatus(target, payment, 'succeeded')">Confirm received</button>
+                  <button type="button" class="button secondary small" [disabled]="posSaveBusy()" (click)="updatePosPaymentStatus(target, payment, 'cancelled')">Cancel</button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (posError()) { <p class="payment-error" role="alert">{{posError()}}</p> }
+      @if (paymentBalanceMinor() > 0) {
+        <form class="payment-record-form" (submit)="recordPosPayment($event)">
+          <label>Payment method
+            <select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)">
+              <option value="cash">Cash</option>
+              <option value="cash_on_delivery">Cash on delivery</option>
+              <option value="bank_transfer">Bank transfer</option>
+              <option value="mobile_money">Mobile money</option>
+              <option value="card_terminal">Card terminal (paid outside Dollareus)</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Amount received
+            <div class="payment-amount-field"><span>{{target.currency || storeCurrency()}}</span><input name="amount" type="number" min="0.01" step="0.01" [max]="paymentBalanceMinor() / 100" required [value]="paymentAmount()" (input)="paymentAmount.set($any($event.target).value)"></div>
+          </label>
+          <label>Payment status
+            <select [value]="paymentRecordStatus()" (change)="paymentRecordStatus.set($any($event.target).value)">
+              <option value="succeeded">Received</option>
+              <option value="pending">Awaiting confirmation</option>
+            </select>
+          </label>
+          <label>Reference <span class="payment-optional">Optional</span>
+            <input name="reference" maxlength="160" [value]="paymentReference()" (input)="paymentReference.set($any($event.target).value)" placeholder="Receipt number or transfer reference">
+          </label>
+          <label>Note <span class="payment-optional">Optional</span>
+            <textarea name="note" rows="2" maxlength="1000" [value]="paymentNote()" (input)="paymentNote.set($any($event.target).value)" placeholder="Add a note for your records"></textarea>
+          </label>
+          <div class="payment-modal-actions">
+            <button type="button" class="button secondary" (click)="closePosPaymentForm()">Cancel</button>
+            <button type="submit" class="button primary" [disabled]="posSaveBusy()">{{posSaveBusy() ? 'Saving…' : 'Save payment record'}}</button>
+          </div>
+        </form>
+      } @else {
+        <p class="payment-settled">This order has no remaining balance.</p>
+        <div class="payment-modal-actions"><button type="button" class="button secondary" (click)="closePosPaymentForm()">Close</button></div>
+      }
+    </section>
+  </div>
+}
