@@ -113,7 +113,15 @@ jobs:
         run: |
           pnpm api:start > /tmp/dollareus-browser-api.log 2>&1 &
           api_pid=$!
-          pnpm serve:ssr > /tmp/dollareus-browser-ssr.log 2>&1 &
+          PORT=4000 pnpm serve:ssr > /tmp/dollareus-browser-ssr.log 2>&1 &
           ssr_pid=$!
           trap 'kill "$api_pid" "$ssr_pid" 2>/dev/null || true' EXIT
-          PLAYWRIGHT_MODULE_URL="file://$RUNNER_TEMP/dollareus-browser/node_modules/playwright/index.mjs" PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node apps/api/test/browser-acceptance.mjs
+          if ! PLAYWRIGHT_MODULE_URL="file://$RUNNER_TEMP/dollareus-browser/node_modules/playwright/index.mjs" PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node apps/api/test/browser-acceptance.mjs; then
+            echo "::group::API server log"
+            cat /tmp/dollareus-browser-api.log || true
+            echo "::endgroup::"
+            echo "::group::SSR server log"
+            cat /tmp/dollareus-browser-ssr.log || true
+            echo "::endgroup::"
+            exit 1
+          fi
