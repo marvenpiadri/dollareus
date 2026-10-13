@@ -1765,7 +1765,7 @@ app.get<{ Params: { entryPointId: string } }>('/api/v1/public/entry-points/:entr
   const publicDomain = (process.env.PUBLIC_STORE_DOMAIN ?? '').trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
   const publicDomainBase = publicDomain ? 'https://' + publicDomain : '';
   const targetUrl = primaryDomain.rows[0]?.hostname
-    ? 'https://' + primaryDomain.rows[0].hostname + (row.target_path === '/' ? '' : row.target_path)
+    ? 'https://' + primaryDomain.rows[0].hostname + targetUrlPath
     : configuredBase
       ? configuredBase + targetUrlPath
       : publicDomainBase
