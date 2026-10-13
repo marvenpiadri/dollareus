@@ -228,7 +228,7 @@ function fail(reply: FastifyReply, request: FastifyRequest, status: number, code
 }
 
 const Slug = z.string().trim().min(1).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-function slugFromName(value: string): string { return value.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
+function slugFromName(value: string): string { return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
 const OrganizationInput = z.object({ name: z.string().trim().min(1).max(180), slug: Slug }).strict();
 const StoreInput = z.object({
   name: z.string().trim().min(1).max(180), description: z.string().max(5000).nullable(), slug: Slug,
