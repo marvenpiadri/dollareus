@@ -1,7 +1,7 @@
 import { Component, Inject, signal } from '@angular/core';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Meta, Title } from '@angular/platform-browser';
+import { DomSanitizer, Meta, Title, type SafeResourceUrl } from '@angular/platform-browser';
 import { ApiClientService } from '../../core/api/api-client.service';
 
 @Component({
@@ -29,7 +29,7 @@ export class PublicStorefrontComponent {
   protected readonly appointmentNote = signal('');
   private readonly initialReviewToken: string;
 
-  constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, @Inject(DOCUMENT) private readonly document: Document) {
+  constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, private readonly sanitizer: DomSanitizer, @Inject(DOCUMENT) private readonly document: Document) {
     this.initialReviewToken = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('token') ?? '') : '';
     const handle = route.snapshot.paramMap.get('storeHandle') ?? '';
     const location = route.snapshot.paramMap.get('locationSlug') ?? '';
@@ -112,11 +112,12 @@ export class PublicStorefrontComponent {
     return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
-  protected mapEmbedUrl(): string {
+  protected mapEmbedUrl(): SafeResourceUrl | null {
     const store = this.store();
     const address = [store?.addressLine, store?.city, store?.countryCode].filter((part) => typeof part === 'string' && part.trim()).join(', ');
-    if (!address) return '';
-    return 'https://maps.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed';
+    if (!address) return null;
+    const url = 'https://maps.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed';
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
   }
 
   protected initialLetter(): string { return String(this.store()?.name ?? 'S').slice(0, 1).toUpperCase(); }
