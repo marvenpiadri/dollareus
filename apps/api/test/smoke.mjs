@@ -884,9 +884,9 @@ try {
   }
   checks.push('product details, transactional multi-variant creation/update/options, and archive');
 
-  await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
-  await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 404);
-  await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 404);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}`, 404);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 404);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 404);
   await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 404);
   checks.push('unpublished stores and their QR entry points stay private');
 
@@ -965,7 +965,7 @@ try {
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${secondDish.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'active' })
   });
-  const publicModifierProjection = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  const publicModifierProjection = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
   const publishedModifierDish = publicModifierProjection.payload?.data?.flatMap((entry) => entry.items ?? []).find((dish) => dish.id === secondDish.payload?.data?.id);
   if (publishedModifierDish?.modifierGroups?.[0]?.id !== 'extras'
       || Number(publishedModifierDish?.modifierGroups?.[0]?.options?.[0]?.priceDeltaMinor) !== 250) {
@@ -975,7 +975,7 @@ try {
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'unavailable' })
   });
-  const hiddenUnavailableMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  const hiddenUnavailableMenu = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
   if (hiddenUnavailableMenu.payload?.data?.some((item) => item.items?.some((dish) => dish.id === menuItem.payload?.data?.id))) throw new Error('Unavailable restaurant dishes must not appear on the public menu.');
   await request(`/api/v1/organizations/${organizationId}/menus/${menu.payload?.data?.id}/items/${menuItem.payload?.data?.id}`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ availability: 'limited' })
@@ -983,16 +983,16 @@ try {
   await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'catalog', enabledExperiences: ['catalog'] })
   });
-  await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 404);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 404);
   await request(`/api/v1/public/entry-points/${entryPoint.payload?.data?.id}`, 404);
-  await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 200);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 200);
   await request(`/api/v1/organizations/${organizationId}/stores/${storeId}/storefront`, 200, {
     method: 'PATCH', headers: authHeaders, body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
   });
-  await request(`/api/v1/public/stores/smoke-store-${suffix}/catalog`, 200);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/catalog`, 200);
   checks.push('public restaurant menu is hidden when the menu experience is disabled');
 
-  const publicMenu = await request(`/api/v1/public/stores/smoke-store-${suffix}/menus`, 200);
+  const publicMenu = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/menus`, 200);
   const publicDish = publicMenu.payload?.data?.flatMap((item) => item.items ?? []).find((dish) => dish.id === menuItem.payload?.data?.id);
   if (!publicDish || publicDish.availability !== 'limited' || !publicDish.modifierGroups?.some((group) => group.id === 'size')) throw new Error('Published restaurant menu must expose limited-availability dishes and modifier groups, while excluding unavailable dishes.');
   if (publicDish.categoryName !== category.payload?.data?.name || !publicDish.allergens?.includes('milk') || !publicDish.dietaryLabels?.includes('vegetarian')) throw new Error('Public restaurant menu must include the assigned category name, allergen information, and dietary labels for customer display.');
@@ -1013,7 +1013,7 @@ try {
       || updatedStore?.locale !== 'fr' || updatedStore?.timeZone !== 'Europe/Paris' || updatedStore?.businessType !== 'restaurant') {
     throw new Error('Core store identity, currency, locale, time zone, or lifecycle changes did not persist.');
   }
-  await request(`/api/v1/public/stores/smoke-store-${suffix}`, 404);
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}`, 404);
   checks.push('manager-only core store identity, business type, status, currency, locale, time zone, and paused-store public gating');
 
   console.log(`API integration smoke checks passed (${checks.length} checks):`);
