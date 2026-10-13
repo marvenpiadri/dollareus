@@ -32,8 +32,26 @@ export class WorkspaceShellComponent {
   readonly mobileOpen = signal(false);
 
   constructor() {
-    if (typeof document !== 'undefined') this.dark.set(document.documentElement.dataset['theme'] === 'dark');
-    try { if (typeof localStorage !== 'undefined') this.collapsed.set(localStorage.getItem('dollareus:sidebar-collapsed') === 'true'); } catch { /* Keep the default expanded navigation. */ }
+    let savedTheme: string | null = null;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        savedTheme = localStorage.getItem('dollareus:theme');
+        this.collapsed.set(localStorage.getItem('dollareus:sidebar-collapsed') === 'true');
+      }
+    } catch {
+      // Preferences still work for the current session when storage is unavailable.
+    }
+
+    if (typeof document !== 'undefined') {
+      const prefersDark = savedTheme ? savedTheme === 'dark' : document.documentElement.dataset['theme'] === 'dark';
+      this.dark.set(prefersDark);
+      const theme = prefersDark ? 'dark' : 'light';
+      document.documentElement.dataset['theme'] = theme;
+      document.documentElement.classList.toggle('theme-dark', prefersDark);
+      document.documentElement.classList.toggle('theme-light', !prefersDark);
+      document.body?.classList.toggle('theme-dark', prefersDark);
+      document.body?.classList.toggle('theme-light', !prefersDark);
+    }
   }
 
   toggleCollapsed(): void {
