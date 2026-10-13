@@ -51,7 +51,7 @@ try {
   const signupCookie = signup.response.headers.get('set-cookie')?.match(/dollareus_session=([^;]+)/)?.[1];
   if (!signupCookie) throw new Error('Signup session cookie was not present.');
   const signupSession = await request('/api/v1/auth/session', 200, { headers: { cookie: `dollareus_session=${signupCookie}` } });
-  if (signupSession.payload?.data?.id !== signupUserId) throw new Error('The session created during signup is not valid.');
+  if (signupSession.payload?.data?.id !== signupUserId || signupSession.payload?.data?.username !== `signup-${suffix}`) throw new Error('The session created during signup did not return the expected account identity.');
   const signupAuthHeaders = { cookie: `dollareus_session=${signupCookie}` };
   const signupOrganizations = await request('/api/v1/organizations', 200, { headers: signupAuthHeaders });
   const signupOrganizationId = signupOrganizations.payload?.data?.[0]?.id;
