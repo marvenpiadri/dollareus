@@ -44,7 +44,7 @@ try {
 
   // Regression guard: registration must provision a usable workspace and land
   // on the dashboard, never the previous "couldn't load your workspace" error.
-  await page.getByRole('heading', { name: 'Good morning, welcome back.' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your business at a glance' }).waitFor({ timeout: 15000 });
   assert.equal(await page.getByText('We couldn’t load your workspace').count(), 0);
 
   // Signup provisions a default workspace/store. Convert that store to a
@@ -71,7 +71,7 @@ try {
   }, { apiUrl });
   storeSlug = bootstrap.storeSlug;
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('heading', { name: 'Good morning, welcome back.' }).waitFor({ timeout: 15000 });
+  await page.getByRole('heading', { name: 'Your business at a glance' }).waitFor({ timeout: 15000 });
 
   // Real-browser restaurant path: create a menu and dish through merchant forms.
   await page.getByRole('button', { name: /Menus/ }).click();
