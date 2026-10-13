@@ -106,8 +106,38 @@ try {
 
   await page.getByRole('button', { name: 'Inventory', exact: true }).click();
   await page.getByRole('heading', { name: 'Inventory' }).waitFor();
+
+  // Publish the restaurant menu through the authenticated storefront API and
+  // verify the customer-facing menu route renders the saved dish.
+  const publishResult = await page.evaluate(async ({ apiUrl, storeSlug }) => {
+    const read = async (response) => {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error?.message ?? `API request failed (${response.status})`);
+      return payload.data;
+    };
+    const organizations = await read(await fetch(`${apiUrl}/api/v1/organizations`, { credentials: 'include' }));
+    const organization = organizations?.[0];
+    if (!organization?.id) throw new Error('The browser-created workspace could not be reloaded from the API.');
+    const stores = await read(await fetch(`${apiUrl}/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`, { credentials: 'include' }));
+    const store = stores?.find((row) => row.slug === storeSlug);
+    if (!store?.id) throw new Error('The browser-created restaurant could not be reloaded from the API.');
+    await read(await fetch(`${apiUrl}/api/v1/organizations/${encodeURIComponent(organization.id)}/stores/${encodeURIComponent(store.id)}/storefront`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
+    }));
+    return { organizationId: organization.id, storeId: store.id };
+  }, { apiUrl, storeSlug });
+  assert.ok(publishResult.storeId, 'The restaurant storefront should publish successfully.');
+  const publicPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  await publicPage.addInitScript((url) => { window.DOLLAREUS_API_URL = url; }, apiUrl);
+  await publicPage.goto(`${baseUrl}/${storeSlug}/menu`, { waitUntil: 'domcontentloaded' });
+  await publicPage.getByText(dishName).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
-  console.log('Browser acceptance passed: signup/workspace regression, restaurant onboarding, menu/dish creation, POS order, manual payment, printable receipt, and inventory page.');
+  assert.deepEqual(await publicPage.locator('body').evaluate(() => document.body.innerText.includes(dishName)), true);
+  await publicPage.close();
+  console.log('Browser acceptance passed: signup/workspace regression, restaurant onboarding, menu/dish creation, POS order, manual payment, printable receipt, inventory page, and published public menu.');
 } finally {
   await browser.close();
 }
