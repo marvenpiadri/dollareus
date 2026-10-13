@@ -2,6 +2,8 @@
 
 Last reviewed: 13 October 2026
 
+Benchmark sources: Square modifier and multi-channel menu documentation, Toast restaurant POS/offline operations documentation, Shopify multi-location inventory documentation, and Moroccan digital-menu providers listed below. This is a directional UX benchmark, not a feature-parity claim.
+
 This is a product-design reference, not a claim that Dollareus currently matches every competitor feature. Competitor pages are vendor-published and should be rechecked before pricing, positioning, or launch decisions.
 
 ## Research set
@@ -40,8 +42,8 @@ This is a product-design reference, not a claim that Dollareus currently matches
 - Add clear empty, loading, saved, error and unavailable states; keep mobile forms comfortable to use.
 
 ### P1 — improve conversion and everyday usability
-- Public menu: WhatsApp contact/order inquiry is now implemented from the configured business number, with a prefilled message; CI/browser verification is pending. Continue with shareable stable URLs, strong mobile performance, category navigation and useful no-menu/no-items states.
-- Locale-aware currency formatting and Arabic right-to-left direction are now implemented on the public restaurant menu; CI verification and a broader French/English/Arabic layout audit remain.
+- Public menu: WhatsApp contact inquiry is implemented from the configured business number with a prefilled message, and the latest CI/browser acceptance run passes. Keep the action explicitly described as a WhatsApp conversation, not an in-app order. Next: audit no-menu/no-items states, category navigation, shareability and mobile performance.
+- Locale-aware currency formatting and Arabic right-to-left direction are implemented on the public restaurant menu and included in the latest passing CI run. A broader French/English/Arabic layout audit remains.
 - Better low-stock visibility, quick counts, and multi-location context.
 - Public page completeness: contact, hours, map, SEO metadata and consistent profile/menu/catalog links.
 
@@ -50,6 +52,13 @@ This is a product-design reference, not a claim that Dollareus currently matches
 - Kitchen display / kitchen ticket routing, table plans and delivery zones.
 - Bulk import/export, deeper sales analytics, loyalty and third-party integrations.
 - Payment-provider integrations, offline mode and operational automation with explicit security/recovery testing.
+
+## Benchmark takeaways from primary sources
+
+- Square's item modifier guidance supports required/optional selections, price deltas, per-item ordering, and visibility by sales channel. Dollareus should preserve the same principle: customization rules belong to the item workflow and must remain legible on tickets and receipts. Source: [Square modifier management](https://squareup.com/help/us/en/article/5119-create-and-manage-item-modifiers) and [Square multi-channel menus](https://squareup.com/help/gb/en/article/8553-manage-your-menus-across-locations-and-sales-channels).
+- Toast documents a broad restaurant operations surface and explicitly describes offline-mode limitations. Dollareus should not claim offline operation until it exists and is verified; for now, keep manual payment records distinct from payment processing. Sources: [Toast restaurant POS](https://pos.toasttab.com/restaurant-pos) and [Toast offline mode](https://support.toasttab.com/en/article/Using-Toast-in-Offline-Mode).
+- Shopify's multi-location guidance tracks stock independently by location and ties POS inventory to the selected location. Dollareus should keep location context visible and avoid suggesting branch stock is pooled. Sources: [Shopify multi-location inventory](https://help.shopify.com/en/manual/inventory-and-locations/setup/multi-managed-inventory) and [Shopify POS inventory](https://help.shopify.com/en/manual/sell-in-person/shopify-pos/inventory-management/products).
+- Local Moroccan digital-menu vendors emphasize QR access, multilingual menus, MAD pricing, and WhatsApp as a low-friction customer contact path. These are important local-market expectations, but individual feature claims should be reconfirmed before positioning or pricing.
 
 ## Verification rule
 
