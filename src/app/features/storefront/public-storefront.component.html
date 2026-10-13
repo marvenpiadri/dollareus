@@ -1,7 +1,7 @@
 <main class="store-page">
-  <header class="topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span><span>Dollareus</span></a><span class="topbar-note">Independent businesses, made discoverable</span></header>
+  <header class="topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span><span>Dollareus</span></a><span class="topbar-note">Businesses, made discoverable</span></header>
   @if (loading()) {
-    <section class="state-panel"><span class="eyebrow">PUBLIC STOREFRONT</span><h1>Opening business page…</h1><p>Loading the latest business details and offerings.</p></section>
+    <section class="state-panel"><span class="eyebrow">PUBLIC BUSINESS PROFILE</span><h1>Opening business profile…</h1><p>Loading the latest business details and offerings.</p></section>
   } @else if (error()) {
     <section class="state-panel error-panel" role="alert"><span class="eyebrow">BUSINESS PAGE UNAVAILABLE</span><h1>We couldn't find this business</h1><p>{{error()}}</p><a routerLink="/">Return to Dollareus</a></section>
   } @else {
@@ -36,7 +36,7 @@
         <p class="location-note">Prices and availability are maintained by this business.</p>
       </div>
       <aside class="identity-card">
-        <span class="card-label">OFFICIAL BUSINESS PAGE</span>
+        <span class="card-label">BUSINESS PROFILE</span>
         @if (store()?.theme?.profileImageUrl) {
           <img class="identity-image" [src]="store()?.theme?.profileImageUrl" [alt]="(store()?.name || 'Business') + ' profile picture'" fetchpriority="high">
         } @else {
