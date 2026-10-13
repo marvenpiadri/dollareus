@@ -162,7 +162,7 @@
               </div>
               <div class="line-price-action">
                 <strong class="line-total">{{ money(line.priceAmountMinor * line.quantity, line.currency) }}</strong>
-                <button type="button" class="line-remove-btn" (click)="removePosCartItem(line.key)" title="Remove item">×</button>
+                <button type="button" class="line-remove-btn" (click)="removePosCartItem(line.key)" [attr.aria-label]="'Remove ' + line.name + ' from ticket'" title="Remove item">×</button>
               </div>
             </div>
           }
