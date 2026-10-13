@@ -23,6 +23,10 @@ export class PublicStorefrontComponent {
   protected readonly reviewBusy = signal(false);
   protected readonly reviewMessage = signal('');
   protected readonly reviewError = signal('');
+  protected readonly appointmentService = signal('');
+  protected readonly appointmentDate = signal('');
+  protected readonly appointmentTime = signal('');
+  protected readonly appointmentNote = signal('');
   private readonly initialReviewToken: string;
 
   constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, @Inject(DOCUMENT) private readonly document: Document) {
@@ -89,6 +93,23 @@ export class PublicStorefrontComponent {
     } catch (error) {
       this.reviewError.set(error instanceof Error ? error.message : 'This review verification link is invalid or expired.');
     }
+  }
+
+  protected appointmentWhatsAppUrl(): string {
+    const store = this.store();
+    const rawPhone = String(store?.phone ?? '').replace(/[^0-9+]/g, '');
+    let phone = rawPhone.replace(/^\+/, '').replace(/^00/, '');
+    if (String(store?.countryCode ?? '').toUpperCase() === 'MA' && phone.startsWith('0')) phone = '212' + phone.slice(1);
+    if (!/^\d{8,15}$/.test(phone)) return '';
+    const lines = [
+      'Hello ' + String(store?.name ?? 'there') + ', I would like to request an appointment.',
+      this.appointmentService().trim() ? 'Service: ' + this.appointmentService().trim() : '',
+      this.appointmentDate() ? 'Preferred date: ' + this.appointmentDate() : '',
+      this.appointmentTime() ? 'Preferred time: ' + this.appointmentTime() : '',
+      this.appointmentNote().trim() ? 'Additional details: ' + this.appointmentNote().trim() : '',
+      store?.locationName || store?.city ? 'Location: ' + String(store?.locationName || store?.city) : ''
+    ].filter(Boolean);
+    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
   protected initialLetter(): string { return String(this.store()?.name ?? 'S').slice(0, 1).toUpperCase(); }
