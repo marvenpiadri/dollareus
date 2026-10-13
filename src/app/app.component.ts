@@ -92,6 +92,9 @@ export class AppComponent {
 
   private syncRoute(url: string): void {
     this.workspaceRoute.set(url.split(/[?#]/, 1)[0] === '/app');
+    if (typeof window !== 'undefined') {
+      try { this.dark.set(localStorage.getItem('dollareus:theme') === 'dark'); } catch { /* Keep the current theme if storage is unavailable. */ }
+    }
   }
 
   private applyPreferences(): void {
