@@ -5,7 +5,7 @@
     } @else if (workspaceLoading()) {
       <main class="auth-loading"><span class="brand-mark">d.</span><p>Loading your workspace…</p></main>
     } @else if (workspaceError()) {
-      <main style="min-height:100vh;display:grid;place-content:center;justify-items:center;gap:12px;padding:24px;background:#f8fafc;color:#0f172a"><span class="brand-mark">d.</span><h1 style="font-size:24px;margin:0">We couldn’t load your workspace</h1><p style="max-width:460px;text-align:center;color:#64748b">{{ workspaceError() }}</p><button class="button primary" type="button" (click)="retryWorkspace()">Try again</button><button type="button" style="border:0;background:none;color:#238636" (click)="signOut()">Sign out</button></main>
+      <main class="workspace-error-screen"><section class="workspace-error-card"><span class="brand-mark">d.</span><p class="eyebrow">WORKSPACE CONNECTION</p><h1>We couldn’t load your workspace</h1><p class="workspace-error-copy">{{ workspaceError() }}</p><button class="button primary" type="button" (click)="retryWorkspace()">Try again</button><button class="workspace-error-signout" type="button" (click)="signOut()">Sign out</button></section></main>
     } @else if (onboardingStage() !== 'ready') {
       <main style="min-height:100vh;display:grid;place-content:center;padding:24px;background:#f8fafc;color:#0f172a">
         <section style="width:min(100%,480px);padding:34px;background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 18px 60px #253b1b0b">
