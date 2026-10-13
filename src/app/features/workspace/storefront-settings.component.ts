@@ -232,8 +232,14 @@ export class StorefrontSettingsComponent {
 
   protected chooseMapLocation(place: any): void {
     this.mapLatitude.set(Number(place.lat)); this.mapLongitude.set(Number(place.lon));
-    this.mapUrl.set('https://www.openstreetmap.org/?mlat=' + encodeURIComponent(place.lat) + '&mlon=' + encodeURIComponent(place.lon) + '#map=17/' + encodeURIComponent(place.lat) + '/' + encodeURIComponent(place.lon));
+    this.mapUrl.set('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(place.lat + ',' + place.lon));
     this.mapResults.set([]); this.mapError.set('');
+  }
+
+  protected openStreetMapUrl(): string {
+    const lat = this.mapLatitude() ?? Number(this.settings()?.latitude);
+    const lon = this.mapLongitude() ?? Number(this.settings()?.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lon) ? 'https://www.openstreetmap.org/?mlat=' + encodeURIComponent(String(lat)) + '&mlon=' + encodeURIComponent(String(lon)) + '#map=17/' + encodeURIComponent(String(lat)) + '/' + encodeURIComponent(String(lon)) : 'https://www.openstreetmap.org';
   }
 
   protected mapEmbedUrl(): SafeResourceUrl {
@@ -259,7 +265,7 @@ export class StorefrontSettingsComponent {
       this.settings.set(store);
       this.mapLatitude.set(store.latitude !== null && store.latitude !== undefined ? Number(store.latitude) : null);
       this.mapLongitude.set(store.longitude !== null && store.longitude !== undefined ? Number(store.longitude) : null);
-      this.mapUrl.set(store.googleMapsUrl || (store.latitude != null && store.longitude != null ? 'https://www.openstreetmap.org/?mlat=' + store.latitude + '&mlon=' + store.longitude + '#map=17/' + store.latitude + '/' + store.longitude : ''));
+      this.mapUrl.set(store.googleMapsUrl || (store.latitude != null && store.longitude != null ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(store.latitude + ',' + store.longitude) : ''));
       this.profilePicturePreview.set('');
     } catch (error) {
       if (version !== this.loadVersion) return;
