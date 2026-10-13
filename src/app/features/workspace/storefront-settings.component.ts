@@ -79,7 +79,7 @@ export class StorefrontSettingsComponent {
       }
       businessHours[day.key] = { open: closed ? '' : open, close: closed ? '' : close, closed };
     }
-    if (profileImageUrl && !profileImageUrl.startsWith('/api/v1/public/storefronts/')) {
+    if (profileImageUrl && !profileImageUrl.startsWith('/api/v1/public/storefronts/') && !profileImageUrl.startsWith('/api/v1/public/stores/')) {
       try { if (new URL(profileImageUrl).protocol !== 'https:') throw new Error(); }
       catch { this.error.set('Upload a valid business profile picture.'); return; }
     }
