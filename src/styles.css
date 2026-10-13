@@ -116,3 +116,41 @@ html[data-theme="dark"] .project-name-input{background:var(--color-input-bg);col
 html[data-theme="dark"] .qr-canvas-holder.bg-white,
 html[data-theme="dark"] .qr-canvas-holder.bg-dark{background:var(--color-surface)}
 html[data-theme="dark"] .second{border-top-color:var(--color-border)}
+
+/* Product-wide interaction and layout refinements (WCAG 2.2-informed). */
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{min-width:320px;text-rendering:optimizeLegibility}
+button,a,input,select,textarea{touch-action:manipulation}
+button:disabled,.button:disabled{opacity:.58}
+:where(button,a,input,select,textarea,[tabindex]):focus-visible{outline:3px solid var(--color-border-focus);outline-offset:3px}
+:where(input,select,textarea):focus-visible{box-shadow:0 0 0 3px var(--color-money-green-light)}
+:where(button,.button,.primary,.secondary,[role=button]){min-height:40px}
+:where(.button,.primary,.secondary){display:inline-flex;align-items:center;justify-content:center;gap:8px;padding-inline:14px;font-weight:650;text-decoration:none}
+:where(.button.primary,.primary){background:var(--color-money-green);border-color:var(--color-money-green);color:#fff}
+:where(.button.primary,.primary):hover:not(:disabled){background:var(--color-money-green-dark);border-color:var(--color-money-green-dark)}
+:where(.button.secondary,.secondary):hover:not(:disabled){border-color:var(--color-border-dark)}
+:where(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]),select,textarea){max-width:100%}
+textarea{min-height:104px;padding:10px 12px;resize:vertical}
+label{line-height:1.45}
+:where(h1,h2,h3,h4){text-wrap:balance}
+:where(p,small){overflow-wrap:anywhere}
+:where(.panel,.metric,.card,.editor,.preview,.settings-card,.publish-card){border-radius:var(--radius-lg)}
+:where(.panel,.metric,.card,.editor,.preview,.settings-card){box-shadow:var(--shadow-xs)}
+:where(.panel,.settings-card,.store-dialog,.onboarding-card){min-width:0}
+:where(.table-wrap,.table-container,.table-responsive){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+table th{font-weight:650}
+table tbody tr{transition:background-color var(--transition-fast)}
+table tbody tr:hover{background:var(--color-surface-subtle)}
+:where(.empty-state,[class*=empty-state]){line-height:1.65}
+:where(.error,.form-error,[role=alert]){overflow-wrap:anywhere}
+:where(.success,.notice,[role=status]){line-height:1.55}
+@media(prefers-reduced-motion:reduce){
+ html{scroll-behavior:auto}
+ *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
+@media(max-width:820px){
+ html{scroll-padding-top:72px}
+ :where(.button,.primary,.secondary){min-height:42px}
+ :where(.table-wrap,.table-container,.table-responsive){margin-inline:-2px}
+}
+@media(forced-colors:active){:focus-visible{outline:2px solid Highlight}}
