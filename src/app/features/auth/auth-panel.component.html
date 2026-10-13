@@ -31,7 +31,20 @@
         <div class="auth-divider"><span></span>or continue with email<span></span></div>
       }
       <form (submit)="submit($event)">
-        @if (mode() === 'register') { <label>Your name<input name="displayName" type="text" autocomplete="name" maxlength="120" placeholder="Your name"></label> }
+        @if (mode() === 'register') {
+          <label>Your name<input name="displayName" type="text" autocomplete="name" maxlength="120" placeholder="Your name"></label>
+          <label>Username
+            <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="30" pattern="[a-z0-9][a-z0-9_-]{2,29}" placeholder="yourname" [value]="username()" (input)="onUsernameInput($any($event.target).value)" required>
+            <span class="username-status" [class.is-available]="usernameStatus() === 'available'" [class.is-error]="['taken','invalid','error'].includes(usernameStatus())" aria-live="polite">
+              @if (usernameStatus() === 'checking') { Checking availability… }
+              @else if (usernameStatus() === 'available') { ✓ Username is available }
+              @else if (usernameStatus() === 'taken') { That username is taken or reserved. }
+              @else if (usernameStatus() === 'invalid') { Use 3–30 lowercase letters, numbers, underscores or hyphens; start with a letter or number. }
+              @else if (usernameStatus() === 'error') { Could not check right now. We'll verify it when you submit. }
+              @else { Your public username; you can use it for your business identity. }
+            </span>
+          </label>
+        }
         <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@company.com" required></label>
         @if (mode() !== 'forgot') { <label>Password<input name="password" type="password" [attr.autocomplete]="mode() === 'register' ? 'new-password' : 'current-password'" [attr.minlength]="mode() === 'register' ? 12 : null" maxlength="256" required></label> }
         @if (mode() === 'login' && providers().emailFlows) { <button class="auth-forgot" type="button" (click)="setMode('forgot')">Forgot password?</button> }
