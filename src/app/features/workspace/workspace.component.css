@@ -10,3 +10,24 @@
 .workspace-error-signout{margin-top:10px;padding:8px 16px;border:0;background:transparent;color:var(--color-text-secondary);font-size:13px}
 .workspace-error-signout:hover{color:var(--color-money-green)}
 @media(max-width:520px){.workspace-error-card{padding:32px 20px}}
+
+/* Unified workspace design language */
+:host{color:var(--color-text-main)}
+.button,.button.secondary,.secondary{border-radius:var(--radius-md);transition:background var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast),box-shadow var(--transition-fast)}
+.button.secondary,.secondary{background:var(--color-surface);color:var(--color-text-main);border-color:var(--color-border)}
+.button.secondary:hover,.secondary:hover{background:var(--color-surface-hover)}
+.store-dialog-backdrop{position:fixed;inset:0;z-index:var(--z-modal);display:grid;place-items:center;padding:20px;background:rgba(3,8,18,.58);backdrop-filter:blur(4px)}
+.store-dialog{width:min(100%,500px);max-height:min(90dvh,760px);overflow:auto;padding:26px;border:1px solid var(--color-border);border-radius:var(--radius-xl);background:var(--color-surface-modal);color:var(--color-text-main);box-shadow:var(--shadow-modal)}
+.store-dialog-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:22px}
+.store-dialog-heading .eyebrow{margin:0 0 7px;color:var(--color-money-green);font-size:11px;letter-spacing:1.1px}
+.store-dialog-heading h2{margin:0;font-size:24px;line-height:1.25;letter-spacing:-.6px}
+.store-dialog-heading p:last-child{margin:8px 0 0;color:var(--color-text-secondary);font-size:13px;line-height:1.6}
+.dialog-close{flex:0 0 34px;width:34px;height:34px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-secondary);font-size:22px;line-height:1}
+.dialog-close:hover{background:var(--color-surface-hover);color:var(--color-text-main)}
+.store-dialog-form{display:grid;gap:16px}
+.store-dialog-form label{display:grid;gap:7px;color:var(--color-text-main);font-size:13px;font-weight:650}
+.store-dialog-form input,.store-dialog-form select{width:100%;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--color-input-border);border-radius:var(--radius-md);background:var(--color-input-bg);color:var(--color-input-text)}
+.store-dialog-form label small{color:var(--color-text-secondary);font-size:11px;font-weight:400}
+.store-dialog-error{margin:0;color:var(--color-status-overdue);font-size:13px;line-height:1.5}
+.store-dialog-actions{display:flex;justify-content:flex-end;gap:9px;padding-top:5px}
+@media(max-width:560px){.store-dialog{padding:20px}.store-dialog-heading h2{font-size:21px}.store-dialog-actions .button{flex:1}}
