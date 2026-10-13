@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, HostListener, input, output, signal } from '@angular/core';
 
 type WorkspaceNavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 
@@ -42,6 +42,15 @@ export class WorkspaceShellComponent {
   }
 
   navigate(label: WorkspaceNavItem): void { this.navRequested.emit(label); this.mobileOpen.set(false); }
+
+  @HostListener('document:keydown', ['$event'])
+  handleSearchShortcut(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (typeof document !== 'undefined') document.getElementById('workspace-search')?.focus();
+    }
+    if (event.key === 'Escape' && this.mobileOpen()) this.mobileOpen.set(false);
+  }
 
   toggleTheme(): void {
     this.dark.update(value => !value);
