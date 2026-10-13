@@ -741,7 +741,7 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: Buffer }>(
 
 app.get<{ Params: { storeId: string } }>('/api/v1/public/stores/:storeId/profile-picture', async (request, reply) => {
   const result = await pool.query(
-    "SELECT f.theme->>'profileImageStorageKey' AS storage_key FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.status='active' AND f.published=true LIMIT 1",
+    "SELECT f.theme->>'profileImageStorageKey' AS storage_key FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 LIMIT 1",
     [request.params.storeId]
   );
   const storageKey = result.rows[0]?.storage_key;
