@@ -924,6 +924,13 @@ try {
   if (reviewMetrics.payload?.data?.reviewCount !== 1 || Number(reviewMetrics.payload?.data?.averageRating) !== 4 || reviewMetrics.payload?.data?.reviews?.[0]?.reviewText !== 'A verified review for metrics.' || 'reviewerEmail' in (reviewMetrics.payload?.data?.reviews?.[0] ?? {})) {
     throw new Error('Public five-heart review metrics are inaccurate or expose private reviewer email addresses.');
   }
+  await request('/api/v1/public/reviews/verify', 400, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: verificationToken })
+  });
+  await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/reviews`, 409, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: `verified-${suffix}@example.test`, rating: 1, reviewText: 'A duplicate review must not overwrite a verified review.' })
+  });
   checks.push('guest review persistence, email verification, private email handling, and five-heart public metrics');
   const secondLocation = await request(`/api/v1/organizations/${organizationId}/stores`, 201, {
     method: 'POST', headers: authHeaders,
