@@ -1,5 +1,5 @@
 import { Component, Inject, signal } from '@angular/core';
-import { DOCUMENT } from '@angular/common';
+import { DatePipe, DOCUMENT } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Meta, Title } from '@angular/platform-browser';
 import { ApiClientService } from '../../core/api/api-client.service';
@@ -7,7 +7,7 @@ import { ApiClientService } from '../../core/api/api-client.service';
 @Component({
   selector: 'dlr-public-storefront',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DatePipe],
   templateUrl: './public-storefront.component.html',
   styleUrl: './public-storefront.component.css'
 })
@@ -31,7 +31,7 @@ export class PublicStorefrontComponent {
     void this.load(handle, location);
   }
 
-  protected heartString(rating: number): string { return '♥'.repeat(Math.max(0, Math.min(5, rating))); }
+  protected heartString(rating: number): string { return '♥'.repeat(Math.max(0, Math.min(5, rating))); }\n  protected roundedRating(): number { return Math.round(this.reviewSummary().averageRating); }
 
   protected async submitReview(event: Event): Promise<void> {
     event.preventDefault();
