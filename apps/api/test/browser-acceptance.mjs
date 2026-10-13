@@ -159,7 +159,7 @@ try {
   await publicPage.goto(`${baseUrl}/${storeSlug}/menu`, { waitUntil: 'domcontentloaded' });
   await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
-  assert.deepEqual(await publicPage.locator('body').evaluate(() => document.body.innerText.includes(dishName)), true);
+  assert.deepEqual(await publicPage.locator('body').evaluate((body, targetName) => body.innerText.includes(targetName), dishName), true);
   await publicPage.close();
   console.log('Browser acceptance passed: signup/workspace regression, restaurant onboarding, menu/dish creation, POS order, manual payment, printable receipt, inventory page, and published public menu.');
 } finally {
