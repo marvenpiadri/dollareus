@@ -45,7 +45,7 @@
   <dlr-panel
     title="Recent orders"
     subtitle="Latest transactions processed by your store."
-    [footerText]="'Showing ' + orders().slice(0, 5).length + ' of ' + orders().length + ' orders'"
+    [footerText]="'Showing ' + orders().slice(0, 6).length + ' of ' + orders().length + ' orders'"
   >
     <div panel-actions>
       <button class="button secondary small" type="button" (click)="selectNavRequested.emit('Orders')">
@@ -100,8 +100,8 @@
   </dlr-panel>
 
   <dlr-panel
-    title="Sales channels"
-    subtitle="Connected channels distributing your products."
+    title="Sales tools"
+    subtitle="Tools available for in-person sales, QR menus, and external integrations."
   >
     <div panel-actions>
       <button class="button secondary small" type="button" (click)="selectNavRequested.emit('API & channels')">
