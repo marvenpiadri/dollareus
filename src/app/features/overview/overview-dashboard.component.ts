@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { OrderRow, ProductRow } from '../../shared/models/commerce.models';
 import { MetricCard, Panel, StatusBadge, EmptyState } from '../../shared/components';
 
-type OverviewDestination = 'Orders' | 'Products' | 'Integrations' | 'API & channels' | 'POS' | 'QR Studio';
+type OverviewDestination = 'Orders' | 'Products' | 'Integrations' | 'API & channels' | 'POS' | 'QR Studio' | 'Inventory';
 
 @Component({
   selector: 'dlr-overview-dashboard',
