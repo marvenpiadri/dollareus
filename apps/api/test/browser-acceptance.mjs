@@ -160,8 +160,22 @@ try {
   await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
   assert.deepEqual(await publicPage.locator('body').evaluate((body, targetName) => body.innerText.includes(targetName), dishName), true);
+
+  // Check the guest-facing menu at a real phone-sized viewport. This catches
+  // horizontal overflow that can make a QR-linked menu difficult to use.
+  await publicPage.setViewportSize({ width: 390, height: 844 });
+  await publicPage.reload({ waitUntil: 'domcontentloaded' });
+  await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
+  const mobileLayout = await publicPage.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    dishVisible: [...document.querySelectorAll('h4')].some(element => element.textContent?.trim() === dishName)
+  }));
+  assert.ok(mobileLayout.documentWidth <= mobileLayout.viewportWidth + 1,
+    `Public menu overflows phone viewport: ${mobileLayout.documentWidth}px document for ${mobileLayout.viewportWidth}px viewport.`);
+  assert.equal(mobileLayout.dishVisible, true, 'The saved dish should remain visible on a phone-sized screen.');
   await publicPage.close();
-  console.log('Browser acceptance passed: signup/workspace regression, restaurant onboarding, menu/dish creation, POS order, manual payment, printable receipt, inventory page, and published public menu.');
+  console.log('Browser acceptance passed: signup/workspace regression, restaurant onboarding, menu/dish creation, POS order, manual payment, printable receipt, inventory page, and published public menu at desktop and phone widths.');
 } finally {
   await browser.close();
 }
