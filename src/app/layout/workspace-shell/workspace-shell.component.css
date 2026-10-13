@@ -150,3 +150,10 @@
 html[data-theme="dark"] .nav-item.active{color:var(--color-status-paid)}
 html[data-theme="dark"] .nav-item.active .nav-symbol{color:var(--color-status-paid)}
 html[data-theme="dark"] .nav-item.active:before{background:var(--color-status-paid)}
+
+/* Keep the store switcher operable when the sidebar is collapsed to icons. */
+.shell.sidebar-collapsed .store-switch{position:relative;min-height:50px}
+.shell.sidebar-collapsed .store-switch-fields{display:flex;position:absolute;inset:0;width:100%;height:100%;flex:1;overflow:hidden}
+.shell.sidebar-collapsed .store-switch-fields b{display:none}
+.shell.sidebar-collapsed .store-switch-fields select{position:absolute;inset:0;width:100%;height:100%;max-width:none;opacity:0;cursor:pointer;z-index:2}
+.shell.sidebar-collapsed .store-switch>.chevron{display:block;position:absolute;right:4px;bottom:1px;font-size:11px}
