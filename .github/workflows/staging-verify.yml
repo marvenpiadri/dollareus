@@ -46,7 +46,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
       - name: Require the staging database secret
         run: |
           if [ -z "$DATABASE_URL" ]; then
