@@ -338,7 +338,7 @@ CREATE TABLE orders (
   customer_id text,
   order_number bigint NOT NULL,
   status text NOT NULL CHECK (status IN ('pending', 'confirmed', 'processing', 'completed', 'cancelled', 'refunded')),
-  payment_status text NOT NULL CHECK (payment_status IN ('unpaid', 'authorized', 'paid', 'partially_refunded', 'refunded', 'failed')),
+  payment_status text NOT NULL CHECK (payment_status IN ('unpaid', 'authorized', 'paid', 'partially_paid', 'partially_refunded', 'refunded', 'failed')),
   fulfillment_status text NOT NULL CHECK (fulfillment_status IN ('unfulfilled', 'partial', 'fulfilled', 'returned')),
   currency char(3) NOT NULL CHECK (currency ~ '^[A-Z]{3}$'),
   subtotal_minor bigint NOT NULL CHECK (subtotal_minor >= 0),
