@@ -199,7 +199,7 @@ export class PublicStorefrontComponent {
       '@type': type,
       '@id': '/' + handle + '/' + location + '#business',
       name: String(store?.name ?? ''),
-      description: String(store?.seoDescription ?? store?.description ?? ''),
+      description: String(store?.description ?? ''),
       ...(hasAddress ? { address } : {}),
       ...(store?.phone ? { telephone: String(store.phone) } : {}),
       ...(store?.websiteUrl ? { url: String(store.websiteUrl) } : {}),
