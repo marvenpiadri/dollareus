@@ -72,6 +72,11 @@ jobs:
         run: pnpm db:setup
       - name: Verify migration history and checksums
         run: pnpm db:status
+      - name: Verify the schema snapshot on a clean PostgreSQL database
+        run: |
+          PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres dollareus_snapshot
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d dollareus_snapshot -v ON_ERROR_STOP=1 -f apps/api/db/schema.sql
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d dollareus_snapshot -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.inventory_movements'), to_regclass('public.inventory_reservations'), to_regclass('public.magazines')"
       - name: Start API and run HTTP smoke checks
         run: |
           pnpm api:start > /tmp/dollareus-api.log 2>&1 &
