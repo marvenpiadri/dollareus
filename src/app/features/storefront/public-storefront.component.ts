@@ -26,12 +26,15 @@ export class PublicStorefrontComponent {
   private readonly initialReviewToken: string;
 
   constructor(route: ActivatedRoute, private readonly api: ApiClientService, private readonly title: Title, private readonly meta: Meta, @Inject(DOCUMENT) private readonly document: Document) {
+    this.initialReviewToken = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('token') ?? '') : '';
     const handle = route.snapshot.paramMap.get('storeHandle') ?? '';
     const location = route.snapshot.paramMap.get('locationSlug') ?? '';
     void this.load(handle, location);
   }
 
-  protected heartString(rating: number): string { return '♥'.repeat(Math.max(0, Math.min(5, rating))); }\n  protected roundedRating(): number { return Math.round(this.reviewSummary().averageRating); }
+  protected heartString(rating: number): string { return '♥'.repeat(Math.max(0, Math.min(5, rating))); }
+
+  protected roundedRating(): number { return Math.round(this.reviewSummary().averageRating); }
 
   protected async submitReview(event: Event): Promise<void> {
     event.preventDefault();
