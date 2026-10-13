@@ -181,6 +181,11 @@ export class StorefrontSettingsComponent {
   }
 
 
+  protected profileImageSource(): string {
+    const image = this.profilePicturePreview() || String(this.settings()?.theme?.profileImageUrl ?? '');
+    return image.startsWith('/') ? this.api.url(image) : image;
+  }
+
   protected async uploadProfilePicture(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
