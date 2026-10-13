@@ -67,7 +67,7 @@ export class StorefrontSettingsComponent {
     const locationName = String(values.get('locationName') ?? '').trim();
     const storeName = String(values.get('storeName') ?? '').trim();
     const city = String(values.get('city') ?? '').trim();
-    const locationSlug = this.slugify(locationName || [storeName, city].filter(Boolean).join(' '));
+    const locationSlug = this.slugify([locationName || storeName, city].filter(Boolean).join(' '));
     const profileImageUrl = this.profilePicturePreview() || String(this.settings()?.theme?.profileImageUrl ?? '').trim();
     const businessHours: Record<string, { open: string; close: string; closed: boolean }> = {};
     for (const day of this.weekdays) {
