@@ -47,6 +47,16 @@
         <span class="handle">@{{store()?.publicHandle}}</span>
       </aside>
     </section>
+    @if (businessHours().length) {
+      <section class="business-hours-section" aria-labelledby="business-hours-title">
+        <div class="section-heading"><div><span class="eyebrow">PLAN YOUR VISIT</span><h2 id="business-hours-title">Working hours</h2></div><p>Regular hours for this business location. Appointments are confirmed directly by the business.</p></div>
+        <div class="business-hours-list">
+          @for (day of businessHours(); track day.key) {
+            <div class="business-hours-item"><strong>{{day.label}}</strong><span>{{day.open && day.close ? day.open + ' – ' + day.close : 'Closed'}}</span></div>
+          }
+        </div>
+      </section>
+    }
     @if (mapEmbedUrl()) {
       <section class="business-map-section" aria-labelledby="business-map-title">
         <div><span class="eyebrow">FIND US</span><h2 id="business-map-title">Visit this business</h2><p>Check the address and open directions in Google Maps.</p></div>
