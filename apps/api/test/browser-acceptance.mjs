@@ -149,7 +149,7 @@ try {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'] })
+      body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'], theme: { profileImageUrl: 'https://example.com/dollareus-browser-profile.webp' } })
     }));
     return { organizationId: organization.id, storeId: store.id };
   }, { apiUrl, storeSlug });
