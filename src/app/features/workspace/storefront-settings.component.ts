@@ -46,6 +46,15 @@ export class StorefrontSettingsComponent {
     }
     const publicHandle = String(values.get('publicHandle') ?? '').trim().toLowerCase();
     const locationSlug = String(values.get('locationSlug') ?? '').trim().toLowerCase();
+    const profileImageUrl = String(values.get('profileImageUrl') ?? '').trim();
+    if (profileImageUrl) {
+      try { if (new URL(profileImageUrl).protocol !== 'https:') throw new Error(); }
+      catch { this.error.set('Use a valid HTTPS image URL for the business profile picture.'); return; }
+    }
+    if (values.get('published') === 'on' && !profileImageUrl && !this.settings()?.theme?.profileImageUrl) {
+      this.error.set('Add a business profile picture (logo, storefront photo, or another image) before publishing.');
+      return;
+    }
     if (!/^[a-z0-9]+([_-][a-z0-9]+)*$/.test(publicHandle)) {
       this.error.set('Use 2–60 lowercase letters and numbers, separated only by hyphens or underscores.');
       return;
@@ -84,7 +93,8 @@ export class StorefrontSettingsComponent {
           countryCode: String(values.get('countryCode') ?? '').trim().toUpperCase() || null,
           phone: String(values.get('phone') ?? '').trim() || null,
           websiteUrl: String(values.get('websiteUrl') ?? '').trim() || null,
-          googleMapsUrl: String(values.get('googleMapsUrl') ?? '').trim() || null
+          googleMapsUrl: String(values.get('googleMapsUrl') ?? '').trim() || null,
+          theme: { ...(this.settings()?.theme ?? {}), profileImageUrl: profileImageUrl || null }
         })
       });
       this.settings.set({ ...(this.settings() ?? {}), ...result });
