@@ -10,7 +10,6 @@ import { ApiClientService } from '../../../core/api/api-client.service';
   styleUrl: './public-menu.component.css'
 })
 export class PublicMenuComponent {
-  protected readonly publicMenuStoreSlug = signal('');
   protected readonly publicMenuStore = signal<any | null>(null);
   protected readonly publicMenus = signal<any[]>([]);
   protected readonly publicMenuLoading = signal(false);
@@ -18,15 +17,13 @@ export class PublicMenuComponent {
   protected readonly wifiQrDataUrl = signal('');
 
   constructor(private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService, private readonly title: Title, private readonly meta: Meta) {
-    const routeSlug = this.route.snapshot.paramMap.get('storeSlug') ?? '';
     const storeHandle = this.route.snapshot.paramMap.get('storeHandle') ?? '';
     const locationSlug = this.route.snapshot.paramMap.get('locationSlug') ?? '';
-    const hostnameLabels = typeof window !== 'undefined' ? window.location.hostname.toLowerCase().split('.') : [];
-    const hostStoreSlug = typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/menu' && hostnameLabels.length >= 3 ? hostnameLabels[0] : '';
-    const storeSlug = routeSlug || hostStoreSlug;
-    const publicIdentity = storeHandle && locationSlug ? { storeHandle, locationSlug } : null;
-    this.publicMenuStoreSlug.set(publicIdentity ? storeHandle + '/' + locationSlug : storeSlug);
-    void this.loadPublicMenu(storeSlug, publicIdentity);
+    if (!storeHandle || !locationSlug) {
+      this.publicMenuError.set('This menu address is incomplete. Open the menu from the business profile or scan its location-specific QR code.');
+      return;
+    }
+    void this.loadPublicMenu({ storeHandle, locationSlug });
   }
 
   protected publicMenuSections(menu: { items?: any[] }): { name: string; items: any[] }[] {
@@ -61,18 +58,11 @@ export class PublicMenuComponent {
     }
   }
 
-  private async loadPublicMenu(storeSlug: string, publicIdentity: { storeHandle: string; locationSlug: string } | null = null): Promise<void> {
-    if (!storeSlug && !publicIdentity) {
-      this.publicMenuError.set('This menu link is missing its restaurant address. Scan the full QR code or open the restaurant-specific menu link.');
-      return;
-    }
+  private async loadPublicMenu(publicIdentity: { storeHandle: string; locationSlug: string }): Promise<void> {
     this.publicMenuLoading.set(true);
     this.publicMenuError.set('');
     try {
-      const encodedSlug = encodeURIComponent(storeSlug);
-      const publicPath = publicIdentity
-        ? '/api/v1/public/storefronts/' + encodeURIComponent(publicIdentity.storeHandle) + '/' + encodeURIComponent(publicIdentity.locationSlug)
-        : '/api/v1/public/stores/' + encodedSlug;
+      const publicPath = '/api/v1/public/storefronts/' + encodeURIComponent(publicIdentity.storeHandle) + '/' + encodeURIComponent(publicIdentity.locationSlug);
       const [store, menus] = await Promise.all([
         this.apiClient.request(publicPath),
         this.apiClient.request(publicPath + '/menus')
