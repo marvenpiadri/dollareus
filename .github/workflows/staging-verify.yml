@@ -2,6 +2,12 @@ name: Staging database verification
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/staging-verify.yml'
+      - 'apps/api/db/migrations/**'
+      - 'apps/api/src/db/schema-version.ts'
 
 permissions:
   contents: read
@@ -74,6 +80,8 @@ jobs:
           done
           command -v aws >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y awscli; }
           region="${AWS_REGION:-us-east-2}"
+          export AWS_CONFIG_FILE="$RUNNER_TEMP/aws-config"
+          printf '[default]\ns3 =\n    addressing_style = path\n' > "$AWS_CONFIG_FILE"
           key="dollareus-healthchecks/staging-storage-probe-${GITHUB_RUN_ID}.txt"
           source_file="$RUNNER_TEMP/dollareus-storage-probe.txt"
           readback_file="$RUNNER_TEMP/dollareus-storage-readback.txt"
