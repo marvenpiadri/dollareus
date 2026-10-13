@@ -244,7 +244,7 @@ export class StorefrontSettingsComponent {
     return this.sanitizer.bypassSecurityTrustResourceUrl(url);
   }
 
-  private slugify(value: string): string { return value.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
+  private slugify(value: string): string { return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
   private detectedTimeZone(fallback?: string): string { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || fallback || 'Africa/Casablanca'; } catch { return fallback || 'Africa/Casablanca'; } }
 
   private async load(organizationId: string, storeId: string): Promise<void> {
