@@ -231,6 +231,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+        const usernameConflict = await pool.query(
+          'SELECT 1 FROM users WHERE username=$1 UNION ALL SELECT 1 FROM organizations WHERE public_handle=$1 LIMIT 1',
+          [username]
+        );
+        if (usernameConflict.rowCount) {
+          return reply.code(409).send({ error: { code: 'USERNAME_TAKEN', message: 'That username is already in use. Choose another one.', requestId: request.id } });
+        }
         return reply.code(409).send({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'An account with this email already exists.', requestId: request.id } });
       }
       throw error;

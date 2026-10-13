@@ -42,7 +42,7 @@ export class PublicStorefrontComponent {
     if (!store) return;
     const email = this.reviewEmail().trim().toLowerCase();
     const reviewText = this.reviewText().trim();
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       this.reviewError.set('Enter a valid email address.');
       return;
     }
