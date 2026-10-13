@@ -249,7 +249,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const result = await pool.query(
-      'SELECT u.id,u.email,u.display_name,u.status,p.password_hash FROM users u JOIN auth_passwords p ON p.user_id=u.id WHERE u.email=$1 LIMIT 1',
+      'SELECT u.id,u.email,u.display_name,u.status,p.password_hash FROM users u JOIN auth_passwords p ON p.user_id=u.id WHERE lower(u.email)=$1 OR u.username=$1 LIMIT 1',
       [email]
     );
     const row = result.rows[0];
