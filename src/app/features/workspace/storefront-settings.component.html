@@ -7,21 +7,23 @@
       <section class="settings-card">
         <div class="card-heading"><span class="step">00</span><div><h3>Business identity and operations</h3><p>Manage the core business location independently from its public publishing settings.</p></div></div>
         <div class="fields two-col">
-          <label>Business profile picture URL<input name="profileImageUrl" type="url" maxlength="1000" [value]="settings()?.theme?.profileImageUrl || ''" placeholder="https://…/logo-or-storefront.webp"><small>Required before publishing. Use the business logo, storefront photo, or another image that represents this business. HTTPS image URLs only.</small></label>
-          @if (settings()?.theme?.profileImageUrl) { <div class="profile-image-preview"><img [src]="settings()?.theme?.profileImageUrl" alt="Business profile image preview" loading="lazy"><span>Current profile picture</span></div> }
+          <div class="profile-upload-field">
+            <label>Profile picture <span class="hint">Upload your logo or a clear photo</span><input type="file" accept="image/png,image/jpeg,image/webp" (change)="uploadProfilePicture($event)" [disabled]="uploadingProfilePicture()"><small>PNG, JPG or WebP. The image is optimized automatically.</small></label>
+            @if (profilePicturePreview() || settings()?.theme?.profileImageUrl) { <div class="profile-image-preview"><img [src]="profilePicturePreview() || settings()?.theme?.profileImageUrl" alt="Business profile picture preview" loading="lazy"><span>{{ uploadingProfilePicture() ? 'Uploading picture…' : 'Profile picture' }}</span></div> }
+            @if (profileUploadError()) { <p class="settings-error" role="alert">{{profileUploadError()}}</p> }
+          </div>
           <label>Business name<input name="storeName" required maxlength="180" [value]="settings()?.name || ''" placeholder="Business or branch name"></label>
           <label>Business type<select name="businessType" [value]="settings()?.businessType || 'general'"><option value="retail">Retail</option><option value="restaurant">Restaurant</option><option value="cafe">Café</option><option value="freelancer">Freelancer</option><option value="services">Services</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>
           <label>Business status<select name="storeStatus" [value]="settings()?.status || 'setup'"><option value="setup">Setup — not operational</option><option value="active">Active — operational</option><option value="paused">Paused — temporarily unavailable</option><option value="archived">Archived — retired location</option></select><small>Paused and archived stores are not available on public storefront routes.</small></label>
-          <label>Default currency<input name="currency" required minlength="3" maxlength="3" pattern="[A-Za-z]{3}" [value]="settings()?.defaultCurrency || 'MAD'" placeholder="MAD"><small>Three-letter ISO currency code, such as MAD, EUR or USD.</small></label>
+          <label>Currency<select name="currency" required [value]="settings()?.defaultCurrency || 'MAD'"><option value="MAD">MAD — Moroccan dirham</option><option value="EUR">EUR — Euro</option><option value="USD">USD — US dollar</option><option value="GBP">GBP — British pound</option><option value="CAD">CAD — Canadian dollar</option><option value="AUD">AUD — Australian dollar</option><option value="AED">AED — UAE dirham</option><option value="SAR">SAR — Saudi riyal</option><option value="CHF">CHF — Swiss franc</option><option value="JPY">JPY — Japanese yen</option><option value="CNY">CNY — Chinese yuan</option><option value="XOF">XOF — West African CFA franc</option><option value="TND">TND — Tunisian dinar</option><option value="DZD">DZD — Algerian dinar</option><option value="EGP">EGP — Egyptian pound</option><option value="INR">INR — Indian rupee</option><option value="BRL">BRL — Brazilian real</option><option value="ZAR">ZAR — South African rand</option><option value="TRY">TRY — Turkish lira</option><option value="SEK">SEK — Swedish krona</option><option value="NOK">NOK — Norwegian krone</option><option value="DKK">DKK — Danish krone</option><option value="PLN">PLN — Polish złoty</option><option value="MXN">MXN — Mexican peso</option><option value="SGD">SGD — Singapore dollar</option><option value="NZD">NZD — New Zealand dollar</option></select></label>
           <label>Interface language<select name="locale" [value]="settings()?.locale || 'en'"><option value="en">English</option><option value="fr">Français</option><option value="ar">العربية</option></select></label>
-          <label>Time zone<input name="timeZone" required maxlength="100" [value]="settings()?.timeZone || 'Africa/Casablanca'" placeholder="Africa/Casablanca"><small>Use an IANA time zone identifier.</small></label>
         </div>
       </section>
       <section class="settings-card">
         <div class="card-heading"><span class="step">01</span><div><h3>Public address</h3><p>Business names can be shared by different owners. The username plus location keeps each public page distinct.</p></div></div>
         <div class="fields two-col">
           <label>Store username <span class="hint">Unique business identity</span><input name="publicHandle" required minlength="2" maxlength="60" pattern="[a-z0-9]+([_-][a-z0-9]+)*" [value]="settings()?.publicHandle || ''" autocomplete="off"><small>Example: <strong>kfcLLCC</strong> becomes <strong>kfcllcc</strong>. Use lowercase letters, numbers, hyphens or underscores.</small></label>
-          <label>Location address <span class="hint">One per branch</span><input name="locationSlug" required maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" [value]="settings()?.locationSlug || settings()?.slug || ''" autocomplete="off"><small>Example: <strong>kfc-casablanca-maarif</strong></small></label>
+          <input type="hidden" name="locationSlug" [value]="settings()?.locationSlug || settings()?.slug || ''"><input type="hidden" name="publicHandle" [value]="settings()?.publicHandle || ''"><p class="automatic-url-note">Your public address is created automatically from your business and location name. You don’t need to manage a slug.</p>
         </div>
         <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-username'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
       </section>
@@ -34,7 +36,16 @@
           <label>Country code<input name="countryCode" minlength="2" maxlength="2" pattern="[A-Za-z]{2}" [value]="settings()?.countryCode || ''" placeholder="MA"><small>Two-letter ISO country code, for example MA or FR.</small></label>
           <label>Public phone<input name="phone" maxlength="40" [value]="settings()?.phone || ''" placeholder="+212 …"></label>
           <label>Website URL<input name="websiteUrl" type="url" maxlength="500" [value]="settings()?.websiteUrl || ''" placeholder="https://example.com"></label>
-          <label>Google Maps link<input name="googleMapsUrl" type="url" maxlength="1000" [value]="settings()?.googleMapsUrl || ''" placeholder="https://maps.google.com/…"></label>
+          <label>WhatsApp number<input name="whatsappNumber" inputmode="tel" maxlength="40" [value]="settings()?.whatsappNumber || settings()?.phone || ''" placeholder="+212 6 00 00 00 00"><small>Include your country code. Customers can message this number directly.</small></label>
+          <input type="hidden" name="googleMapsUrl" [value]="mapUrl() || settings()?.googleMapsUrl || ''">
+          <input type="hidden" name="latitude" [value]="mapLatitude() ?? settings()?.latitude ?? ''">
+          <input type="hidden" name="longitude" [value]="mapLongitude() ?? settings()?.longitude ?? ''">
+        </div>
+        <div class="map-picker">
+          <div class="map-picker-heading"><div><h4>Pin your business on the map</h4><p>Search your address and select the matching place to show customers where to find you.</p></div><button class="secondary-save" type="button" (click)="findMapLocation($event)" [disabled]="mapSearching()">{{mapSearching() ? 'Searching…' : 'Find on map'}}</button></div>
+          @if (mapError()) { <p class="settings-error" role="alert">{{mapError()}}</p> }
+          @if (mapResults().length) { <div class="map-results" role="listbox" aria-label="Map search results">@for (place of mapResults(); track place.place_id) { <button type="button" class="map-result" (click)="chooseMapLocation(place)"><span class="material-icons">location_on</span><span>{{place.display_name}}</span></button> }</div> }
+          @if (mapLatitude() !== null && mapLongitude() !== null) { <iframe class="location-map" title="Selected business location map" [src]="mapEmbedUrl()" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><p class="map-selected"><span class="material-icons">check_circle</span> Location selected <a [href]="mapUrl()" target="_blank" rel="noopener">Open map</a></p> }
         </div>
       </section>
       <section class="settings-card">
@@ -56,7 +67,7 @@
         <div class="create-location-form">
           <div class="fields two-col">
             <label>New location name<input name="newLocationName" maxlength="180" placeholder="Downtown branch"></label>
-            <label>New location URL slug<input name="newLocationSlug" maxlength="180" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="kfc-casablanca-maarif"><small>URL preview: /{{settings()?.publicHandle}}/your-location-slug</small></label>
+            <p class="automatic-url-note">The public address for this location will be generated from its name and city.</p>
             <label>City<input name="newCity" maxlength="120" placeholder="Casablanca"></label>
             <label>Country code<input name="newCountryCode" maxlength="2" pattern="[A-Za-z]{2}" placeholder="MA"></label>
             <label>Street address<input name="newAddressLine" maxlength="300" placeholder="Street, number, district"></label>
@@ -66,11 +77,7 @@
         </div>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">05</span><div><h3>Search engine details</h3><p>These fields help customers understand the page before they visit it from search results.</p></div></div>
-        <div class="fields"><label>Store description <span class="hint">Shown on your public store page · up to 5,000 characters</span><textarea name="storeDescription" rows="4" maxlength="5000" [value]="settings()?.description || ''" placeholder="Tell customers what makes this location special, what you offer, and what they should know before visiting."></textarea></label><label>SEO title <span class="hint">Optional · up to 180 characters</span><input name="seoTitle" maxlength="180" [value]="settings()?.seoTitle || ''" placeholder="KFC Maarif — Menu, opening details and location"></label><label>Search description <span class="hint">Optional · up to 320 characters</span><textarea name="seoDescription" rows="3" maxlength="320" [value]="settings()?.seoDescription || ''" placeholder="Discover this location's menu, prices and customer information."></textarea></label></div>
-      </section>
-      <section class="settings-card">
-        <div class="card-heading"><span class="step">06</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
+        <div class="card-heading"><span class="step">05</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
         <div class="experience-options">
           <label><input type="checkbox" name="experiences" value="catalog" [checked]="enabled('catalog')"> <span><strong>Products and categories</strong><small>Public product catalog with categories and prices.</small></span></label>
           <label><input type="checkbox" name="experiences" value="commerce" [checked]="enabled('commerce')"> <span><strong>Shop</strong><small>Commerce-oriented product browsing.</small></span></label>
@@ -80,7 +87,7 @@
         <label class="default-experience">Main button on your store page<select name="defaultExperience" [value]="settings()?.defaultExperience || 'catalog'"><option value="catalog">Browse products</option><option value="commerce">Shop products</option><option value="menu">See menu</option><option value="services">Explore services</option></select></label>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">07</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
+        <div class="card-heading"><span class="step">06</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
         <div class="fields two-col"><label>Network name (SSID)<input name="wifiSsid" maxlength="120" [value]="settings()?.wifiSsid || ''" placeholder="Cafe Guest Wi-Fi"></label><label>Network password<input name="wifiPassword" type="password" maxlength="120" [value]="settings()?.wifiPassword || ''" placeholder="Guest network password" autocomplete="new-password"></label><label>Security<select name="wifiSecurity" [value]="settings()?.wifiSecurity || 'WPA2'"><option value="none">Open network (no password)</option><option value="WPA">WPA</option><option value="WPA2">WPA2</option><option value="WPA3">WPA3</option><option value="WEP">WEP</option></select></label></div>
         <p class="privacy-note">Wi-Fi details are public to anyone who can access your published menu. Use a guest network, not your private business network.</p>
       </section>
