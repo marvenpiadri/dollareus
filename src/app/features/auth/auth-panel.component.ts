@@ -1,4 +1,5 @@
 import { Component, output, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
@@ -23,14 +24,15 @@ export class AuthPanelComponent {
   private usernameDebounce: ReturnType<typeof setTimeout> | undefined;
   protected readonly providers = signal({ google: false, facebook: false, emailFlows: false });
 
-  constructor(private readonly apiClient: ApiClientService) {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const action = params.get('auth');
-      if (action === 'verify-email') this.mode.set('verify');
-      else if (action === 'reset-password') this.mode.set('reset');
-      else if (window.location.pathname === '/signup' || params.get('mode') === 'register') this.mode.set('register');
-    }
+  constructor(private readonly apiClient: ApiClientService, private readonly router: Router) {
+    // Read the Angular route rather than window.location so SSR and browser
+    // hydration agree on the initial auth mode for /signup and auth deep links.
+    const [path, query = ''] = this.router.url.split('?', 2);
+    const params = new URLSearchParams(query);
+    const action = params.get('auth');
+    if (action === 'verify-email') this.mode.set('verify');
+    else if (action === 'reset-password') this.mode.set('reset');
+    else if (path === '/signup' || params.get('mode') === 'register') this.mode.set('register');
     void this.loadProviders();
   }
 
