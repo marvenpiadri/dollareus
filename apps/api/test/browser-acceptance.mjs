@@ -129,7 +129,7 @@ try {
   await receipt.close();
 
   await page.getByRole('button', { name: /Inventory/ }).click();
-  await page.getByRole('heading', { name: 'Inventory' }).waitFor();
+  await page.getByRole('heading', { name: 'Inventory', exact: true, level: 1 }).waitFor();
 
   // Publish the restaurant menu through the authenticated storefront API and
   // verify the customer-facing menu route renders the saved dish.
