@@ -287,6 +287,14 @@
             <input maxlength="160" [value]="shipmentTrackingNumber()" (input)="shipmentTrackingNumber.set($any($event.target).value)" placeholder="Tracking number">
           </label>
           <label class="form-field">
+            <span>Tracking link <span class="muted text-xs">Optional</span></span>
+            <input type="url" maxlength="2000" [value]="shipmentTrackingUrl()" (input)="shipmentTrackingUrl.set($any($event.target).value)" placeholder="https://courier.example/track/…">
+          </label>
+          <label class="form-field">
+            <span>Delivery notes <span class="muted text-xs">Optional</span></span>
+            <input maxlength="2000" [value]="shipmentNotes()" (input)="shipmentNotes.set($any($event.target).value)" placeholder="Drop-off instructions or delivery update">
+          </label>
+          <label class="form-field">
             <span>Expected date</span>
             <input type="date" [value]="shipmentEstimatedDate()" (input)="shipmentEstimatedDate.set($any($event.target).value)">
           </label>
