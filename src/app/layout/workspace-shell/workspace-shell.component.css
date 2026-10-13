@@ -163,3 +163,22 @@ html[data-theme="dark"] .nav-item.active:before{background:var(--color-status-pa
 .skip-link:focus{transform:translateY(0)}
 .main:focus{outline:none}
 @media(prefers-reduced-motion:reduce){.sidebar,.main,.skip-link{transition:none!important}}
+
+/* Keep product search discoverable and usable at tablet and phone widths. */
+@media(max-width:1100px) and (min-width:821px){
+  .top-actions .global-search{display:flex;width:min(27vw,220px);min-width:155px}
+  .global-search input{display:block}
+  .global-search kbd{display:none}
+}
+@media(max-width:820px){
+  .top-actions .global-search{display:flex;width:clamp(104px,34vw,180px);height:38px;min-width:0;padding:0 9px;border:1px solid var(--color-border);border-radius:9px;background:var(--color-canvas)}
+  .global-search input{display:block;min-width:0;width:100%;font-size:13px}
+  .global-search input::placeholder{opacity:1}
+  .global-search kbd{display:none}
+}
+@media(max-width:380px){
+  .breadcrumbs{gap:6px;font-size:12px}
+  .topbar-left{gap:6px}
+  .top-actions{gap:5px}
+  .top-actions .global-search{width:104px}
+}
