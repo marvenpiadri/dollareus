@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
 
 type WorkspaceNavItem = 'Overview' | 'Orders' | 'POS' | 'Products' | 'Menus' | 'QR Studio' | 'Customers' | 'Inventory' | 'API & channels' | 'Integrations' | 'Settings';
 
@@ -26,4 +26,23 @@ export class WorkspaceShellComponent {
   readonly signOutRequested = output<void>();
   readonly searchChangeRequested = output<string>();
   readonly dismissToastRequested = output<void>();
+  readonly addStoreRequested = output<void>();
+  readonly dark = signal(false);
+
+  constructor() {
+    if (typeof document !== 'undefined') this.dark.set(document.documentElement.dataset['theme'] === 'dark');
+  }
+
+  toggleTheme(): void {
+    this.dark.update(value => !value);
+    const theme = this.dark() ? 'dark' : 'light';
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset['theme'] = theme;
+      document.documentElement.classList.toggle('theme-dark', this.dark());
+      document.documentElement.classList.toggle('theme-light', !this.dark());
+      document.body?.classList.toggle('theme-dark', this.dark());
+      document.body?.classList.toggle('theme-light', !this.dark());
+    }
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('dollareus:theme', theme); } catch { /* Theme remains active for this session. */ }
+  }
 }
