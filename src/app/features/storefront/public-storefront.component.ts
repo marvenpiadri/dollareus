@@ -24,6 +24,22 @@ export class PublicStorefrontComponent {
   protected readonly reviewMessage = signal('');
   protected readonly reviewError = signal('');
   protected readonly appointmentService = signal('');
+  protected businessHours(): Array<{ key: string; label: string; open: string; close: string }> {
+    const hours = this.store()?.theme?.businessHours;
+    if (!hours || typeof hours !== 'object') return [];
+    return [
+      { key: 'monday', label: 'Monday' }, { key: 'tuesday', label: 'Tuesday' },
+      { key: 'wednesday', label: 'Wednesday' }, { key: 'thursday', label: 'Thursday' },
+      { key: 'friday', label: 'Friday' }, { key: 'saturday', label: 'Saturday' },
+      { key: 'sunday', label: 'Sunday' }
+    ].filter(day => {
+      const entry = hours[day.key];
+      return entry && (entry.closed === true || (typeof entry.open === 'string' && typeof entry.close === 'string' && entry.open && entry.close));
+    }).map(day => {
+      const entry = hours[day.key];
+      return { ...day, open: entry.closed === true ? '' : String(entry.open), close: entry.closed === true ? '' : String(entry.close) };
+    });
+  }
   protected readonly appointmentDate = signal('');
   protected readonly appointmentTime = signal('');
   protected readonly appointmentNote = signal('');
@@ -181,6 +197,19 @@ export class PublicStorefrontComponent {
         }
       } : {})
     };
+    const hours = store?.theme?.businessHours;
+    if (hours && typeof hours === 'object') {
+      const schemaDays: Record<string, string> = {
+        monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday', thursday: 'Thursday',
+        friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday'
+      };
+      const openingHoursSpecification = Object.entries(schemaDays).flatMap(([key, dayOfWeek]) => {
+        const entry = hours[key];
+        if (!entry || entry.closed === true || typeof entry.open !== 'string' || typeof entry.close !== 'string' || !entry.open || !entry.close) return [];
+        return [{ '@type': 'OpeningHoursSpecification', dayOfWeek: 'https://schema.org/' + dayOfWeek, opens: entry.open, closes: entry.close }];
+      });
+      if (openingHoursSpecification.length) data['openingHoursSpecification'] = openingHoursSpecification;
+    }
     if ((store?.enabledExperiences ?? []).includes('menu')) data['hasMenu'] = '/' + handle + '/' + location + '/menu';
     const existing = this.document.getElementById('dollareus-store-jsonld');
     existing?.parentNode?.removeChild(existing);
