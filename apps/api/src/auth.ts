@@ -39,8 +39,12 @@ function cookieValue(request: FastifyRequest, name: string): string | null {
 }
 
 function setSessionCookie(reply: FastifyReply, token: string, maxAgeSeconds: number): void {
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
-  const cookie = `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure}`;
+  const production = process.env.NODE_ENV === 'production';
+  // The Angular frontend and API may be hosted on different sites. Cross-site
+  // fetch() calls with credentials require SameSite=None; Secure in production.
+  // Keep Lax for local development where HTTPS is not guaranteed.
+  const cookiePolicy = production ? '; SameSite=None; Secure' : '; SameSite=Lax';
+  const cookie = `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly${cookiePolicy}; Max-Age=${maxAgeSeconds}`;
   const existing = reply.getHeader('Set-Cookie');
   if (Array.isArray(existing)) reply.header('Set-Cookie', [...existing.map(String), cookie]);
   else if (typeof existing === 'string') reply.header('Set-Cookie', [existing, cookie]);
