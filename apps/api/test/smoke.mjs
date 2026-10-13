@@ -42,7 +42,7 @@ try {
   const signupPassword = 'Dollareus-Smoke-2026!';
   const signup = await request('/api/v1/auth/register', 201, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: signupEmail, password: signupPassword, displayName: 'Signup Smoke Test' })
+    body: JSON.stringify({ email: signupEmail, password: signupPassword, displayName: 'Signup Smoke Test', username: `signup-${suffix}` })
   });
   signupUserId = signup.payload?.data?.id;
   if (!signupUserId || signup.payload?.data?.email !== signupEmail || !signup.response.headers.get('set-cookie')?.includes('dollareus_session=')) {
@@ -76,8 +76,8 @@ try {
 
   const now = new Date();
   await pool.query(
-    'INSERT INTO users (id,email,email_verified_at,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)',
-    [userId, `smoke-${suffix}@example.test`, now, 'CI Smoke Test', 'active', now]
+    'INSERT INTO users (id,username,email,email_verified_at,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)',
+    [userId, `smoke-${suffix}`, `smoke-${suffix}@example.test`, now, 'CI Smoke Test', 'active', now]
   );
   await pool.query(
     'INSERT INTO auth_sessions (id,user_id,token_hash,created_at,last_seen_at,expires_at) VALUES ($1,$2,$3,$4,$4,$5)',
@@ -131,8 +131,8 @@ try {
   viewerToken = randomUUID() + randomUUID();
   const viewerNow = new Date();
   await pool.query(
-    'INSERT INTO users (id,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)',
-    [viewerUserId, `viewer-${suffix}@example.test`, 'CI Viewer', 'active', viewerNow]
+    'INSERT INTO users (id,username,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)',
+    [viewerUserId, `viewer-${suffix}`, `viewer-${suffix}@example.test`, 'CI Viewer', 'active', viewerNow]
   );
   await pool.query(
     'INSERT INTO auth_sessions (id,user_id,token_hash,created_at,last_seen_at,expires_at) VALUES ($1,$2,$3,$4,$4,$5)',
