@@ -45,7 +45,11 @@
             </span>
           </label>
         }
-        <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@company.com" required></label>
+        @if (mode() === 'login') {
+          <label>Email or username<input name="email" type="text" autocomplete="username" maxlength="254" placeholder="you@example.com or username" required></label>
+        } @else {
+          <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@company.com" required></label>
+        }
         @if (mode() !== 'forgot') { <label>Password<input name="password" type="password" [attr.autocomplete]="mode() === 'register' ? 'new-password' : 'current-password'" [attr.minlength]="mode() === 'register' ? 12 : null" maxlength="256" required></label> }
         @if (mode() === 'login' && providers().emailFlows) { <button class="auth-forgot" type="button" (click)="setMode('forgot')">Forgot password?</button> }
         <button class="auth-submit" type="submit" [disabled]="busy()">{{ busy() ? 'Please wait…' : mode() === 'register' ? 'Create account' : mode() === 'forgot' ? 'Send reset link' : 'Sign in' }}</button>
