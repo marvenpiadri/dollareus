@@ -141,6 +141,14 @@ export class PublicStorefrontComponent {
     return image.startsWith('/') ? this.api.url(image) : image;
   }
 
+  protected googleMapsLink(): string {
+    const store = this.store();
+    if (store?.googleMapsUrl) return String(store.googleMapsUrl);
+    if (store?.latitude !== null && store?.latitude !== undefined && store?.longitude !== null && store?.longitude !== undefined) return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(store.latitude + ',' + store.longitude);
+    const address = [store?.addressLine, store?.city, store?.countryCode].filter((part) => typeof part === 'string' && part.trim()).join(', ');
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address || String(store?.name ?? ''));
+  }
+
   protected mapEmbedUrl(): SafeResourceUrl | null {
     const store = this.store();
     const address = [store?.addressLine, store?.city, store?.countryCode].filter((part) => typeof part === 'string' && part.trim()).join(', ');
