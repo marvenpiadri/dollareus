@@ -22,16 +22,12 @@ export const routes: Routes = [
   { path: 'qr/scan', component: QrScannerView, title: 'QR Scanner | Dollareus' },
   { path: 'login', component: AuthPageComponent },
   { path: 'signup', component: AuthPageComponent },
-  { path: 'menu', component: PublicMenuComponent },
   { path: ':storeHandle/:locationSlug/menu', component: PublicMenuComponent },
   { path: ':storeHandle/:locationSlug/products/category/:categorySlug', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/products/:productSlug', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/catalog', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/products', component: PublicCatalogComponent },
   { path: ':storeHandle/:locationSlug/services', component: PublicStorefrontComponent },
-  // Keep the one-segment store menu route ahead of the generic two-segment
-  // storefront route, otherwise /:storeSlug/menu is misread as handle/location.
-  { path: ':storeSlug/menu', component: PublicMenuComponent },
   { path: ':storeHandle/:locationSlug', component: PublicStorefrontComponent },
   { path: 'app', component: WorkspaceComponent },
   { path: '**', redirectTo: '' }
