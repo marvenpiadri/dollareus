@@ -24,3 +24,30 @@
 .panel-heading{padding:14px 12px}
 .product-actions{width:100%}
 @media(max-width:900px){.table-wrap{overflow-x:auto}.customer-form{align-items:stretch}}
+
+/* QR Studio uses the same surfaces and controls as the rest of the CRM. */
+:host{display:block;min-width:0;color:var(--color-text-main)}
+.panel,.metric{background:var(--color-surface);color:var(--color-text-main);border-color:var(--color-border);box-shadow:var(--shadow-sm);border-radius:var(--radius-lg)}
+.panel-heading{background:var(--color-surface)}
+.panel-heading h2{color:var(--color-text-main);letter-spacing:-.2px}
+.panel-heading p,.muted{color:var(--color-text-secondary)}
+.customer-form{border-color:var(--color-border)}
+.customer-form label{color:var(--color-text-secondary)}
+.customer-form input:not([type=color]),.customer-form select,.customer-form textarea{background:var(--color-input-bg);color:var(--color-input-text);border-color:var(--color-input-border);border-radius:var(--radius-md)}
+.customer-form input[type=color]{width:100%;min-height:42px;padding:4px;border:1px solid var(--color-input-border);border-radius:var(--radius-md);background:var(--color-input-bg)}
+.button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 13px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-main);font-size:13px;font-weight:650;text-decoration:none;transition:background var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast)}
+.button:hover:not(:disabled){border-color:var(--color-border-dark);background:var(--color-surface-hover)}
+.button.primary{border-color:var(--color-money-green);background:var(--color-money-green);color:#fff}
+.button.primary:hover:not(:disabled){background:var(--color-money-green-dark)}
+.button.secondary{background:var(--color-surface);color:var(--color-text-main)}
+.button:disabled{opacity:.55;cursor:not-allowed}
+.table-wrap table{width:100%;border-collapse:separate;border-spacing:0;color:var(--color-text-main);font-size:13px}
+.table-wrap th{padding:12px 14px;background:var(--color-surface-subtle);color:var(--color-text-secondary);font-size:10px;font-weight:800;letter-spacing:.65px;text-align:left}
+.table-wrap td{padding:13px 14px;border-top:1px solid var(--color-border);background:var(--color-surface);vertical-align:middle}
+.table-wrap tr:hover td{background:var(--color-surface-subtle)}
+.table-wrap .empty-state{padding:28px 16px;color:var(--color-text-secondary);text-align:center}
+.status-pill{display:inline-flex;align-items:center;min-height:24px;padding:2px 9px;border:1px solid var(--color-border);border-radius:var(--radius-full);background:var(--color-surface-subtle);color:var(--color-text-secondary);font-size:11px;font-weight:700}
+.product-actions{display:flex;flex-wrap:wrap;gap:7px}
+.panel-heading>a{color:var(--color-money-green);font-size:12px;font-weight:700;text-decoration:none}
+.panel-heading>a:hover{text-decoration:underline}
+@media(max-width:680px){.customer-form{display:grid;grid-template-columns:1fr;align-items:stretch}.customer-form label{min-width:0}.product-actions{min-width:180px}.panel-heading{align-items:flex-start;flex-wrap:wrap}}
