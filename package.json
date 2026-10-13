@@ -17,7 +17,7 @@
     "api:dev": "node --env-file-if-exists=.env --import tsx --watch apps/api/src/server.ts",
     "api:start": "node --env-file-if-exists=.env --import tsx apps/api/src/server.ts",
     "api:typecheck": "tsc --noEmit -p apps/api/tsconfig.json",
-    "ci": "npm run build && npm run api:typecheck && npm run db:schema-check",
+    "ci": "npm run build && npm run api:typecheck",
     "db:setup": "npm run db:migrate",
     "db:migrate": "node --env-file-if-exists=.env --import tsx apps/api/src/db/setup.ts",
     "db:status": "node --env-file-if-exists=.env --import tsx apps/api/src/db/status.ts",

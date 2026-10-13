@@ -5,13 +5,15 @@ const connectionString = process.env.DATABASE_URL;
 const sqlHost = process.env.SQL_HOST;
 const sqlUser = process.env.SQL_USER;
 const sqlDatabase = process.env.SQL_DB_NAME;
+const sqlPort = Number.parseInt(process.env.SQL_PORT ?? '5432', 10);
+const sqlSsl = process.env.SQL_SSL === 'true' ? { rejectUnauthorized: process.env.SQL_SSL_REJECT_UNAUTHORIZED !== 'false' } : undefined;
 const hasDatabaseConfig = Boolean(connectionString || (sqlHost && sqlUser && sqlDatabase));
 const databaseConfigurationError = new Error('Database configuration is required. Set DATABASE_URL or SQL_HOST, SQL_USER, SQL_DB_NAME and SQL_PASSWORD. Dollareus does not use a fake database.');
 const poolOptions = {
   max: Number.parseInt(process.env.DATABASE_POOL_MAX ?? '5', 10),
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 10_000,
-  ...(connectionString ? { connectionString, ...(connectionString.includes('sslmode=require') ? { ssl: { rejectUnauthorized: true } } : {}) } : { host: sqlHost, user: sqlUser, password: process.env.SQL_PASSWORD, database: sqlDatabase, connectionTimeoutMillis: 15_000 })
+  ...(connectionString ? { connectionString, ...(connectionString.includes('sslmode=require') ? { ssl: { rejectUnauthorized: true } } : {}) } : { host: sqlHost, port: sqlPort, user: sqlUser, password: process.env.SQL_PASSWORD, database: sqlDatabase, connectionTimeoutMillis: 15_000, ...(sqlSsl ? { ssl: sqlSsl } : {}) })
 };
 const unavailablePool = {
   query: async () => { throw databaseConfigurationError; },
