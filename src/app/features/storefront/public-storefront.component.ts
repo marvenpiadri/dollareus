@@ -168,7 +168,11 @@ export class PublicStorefrontComponent {
     try {
       const store = await this.api.request('/api/v1/public/storefronts/' + encodeURIComponent(handle) + '/' + encodeURIComponent(location));
       this.store.set(store);
+      await this.loadReviews(handle, location);
       this.updateStructuredData(store, handle, location);
+      if (this.initialReviewToken && new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('review') === 'verify') {
+        await this.verifyReviewToken(this.initialReviewToken, handle, location);
+      }
       const name = String(store?.name ?? 'Store');
       const locationName = String(store?.locationSlug ?? location).replace(/-/g, ' ');
       const title = String(store?.seoTitle ?? (name + ' in ' + locationName + ' | Dollareus')).slice(0, 180);
