@@ -209,9 +209,9 @@
   margin: 14px 0 0;
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  background: rgba(217, 119, 6, 0.1);
-  border: 1px solid rgba(217, 119, 6, 0.2);
-  color: #b45309;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   font-size: var(--text-xs);
   line-height: 1.6;
 }
@@ -441,3 +441,6 @@
 .map-selected .material-icons{font-size:17px}
 .map-selected a{margin-left:auto;color:var(--color-text-secondary)}
 @media(max-width:640px){.profile-upload-field{grid-template-columns:1fr}.map-picker-heading{align-items:flex-start;flex-direction:column}.business-hours-row{grid-template-columns:1fr 1fr}.business-hours-row>strong{grid-column:1/-1}.business-hours-row .closed-day{grid-column:1/-1}}
+
+.map-attribution{color:var(--color-text-muted);font-size:10px;line-height:1.5}
+.map-attribution a{color:var(--color-text-secondary)}
