@@ -74,7 +74,7 @@ try {
   await page.getByRole('heading', { name: 'Good morning, welcome back.' }).waitFor({ timeout: 15000 });
 
   // Real-browser restaurant path: create a menu and dish through merchant forms.
-  await page.getByRole('button', { name: 'Menus', exact: true }).click();
+  await page.getByRole('button', { name: /Menus/ }).click();
   await page.getByRole('heading', { name: 'Restaurant menus' }).waitFor();
   const menuForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Create menu/ }) });
   await menuForm.locator('input[name="name"]').fill(menuName);
@@ -91,7 +91,7 @@ try {
 
   // Open a restaurant register, create a server-priced order, and record a
   // manually received cash payment. No payment provider or card data is used.
-  await page.getByRole('button', { name: 'POS', exact: true }).click();
+  await page.getByRole('button', { name: /POS/ }).click();
   await page.getByRole('heading', { name: 'Point of sale' }).waitFor();
   const registerForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Open register/ }) });
   await registerForm.locator('input[name="label"]').fill(`Browser register ${suffix}`);
@@ -122,7 +122,7 @@ try {
   assert.match(await receipt.locator('body').innerText(), /Order #/);
   await receipt.close();
 
-  await page.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await page.getByRole('button', { name: /Inventory/ }).click();
   await page.getByRole('heading', { name: 'Inventory' }).waitFor();
 
   // Publish the restaurant menu through the authenticated storefront API and
