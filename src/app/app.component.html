@@ -1,1 +1,79 @@
-<router-outlet />
+<div class="site-frame" (click)="closeMenus()">
+  <header class="site-header" (click)="$event.stopPropagation()">
+    <a class="site-brand" routerLink="/" (click)="closeMenus()" aria-label="Dollareus home">
+      <span class="brand-symbol">d.</span>
+      <span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span>
+    </a>
+
+    <nav class="site-nav" aria-label="Main navigation">
+      <a class="site-nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="closeMenus()"><span class="material-icons">home</span>{{ t('home') }}</a>
+
+      <div class="site-nav-group">
+        <button class="site-nav-link dropdown-trigger" type="button" [class.active]="openMenu() === 'business'" [attr.aria-expanded]="openMenu() === 'business'" (click)="toggleMenu('business')">
+          <span class="material-icons">storefront</span>{{ t('business') }}<span class="material-icons arrow">expand_more</span>
+        </button>
+        @if (openMenu() === 'business') {
+          <div class="site-dropdown">
+            <p class="dropdown-heading">{{ t('platform') }}</p>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">space_dashboard</span><span><b>{{ t('overview') }}</b><small>Manage your business in one place</small></span></a>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">receipt_long</span><span><b>{{ t('orders') }}</b><small>Orders, fulfilment and payment status</small></span></a>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">point_of_sale</span><span><b>{{ t('pointOfSale') }}</b><small>Serve customers at the counter</small></span></a>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">inventory_2</span><span><b>{{ t('products') }} & {{ t('inventory') }}</b><small>Catalog, stock and variants</small></span></a>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">restaurant_menu</span><span><b>{{ t('menus') }}</b><small>Restaurant and café menus</small></span></a>
+          </div>
+        }
+      </div>
+
+      <div class="site-nav-group">
+        <button class="site-nav-link dropdown-trigger" type="button" [class.active]="openMenu() === 'tools'" [attr.aria-expanded]="openMenu() === 'tools'" (click)="toggleMenu('tools')">
+          <span class="material-icons">handyman</span>{{ t('tools') }}<span class="material-icons arrow">expand_more</span>
+        </button>
+        @if (openMenu() === 'tools') {
+          <div class="site-dropdown tools-dropdown">
+            <p class="dropdown-heading">{{ t('resources') }}</p>
+            <a routerLink="/qr" (click)="closeMenus()"><span class="material-icons">qr_code_2</span><span><b>{{ t('qrStudio') }}</b><small>Create branded QR codes</small></span></a>
+            <a routerLink="/qr/projects" (click)="closeMenus()"><span class="material-icons">folder_open</span><span><b>{{ t('savedProjects') }}</b><small>Continue a saved QR project</small></span></a>
+            <a routerLink="/qr/scan" (click)="closeMenus()"><span class="material-icons">qr_code_scanner</span><span><b>{{ t('scanner') }}</b><small>Read a QR code with your camera</small></span></a>
+          </div>
+        }
+      </div>
+
+      <div class="site-nav-group">
+        <button class="site-nav-link dropdown-trigger" type="button" [class.active]="openMenu() === 'settings'" [attr.aria-expanded]="openMenu() === 'settings'" (click)="toggleMenu('settings')">
+          <span class="material-icons">tune</span>{{ t('settings') }}<span class="material-icons arrow">expand_more</span>
+        </button>
+        @if (openMenu() === 'settings') {
+          <div class="site-dropdown settings-dropdown">
+            <p class="dropdown-heading">{{ t('appearance') }} & {{ t('language') }}</p>
+            <label class="preference-row"><span class="material-icons">translate</span><span>{{ t('language') }}</span><select [value]="language()" (change)="setLanguage($any($event.target).value)" aria-label="Interface language"><option value="EN">🇬🇧 English</option><option value="FR">🇫🇷 Français</option><option value="ES">🇪🇸 Español</option><option value="DE">🇩🇪 Deutsch</option></select></label>
+            <button class="preference-row" type="button" (click)="toggleTheme()"><span class="material-icons">{{ dark() ? 'light_mode' : 'dark_mode' }}</span><span>{{ t('appearance') }}</span><b>{{ dark() ? t('light') : t('dark') }}</b></button>
+            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">settings</span><span><b>{{ t('settings') }}</b><small>Store and workspace settings</small></span></a>
+          </div>
+        }
+      </div>
+    </nav>
+
+    <div class="header-actions">
+      <a class="workspace-link" routerLink="/app" (click)="closeMenus()"><span class="material-icons">dashboard</span>{{ t('workspace') }}</a>
+      <a class="signin-link" routerLink="/login" (click)="closeMenus()">{{ t('signIn') }} <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+
+  <div class="site-content" (click)="closeMenus()">
+    <router-outlet />
+  </div>
+
+  <footer class="site-footer" (click)="$event.stopPropagation()">
+    <div class="footer-main">
+      <div class="footer-brand-column">
+        <a class="footer-brand" routerLink="/"><span class="brand-symbol">d.</span><span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span></a>
+        <p>{{ t('footerTagline') }}</p>
+        <div class="footer-status"><i></i> Built for independent businesses</div>
+      </div>
+      <div class="footer-column"><h3>{{ t('platform') }}</h3><a routerLink="/app">{{ t('overview') }}</a><a routerLink="/app">{{ t('products') }} & {{ t('inventory') }}</a><a routerLink="/app">{{ t('orders') }}</a><a routerLink="/app">{{ t('pointOfSale') }}</a></div>
+      <div class="footer-column"><h3>{{ t('resources') }}</h3><a routerLink="/qr">{{ t('qrStudio') }}</a><a routerLink="/qr/projects">{{ t('savedProjects') }}</a><a routerLink="/qr/scan">{{ t('scanner') }}</a></div>
+      <div class="footer-column"><h3>{{ t('legal') }}</h3><a routerLink="/app">{{ t('settings') }}</a><button type="button" (click)="toggleTheme()">{{ t('appearance') }}: {{ dark() ? t('dark') : t('light') }}</button><label class="footer-language">{{ t('language') }}<select [value]="language()" (change)="setLanguage($any($event.target).value)" aria-label="Footer interface language"><option value="EN">🇬🇧 English</option><option value="FR">🇫🇷 Français</option><option value="ES">🇪🇸 Español</option><option value="DE">🇩🇪 Deutsch</option></select></label></div>
+    </div>
+    <div class="footer-bottom"><span>© 2026 Dollareus. {{ t('copyright') }}</span><span>One business. One connected workspace.</span></div>
+  </footer>
+</div>
