@@ -15,6 +15,24 @@
         <div class="hero-actions">
           <a class="primary-action" [routerLink]="primaryLink()">{{primaryLabel()}} <span aria-hidden="true">↗</span></a>
         </div>
+        @if (availableExperiences().includes('services') && store()?.phone) {
+          <section class="appointment-card" aria-labelledby="appointment-title">
+            <span class="eyebrow">BOOK A SERVICE</span>
+            <h2 id="appointment-title">Request an appointment</h2>
+            <p>Choose your preferred details. This opens WhatsApp so the business can confirm availability with you.</p>
+            <label>Service or reason for visit<input type="text" maxlength="180" [value]="appointmentService()" (input)="appointmentService.set($any($event.target).value)" placeholder="What would you like to book?"></label>
+            <div class="appointment-fields">
+              <label>Preferred date<input type="date" [value]="appointmentDate()" (input)="appointmentDate.set($any($event.target).value)"></label>
+              <label>Preferred time<input type="time" [value]="appointmentTime()" (input)="appointmentTime.set($any($event.target).value)"></label>
+            </div>
+            <label>Additional details (optional)<textarea rows="3" maxlength="1000" [value]="appointmentNote()" (input)="appointmentNote.set($any($event.target).value)" placeholder="Anything the business should know?"></textarea></label>
+            @if (appointmentWhatsAppUrl()) {
+              <a class="appointment-whatsapp" [href]="appointmentWhatsAppUrl()" target="_blank" rel="noopener noreferrer">Request via WhatsApp <span aria-hidden="true">↗</span></a>
+            } @else {
+              <p class="appointment-phone-note">This business needs a valid phone number with its international country code to accept WhatsApp requests.</p>
+            }
+          </section>
+        }
         <p class="location-note">Prices and availability are maintained by this business.</p>
       </div>
       <aside class="identity-card">
