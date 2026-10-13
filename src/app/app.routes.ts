@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { AuthPageComponent } from './features/auth/auth-page.component';
 import { PublicHomeComponent } from './features/public-home/public-home.component';
 import { QrStudioComponent } from './features/qr-studio/qr-studio.component';
+import { QrStudio } from './features/studio/qr-studio';
 import { PublicMenuComponent } from './features/restaurants/public-menu/public-menu.component';
 import { WorkspaceComponent } from './features/workspace/workspace.component';
 import { PublicStorefrontComponent } from './features/storefront/public-storefront.component';
@@ -9,7 +10,8 @@ import { PublicCatalogComponent } from './features/storefront/public-catalog.com
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: PublicHomeComponent },
-  { path: 'qr', component: QrStudioComponent },
+  { path: 'qr/basic', component: QrStudioComponent },
+  { path: 'qr', component: QrStudio },
   { path: 'login', component: AuthPageComponent },
   { path: 'signup', component: AuthPageComponent },
   { path: 'menu', component: PublicMenuComponent },
