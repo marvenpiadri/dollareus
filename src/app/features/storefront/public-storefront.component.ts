@@ -113,7 +113,7 @@ export class PublicStorefrontComponent {
 
   protected appointmentWhatsAppUrl(): string {
     const store = this.store();
-    const rawPhone = String(store?.phone ?? '').replace(/[^0-9+]/g, '');
+    const rawPhone = String(store?.whatsappNumber || store?.phone || '').replace(/[^0-9+]/g, '');
     let phone = rawPhone.replace(/^\+/, '').replace(/^00/, '');
     if (String(store?.countryCode ?? '').toUpperCase() === 'MA' && phone.startsWith('0')) phone = '212' + phone.slice(1);
     if (!/^\d{8,15}$/.test(phone)) return '';
@@ -128,9 +128,26 @@ export class PublicStorefrontComponent {
     return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
+  protected contactWhatsAppUrl(): string {
+    const store = this.store();
+    const rawPhone = String(store?.whatsappNumber || store?.phone || '').replace(/[^0-9+]/g, '');
+    let phone = rawPhone.replace(/^\\+/, '').replace(/^00/, '');
+    if (String(store?.countryCode ?? '').toUpperCase() === 'MA' && phone.startsWith('0')) phone = '212' + phone.slice(1);
+    return /^\\d{8,15}$/.test(phone) ? 'https://wa.me/' + phone : 'https://wa.me/';
+  }
+
+  protected profileImageSrc(): string {
+    const image = String(this.store()?.theme?.profileImageUrl ?? '');
+    return image.startsWith('/') ? this.api.url(image) : image;
+  }
+
   protected mapEmbedUrl(): SafeResourceUrl | null {
     const store = this.store();
     const address = [store?.addressLine, store?.city, store?.countryCode].filter((part) => typeof part === 'string' && part.trim()).join(', ');
+    if (store?.latitude !== null && store?.latitude !== undefined && store?.longitude !== null && store?.longitude !== undefined) {
+      const lat = Number(store.latitude), lon = Number(store.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) return this.sanitizer.bypassSecurityTrustResourceUrl('https://www.openstreetmap.org/export/embed.html?bbox=' + [lon - 0.008, lat - 0.005, lon + 0.008, lat + 0.005].join('%2C') + '&layer=mapnik&marker=' + lat + '%2C' + lon);
+    }
     if (!address) return null;
     const url = 'https://maps.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed';
     return this.sanitizer.bypassSecurityTrustResourceUrl(url);
@@ -243,7 +260,7 @@ export class PublicStorefrontComponent {
       this.meta.updateTag({ property: 'og:title', content: title });
       this.meta.updateTag({ property: 'og:description', content: description });
       this.meta.updateTag({ property: 'og:type', content: 'website' });
-      if (typeof store?.theme?.profileImageUrl === 'string' && store.theme.profileImageUrl.startsWith('https://')) this.meta.updateTag({ property: 'og:image', content: store.theme.profileImageUrl });
+      if (typeof store?.theme?.profileImageUrl === 'string') this.meta.updateTag({ property: 'og:image', content: this.profileImageSrc() });
       this.meta.updateTag({ name: 'robots', content: 'index,follow' });
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'This store could not be found.');
