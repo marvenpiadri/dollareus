@@ -1,8 +1,8 @@
 # Dollareus + Mageus product roadmap
 
-Last updated: 2026-10-11
+Last updated: 2026-10-13
 
-Latest verification: GitHub Actions CI passes on `5587b6d15fcf87181f0918a7dbb5cc14d5f63b77` (Angular build, API typecheck, and PostgreSQL API smoke suite). This validates the CI PostgreSQL service, not the user's live Neon database.
+Latest application verification: [GitHub Actions run 38463385654](https://github.com/marvenpiadri/dollareus/actions/runs/38463385654) passed on `ee72c1d`, including production build and restaurant browser acceptance. Live Neon and object storage were intentionally not tested. This is a development handoff, not a public-launch certification.
 
 ## Non-negotiable product boundaries
 
@@ -69,13 +69,12 @@ Add only when real use cases justify them:
 - Additional POS workflows, purchasing, stock transfers, and reporting.
 - X-Facture document generation and QR tools as authorized shared engines.
 
-## Definition of done before moving to Mageus
+## Dollareus handoff gate — met for starting Mageus, not for public launch
 
-1. pnpm ci passes in CI.
-2. Fresh Neon schema setup and API smoke tests pass without destructive database operations.
-3. Login, signup, sessions, and organization isolation are verified.
-4. Core merchant workflows are usable at desktop and mobile sizes with readable type and controls.
-5. Orders, offline payments, and shipment stages work end-to-end with audit history.
-6. API contracts and authorization boundaries are documented well enough for Mageus to integrate without direct database access.
+1. [x] The latest application CI passes, including production build and restaurant browser acceptance.
+2. [x] Core restaurant workflows exist: menu editing/publishing, public menu, POS tickets, manual payment recording, receipt printing, and inventory movement tracking.
+3. [x] API and product boundaries are documented: Dollareus owns business operations and operational records; Mageus must use authorized APIs, never direct database access.
+4. [x] Competitor benchmark has been translated into explicit UX priorities, with local Moroccan digital-menu products included.
+5. [x] Live database and storage checks remain explicitly deferred at the user's request; they are not represented as passed.
 
-Online payment gateways and a public marketplace are explicitly outside this completion gate.
+**Decision: begin Mageus now.** Do not wait for live Neon verification to start integration design. Keep public launch blocked until production identity, database/storage, security, domain/TLS, backup/recovery and any required payment/checkout capabilities are deliberately configured and verified. Online payment gateways, guest checkout and a public marketplace are not implied to be complete.
