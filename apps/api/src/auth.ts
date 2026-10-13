@@ -185,7 +185,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (reserved.has(username)) {
       return reply.send({ data: { username, available: false, reason: 'reserved' }, requestId: request.id });
     }
-    const existing = await pool.query('SELECT 1 FROM users WHERE username=$1 LIMIT 1', [username]);
+    const existing = await pool.query('SELECT 1 FROM users WHERE username=$1 UNION ALL SELECT 1 FROM organizations WHERE public_handle=$1 LIMIT 1', [username]);
     return { data: { username, available: existing.rowCount === 0, reason: existing.rowCount === 0 ? null : 'taken' }, requestId: request.id };
   });
 
@@ -489,7 +489,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         if (existing) {
           await client.query('UPDATE users SET email_verified_at=COALESCE(email_verified_at,$1),display_name=COALESCE(display_name,$2),avatar_url=COALESCE(avatar_url,$3),updated_at=$1 WHERE id=$4', [now, displayName, avatarUrl, userId]);
         } else {
-          await client.query('INSERT INTO users (id,email,email_verified_at,display_name,avatar_url,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)', [userId, email, emailVerified ? now : null, displayName, avatarUrl, 'active', now]);
+          const emailSeed = (email?.split('@')[0] ?? 'user').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+/, '').slice(0, 24);
+          let username = emailSeed.length >= 3 ? emailSeed : 'user-' + userId.replaceAll('-', '').slice(0, 8);
+          if (['admin','api','app','auth','billing','dollareus','help','login','mageus','null','root','signup','support','system','www'].includes(username)) username = 'user-' + username;
+          const usernameBase = username;
+          let usernameSuffix = 1;
+          while ((await client.query('SELECT 1 FROM users WHERE username=$1 LIMIT 1', [username])).rowCount) {
+            usernameSuffix += 1;
+            username = usernameBase.slice(0, 30 - String(usernameSuffix).length - 1) + '-' + usernameSuffix;
+          }
+          await client.query('INSERT INTO users (id,username,email,email_verified_at,display_name,avatar_url,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8)', [userId, username, email, emailVerified ? now : null, displayName, avatarUrl, 'active', now]);
         }
         await client.query('INSERT INTO auth_oauth_accounts (id,user_id,provider,provider_subject,provider_email,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [randomUUID(), userId, provider, subject, email, now]);
       }
