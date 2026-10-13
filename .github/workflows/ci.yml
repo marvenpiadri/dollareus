@@ -108,8 +108,6 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node "$RUNNER_TEMP/dollareus-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Run the restaurant workflow in a real Chromium browser
         env:
-          PLAYWRIGHT_MODULE_URL: file:///home/runner/work/_temp/dollareus-browser/node_modules/playwright/index.mjs
-          PLAYWRIGHT_BROWSERS_PATH: /home/runner/work/_temp/dollareus-browsers
           DOLLAREUS_BROWSER_URL: http://127.0.0.1:4000
           DOLLAREUS_API_URL: http://127.0.0.1:3000
         run: |
@@ -118,4 +116,4 @@ jobs:
           pnpm serve:ssr > /tmp/dollareus-browser-ssr.log 2>&1 &
           ssr_pid=$!
           trap 'kill "$api_pid" "$ssr_pid" 2>/dev/null || true' EXIT
-          node apps/api/test/browser-acceptance.mjs
+          PLAYWRIGHT_MODULE_URL="file://$RUNNER_TEMP/dollareus-browser/node_modules/playwright/index.mjs" PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node apps/api/test/browser-acceptance.mjs
