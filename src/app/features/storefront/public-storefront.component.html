@@ -1,9 +1,9 @@
 <main class="store-page">
   <header class="topbar"><a class="brand" routerLink="/"><span class="brand-mark">d.</span><span>Dollareus</span></a><span class="topbar-note">Independent businesses, made discoverable</span></header>
   @if (loading()) {
-    <section class="state-panel"><span class="eyebrow">PUBLIC STOREFRONT</span><h1>Opening store…</h1><p>Loading the latest details and offerings.</p></section>
+    <section class="state-panel"><span class="eyebrow">PUBLIC STOREFRONT</span><h1>Opening business page…</h1><p>Loading the latest business details and offerings.</p></section>
   } @else if (error()) {
-    <section class="state-panel error-panel" role="alert"><span class="eyebrow">STOREFRONT UNAVAILABLE</span><h1>We couldn't find this store</h1><p>{{error()}}</p><a routerLink="/">Return to Dollareus</a></section>
+    <section class="state-panel error-panel" role="alert"><span class="eyebrow">BUSINESS PAGE UNAVAILABLE</span><h1>We couldn't find this business</h1><p>{{error()}}</p><a routerLink="/">Return to Dollareus</a></section>
   } @else {
     <section class="hero">
       <div class="hero-copy" id="contact">
@@ -36,13 +36,19 @@
         <p class="location-note">Prices and availability are maintained by this business.</p>
       </div>
       <aside class="identity-card">
-        <span class="card-label">OFFICIAL STORE PAGE</span>
+        <span class="card-label">OFFICIAL BUSINESS PAGE</span>
         <div class="identity-icon">{{initialLetter()}}</div>
         <h2>{{store()?.name}}</h2>
         <p>{{store()?.businessType || 'Business'}}</p>
         <span class="handle">@{{store()?.publicHandle}}</span>
       </aside>
     </section>
+    @if (mapEmbedUrl()) {
+      <section class="business-map-section" aria-labelledby="business-map-title">
+        <div><span class="eyebrow">FIND US</span><h2 id="business-map-title">Visit this business</h2><p>Check the address and open directions in Google Maps.</p></div>
+        <iframe [src]="mapEmbedUrl()" title="Business location on Google Maps" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      </section>
+    }
     <section class="offerings">
       <div class="section-heading"><div><span class="eyebrow">EXPLORE</span><h2>What would you like to see?</h2></div><p>Choose the experience this business has published.</p></div>
       <div class="offering-grid">
