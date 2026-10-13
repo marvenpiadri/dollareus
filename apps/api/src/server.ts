@@ -1881,7 +1881,7 @@ app.post<{ Params: { organizationId: string; orderId: string }; Body: unknown }>
       [paymentId, organizationId, orderId, 'manual', parsed.data.status, parsed.data.amountMinor, String(order.currency).trim(), parsed.data.idempotencyKey ?? null, JSON.stringify(payload), now]
     );
     const paidAfter = paidBefore + (parsed.data.status === 'succeeded' ? parsed.data.amountMinor : 0);
-    const nextPaymentStatus = paidAfter >= total ? 'paid' : 'unpaid';
+    const nextPaymentStatus = paidAfter >= total ? 'paid' : paidAfter > 0 ? 'partially_paid' : 'unpaid';
     await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [nextPaymentStatus, now, orderId, organizationId]);
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
@@ -1940,8 +1940,7 @@ app.patch<{ Params: { organizationId: string; orderId: string; paymentId: string
     const paid = await client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'", [orderId, organizationId]);
     const paidAmountMinor = Number(paid.rows[0]?.amount ?? 0);
     const paymentStatus = paidAmountMinor >= Number(orderResult.rows[0].total_minor) ? 'paid' : paidAmountMinor > 0 ? 'partially_paid' : 'unpaid';
-    const persistedPaymentStatus = paymentStatus === 'partially_paid' ? 'unpaid' : paymentStatus;
-    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [persistedPaymentStatus, now, orderId, organizationId]);
+    await client.query('UPDATE orders SET payment_status=$1,updated_at=$2 WHERE id=$3 AND organization_id=$4', [paymentStatus, now, orderId, organizationId]);
     await client.query(
       'INSERT INTO audit_events (id,organization_id,actor_user_id,action,resource_type,resource_id,request_id,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)',
       [randomUUID(), organizationId, request.identity!.uid, 'order.manual_payment_status_changed', 'payment', paymentId, request.id, JSON.stringify({ orderId, from: previous, to: next }), now]
