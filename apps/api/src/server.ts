@@ -246,7 +246,7 @@ const StoreInput = z.object({
   countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(), phone: z.string().trim().max(40).nullable().optional(),
   websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional(),
   whatsappNumber: z.string().trim().max(40).nullable().optional(), latitude: z.number().min(-90).max(90).nullable().optional(), longitude: z.number().min(-180).max(180).nullable().optional()
-}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.published || (typeof value.theme.profileImageUrl === 'string' && (value.theme.profileImageUrl.startsWith('https://') || value.theme.profileImageUrl.startsWith('/api/v1/public/storefronts/'))), { path: ['theme', 'profileImageUrl'], message: 'Upload a business profile picture before publishing.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
+}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.published || (typeof value.theme.profileImageUrl === 'string' && (value.theme.profileImageUrl.startsWith('https://') || value.theme.(profileImageUrl.startsWith('/api/v1/public/storefronts/') || profileImageUrl.startsWith('/api/v1/public/stores/')))), { path: ['theme', 'profileImageUrl'], message: 'Upload a business profile picture before publishing.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
   name: z.string().trim().min(1).max(180).optional(),
   businessType: z.enum(['retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general']).optional(),
@@ -732,17 +732,17 @@ app.post<{ Params: { organizationId: string; storeId: string }; Body: Buffer }>(
   const storageKey = 'organizations/' + organizationId + '/stores/' + storeId + '/profile/' + imageId + '.webp';
   const stored = await s3Request('PUT', storageKey, body);
   if (!stored.ok) { request.log.error({ status: stored.status }, 'Business profile picture upload failed'); return fail(reply, request, 502, 'PROFILE_IMAGE_STORAGE_FAILED', 'The profile picture could not be saved.'); }
-  const profileImageUrl = '/api/v1/public/storefronts/' + encodeURIComponent(String(store.rows[0].public_handle)) + '/' + encodeURIComponent(String(store.rows[0].location_slug)) + '/profile-picture';
+  const profileImageUrl = '/api/v1/public/stores/' + encodeURIComponent(storeId) + '/profile-picture';
   try {
     await pool.query("UPDATE store_frontends SET theme=COALESCE(theme,'{}'::jsonb) || jsonb_build_object('profileImageUrl',$1,'profileImageStorageKey',$2),updated_at=$3 WHERE store_id=$4 AND organization_id=$5", [profileImageUrl, storageKey, new Date(), storeId, organizationId]);
     return reply.code(201).send({ data: { profileImageUrl, storageKey }, requestId: request.id });
   } catch (error) { await s3Request('DELETE', storageKey).catch(() => undefined); throw error; }
 });
 
-app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug/profile-picture', async (request, reply) => {
+app.get<{ Params: { storeId: string } }>('/api/v1/public/stores/:storeId/profile-picture', async (request, reply) => {
   const result = await pool.query(
-    "SELECT f.theme->>'profileImageStorageKey' AS storage_key FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status='active' AND f.published=true LIMIT 1",
-    [request.params.storeHandle, request.params.locationSlug]
+    "SELECT f.theme->>'profileImageStorageKey' AS storage_key FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.status='active' AND f.published=true LIMIT 1",
+    [request.params.storeId]
   );
   const storageKey = result.rows[0]?.storage_key;
   if (!storageKey) return fail(reply, request, 404, 'PROFILE_IMAGE_NOT_FOUND', 'This business profile picture is not publicly available.');
@@ -767,7 +767,7 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   const row = current.rows[0];
   const candidateTheme = parsed.data.theme ?? row.theme ?? {};
   const profileImageUrl = typeof candidateTheme?.profileImageUrl === 'string' ? candidateTheme.profileImageUrl.trim() : '';
-  if ((parsed.data.published ?? row.published) === true && (!profileImageUrl || (!profileImageUrl.startsWith('/api/v1/public/storefronts/') && (() => { try { return new URL(profileImageUrl).protocol !== 'https:'; } catch { return true; } })()))) {
+  if ((parsed.data.published ?? row.published) === true && (!profileImageUrl || (!(profileImageUrl.startsWith('/api/v1/public/storefronts/') || profileImageUrl.startsWith('/api/v1/public/stores/')) && (() => { try { return new URL(profileImageUrl).protocol !== 'https:'; } catch { return true; } })()))) {
     return fail(reply, request, 400, 'BUSINESS_PROFILE_IMAGE_REQUIRED', 'Upload a business profile picture before publishing this business.');
   }
   const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
