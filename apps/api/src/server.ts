@@ -701,6 +701,46 @@ app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organiza
   return { data: camelize(result.rows), requestId: request.id };
 });
 
+
+app.post<{ Params: { organizationId: string; storeId: string }; Body: Buffer }>('/api/v1/organizations/:organizationId/stores/:storeId/profile-picture', { preHandler: authenticate, bodyLimit: IMAGE_UPLOAD_LIMIT }, async (request, reply) => {
+  const { organizationId, storeId } = request.params;
+  if (!await requireManagerRole(request, reply, organizationId)) return;
+  if (!Buffer.isBuffer(request.body) || request.body.length < 16 || request.body.length > IMAGE_UPLOAD_LIMIT) return fail(reply, request, 413, 'PROFILE_IMAGE_SIZE_INVALID', 'Upload an image no larger than 4 MB.');
+  const body = request.body;
+  if (body.toString('ascii', 0, 4) !== 'RIFF' || body.toString('ascii', 8, 12) !== 'WEBP') return fail(reply, request, 415, 'PROFILE_IMAGE_TYPE_INVALID', 'Choose a PNG, JPG or WebP image.');
+  const dimensions = readWebpDimensions(body);
+  if (!dimensions || dimensions.width > 2400 || dimensions.height > 2400) return fail(reply, request, 400, 'PROFILE_IMAGE_DIMENSIONS_INVALID', 'Images must be no larger than 2400 by 2400 pixels.');
+  if (!process.env.AWS_S3_BUCKET || !process.env.AWS_ENDPOINT_URL_S3 || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) return fail(reply, request, 503, 'MEDIA_STORAGE_NOT_CONFIGURED', 'Image storage is not configured on the server.');
+  const store = await pool.query('SELECT public_handle,location_slug FROM stores WHERE id=$1 AND organization_id=$2 LIMIT 1', [storeId, organizationId]);
+  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist.');
+  const imageId = randomUUID();
+  const storageKey = 'organizations/' + organizationId + '/stores/' + storeId + '/profile/' + imageId + '.webp';
+  const stored = await s3Request('PUT', storageKey, body);
+  if (!stored.ok) { request.log.error({ status: stored.status }, 'Business profile picture upload failed'); return fail(reply, request, 502, 'PROFILE_IMAGE_STORAGE_FAILED', 'The profile picture could not be saved.'); }
+  const profileImageUrl = '/api/v1/public/storefronts/' + encodeURIComponent(String(store.rows[0].public_handle)) + '/' + encodeURIComponent(String(store.rows[0].location_slug)) + '/profile-picture';
+  try {
+    await pool.query("UPDATE store_frontends SET theme=COALESCE(theme,'{}'::jsonb) || jsonb_build_object('profileImageUrl',$1,'profileImageStorageKey',$2),updated_at=$3 WHERE store_id=$4 AND organization_id=$5", [profileImageUrl, storageKey, new Date(), storeId, organizationId]);
+    return reply.code(201).send({ data: { profileImageUrl, storageKey }, requestId: request.id });
+  } catch (error) { await s3Request('DELETE', storageKey).catch(() => undefined); throw error; }
+});
+
+app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug/profile-picture', async (request, reply) => {
+  const result = await pool.query(
+    "SELECT f.theme->>'profileImageStorageKey' AS storage_key FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status='active' AND f.published=true LIMIT 1",
+    [request.params.storeHandle, request.params.locationSlug]
+  );
+  const storageKey = result.rows[0]?.storage_key;
+  if (!storageKey) return fail(reply, request, 404, 'PROFILE_IMAGE_NOT_FOUND', 'This business profile picture is not publicly available.');
+  const stored = await s3Request('GET', String(storageKey));
+  if (!stored.ok) return fail(reply, request, 502, 'PROFILE_IMAGE_STORAGE_FAILED', 'The business profile picture could not be loaded.');
+  const bytes = Buffer.from(await stored.arrayBuffer());
+  reply.header('Content-Type', 'image/webp');
+  reply.header('Content-Length', String(bytes.length));
+  reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+  reply.header('X-Content-Type-Options', 'nosniff');
+  return reply.send(bytes);
+});
+
 app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }>('/api/v1/organizations/:organizationId/stores/:storeId/storefront', { preHandler: authenticate }, async (request, reply) => {
   const { organizationId, storeId } = request.params;
   if (!await requireMembership(request, reply, organizationId)) return;
