@@ -38,7 +38,21 @@
         </div>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">03</span><div><h3>Add another location</h3><p>Keep one username for the business and give each branch its own location address. Each location can publish its own menu and product catalog.</p></div></div>
+        <div class="card-heading"><span class="step">03</span><div><h3>Working hours</h3><p>Set the normal weekly schedule for this business location. Leave a day blank if you do not have hours yet, or mark it closed.</p></div></div>
+        <div class="business-hours-editor">
+          @for (day of weekdays; track day.key) {
+            <div class="business-hours-row">
+              <strong>{{day.label}}</strong>
+              <label><span>Opens</span><input type="time" [name]="'hours-' + day.key + '-open'" [value]="settings()?.theme?.businessHours?.[day.key]?.open || ''"></label>
+              <label><span>Closes</span><input type="time" [name]="'hours-' + day.key + '-close'" [value]="settings()?.theme?.businessHours?.[day.key]?.close || ''"></label>
+              <label class="closed-day"><input type="checkbox" [name]="'hours-' + day.key + '-closed'" [checked]="settings()?.theme?.businessHours?.[day.key]?.closed === true"> Closed</label>
+            </div>
+          }
+        </div>
+        <p class="privacy-note">These are regular hours, not live availability. Appointment requests still go through WhatsApp, where the business confirms the booking.</p>
+      </section>
+      <section class="settings-card">
+        <div class="card-heading"><span class="step">04</span><div><h3>Add another location</h3><p>Keep one username for the business and give each branch its own location address. Each location can publish its own menu and product catalog.</p></div></div>
         <div class="create-location-form">
           <div class="fields two-col">
             <label>New location name<input name="newLocationName" maxlength="180" placeholder="Downtown branch"></label>
@@ -52,11 +66,11 @@
         </div>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">04</span><div><h3>Search engine details</h3><p>These fields help customers understand the page before they visit it from search results.</p></div></div>
+        <div class="card-heading"><span class="step">05</span><div><h3>Search engine details</h3><p>These fields help customers understand the page before they visit it from search results.</p></div></div>
         <div class="fields"><label>Store description <span class="hint">Shown on your public store page · up to 5,000 characters</span><textarea name="storeDescription" rows="4" maxlength="5000" [value]="settings()?.description || ''" placeholder="Tell customers what makes this location special, what you offer, and what they should know before visiting."></textarea></label><label>SEO title <span class="hint">Optional · up to 180 characters</span><input name="seoTitle" maxlength="180" [value]="settings()?.seoTitle || ''" placeholder="KFC Maarif — Menu, opening details and location"></label><label>Search description <span class="hint">Optional · up to 320 characters</span><textarea name="seoDescription" rows="3" maxlength="320" [value]="settings()?.seoDescription || ''" placeholder="Discover this location's menu, prices and customer information."></textarea></label></div>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">05</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
+        <div class="card-heading"><span class="step">06</span><div><h3>Store experience</h3><p>Enable only the public experiences this location actually offers.</p></div></div>
         <div class="experience-options">
           <label><input type="checkbox" name="experiences" value="catalog" [checked]="enabled('catalog')"> <span><strong>Products and categories</strong><small>Public product catalog with categories and prices.</small></span></label>
           <label><input type="checkbox" name="experiences" value="commerce" [checked]="enabled('commerce')"> <span><strong>Shop</strong><small>Commerce-oriented product browsing.</small></span></label>
@@ -66,7 +80,7 @@
         <label class="default-experience">Main button on your store page<select name="defaultExperience" [value]="settings()?.defaultExperience || 'catalog'"><option value="catalog">Browse products</option><option value="commerce">Shop products</option><option value="menu">See menu</option><option value="services">Explore services</option></select></label>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">06</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
+        <div class="card-heading"><span class="step">07</span><div><h3>Guest Wi-Fi</h3><p>For restaurants and cafés, show customers the network and a scannable QR on the published menu. Leave the network name empty to hide this section.</p></div></div>
         <div class="fields two-col"><label>Network name (SSID)<input name="wifiSsid" maxlength="120" [value]="settings()?.wifiSsid || ''" placeholder="Cafe Guest Wi-Fi"></label><label>Network password<input name="wifiPassword" type="password" maxlength="120" [value]="settings()?.wifiPassword || ''" placeholder="Guest network password" autocomplete="new-password"></label><label>Security<select name="wifiSecurity" [value]="settings()?.wifiSecurity || 'WPA2'"><option value="none">Open network (no password)</option><option value="WPA">WPA</option><option value="WPA2">WPA2</option><option value="WPA3">WPA3</option><option value="WEP">WEP</option></select></label></div>
         <p class="privacy-note">Wi-Fi details are public to anyone who can access your published menu. Use a guest network, not your private business network.</p>
       </section>
