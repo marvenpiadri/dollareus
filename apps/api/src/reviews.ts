@@ -71,9 +71,13 @@ export async function registerReviewRoutes(app: FastifyInstance): Promise<void> 
       try {
         await client.query('BEGIN');
         const existing = await client.query(
-          'SELECT id FROM store_reviews WHERE store_id=$1 AND reviewer_email=$2 FOR UPDATE',
+          'SELECT id,status FROM store_reviews WHERE store_id=$1 AND reviewer_email=$2 FOR UPDATE',
           [storeRow.id, email]
         );
+        if (existing.rowCount && existing.rows[0].status === 'published') {
+          await client.query('ROLLBACK');
+          return fail(reply, request, 409, 'REVIEW_ALREADY_SUBMITTED', 'This email has already submitted a review for this store.');
+        }
         if (existing.rowCount) {
           reviewId = existing.rows[0].id;
           await client.query(
