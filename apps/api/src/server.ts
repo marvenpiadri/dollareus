@@ -860,20 +860,6 @@ app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/publ
   return { data: camelize(result.rows), requestId: request.id };
 });
 
-app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug', async (request, reply) => {
-  const result = await pool.query('SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true LIMIT 1', [request.params.storeSlug, 'active']);
-  if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
-  return { data: camelize(result.rows[0]), requestId: request.id };
-});
-
-app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/catalog', async (request, reply) => {
-  const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true AND (('commerce'=ANY(f.enabled_experiences)) OR ('catalog'=ANY(f.enabled_experiences))) LIMIT 1", [request.params.storeSlug, 'active']);
-  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
-  const products = await pool.query('SELECT p.*, COALESCE((SELECT jsonb_agg(jsonb_build_object(\'id\',v.id,\'title\',v.title,\'options\',v.options,\'amountMinor\',v.price_amount_minor,\'currency\',v.currency) ORDER BY v.created_at) FROM product_variants v WHERE v.product_id=p.id AND v.status=$3), \'[]\'::jsonb) AS variants FROM products p WHERE p.organization_id=$1 AND p.store_id=$2 AND p.status=$3 ORDER BY p.updated_at DESC', [store.rows[0].organization_id, store.rows[0].id, 'active']);
-  return { data: camelize(products.rows), requestId: request.id };
-});
-
-
 const CategoryInput = z.object({
   storeId: z.string().min(1).max(100), name: z.string().trim().min(1).max(120), slug: Slug,
   description: z.string().max(5000).nullable().optional(), position: z.number().int().nonnegative().optional(),
@@ -1634,16 +1620,6 @@ app.put<{ Params: { organizationId: string; menuId: string }; Body: unknown }>('
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally { client.release(); }
-});
-
-app.get<{ Params: { storeSlug: string } }>('/api/v1/public/stores/:storeSlug/menus', async (request, reply) => {
-  const store = await pool.query("SELECT s.id,s.organization_id FROM stores s JOIN store_frontends f ON f.store_id=s.id WHERE s.slug=$1 AND s.status=$2 AND f.published=true AND 'menu'=ANY(f.enabled_experiences) LIMIT 1", [request.params.storeSlug, 'active']);
-  if (!store.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store does not exist.');
-  const result = await pool.query(
-    "SELECT m.id,m.slug,m.name,m.description,m.service_periods,m.position,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',i.id,'slug',i.slug,'name',i.name,'description',i.description,'priceAmountMinor',i.price_amount_minor,'currency',i.currency,'categoryId',i.category_id,'categoryName',(SELECT c.name FROM categories c WHERE c.id=i.category_id AND c.organization_id=i.organization_id AND c.store_id=i.store_id AND c.status='active'),'allergens',i.allergens,'dietaryLabels',i.dietary_labels,'modifierGroups',COALESCE(i.metadata->'modifierGroups','[]'::jsonb),'imageUrl',CASE WHEN i.metadata ? 'restaurantImage' THEN '/api/v1/public/menu-items/' || i.id || '/image' ELSE NULL END,'availability',i.availability ,'position',i.position) ORDER BY i.position,i.name) FROM restaurant_menu_items i WHERE i.menu_id=m.id AND i.organization_id=m.organization_id AND i.status='active' AND i.availability<>'unavailable'), '[]'::jsonb) AS items FROM restaurant_menus m WHERE m.store_id=$1 AND m.organization_id=$2 AND m.status='active' ORDER BY m.position,m.name",
-    [store.rows[0].id, store.rows[0].organization_id]
-  );
-  return { data: camelize(result.rows), requestId: request.id };
 });
 
 const CustomDomainInput = z.object({
