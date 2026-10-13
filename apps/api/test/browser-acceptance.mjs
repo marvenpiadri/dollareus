@@ -9,7 +9,7 @@ const suffix = Math.random().toString(36).slice(2, 10);
 const username = `browser_${suffix}`;
 const email = `browser-${suffix}@example.test`;
 const workspaceSlug = `browser-workspace-${suffix}`;
-const storeSlug = `browser-restaurant-${suffix}`;
+let storeSlug = `browser-restaurant-${suffix}`;
 const menuName = `Browser lunch ${suffix}`;
 const dishName = `Test sandwich ${suffix}`;
 const password = `DollareusBrowser!${suffix}X9`;
@@ -41,19 +41,36 @@ try {
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: 'Create account' }).click();
 
-  // Regression guard: successful registration must create a workspace rather than
-  // landing on the previous "couldn't load your workspace" error screen.
-  await page.getByRole('heading', { name: 'Create your workspace' }).waitFor({ timeout: 15000 });
-  await page.locator('input[name="name"]').fill('Browser Acceptance Restaurant');
-  await page.locator('input[name="slug"]').fill(workspaceSlug);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
-  await page.getByRole('heading', { name: 'Create your first store' }).waitFor({ timeout: 15000 });
-  await page.locator('input[name="name"]').fill('Browser Acceptance Restaurant');
-  await page.locator('select[name="businessType"]').selectOption('restaurant');
-  await page.locator('input[name="slug"]').fill(storeSlug);
-  await page.getByRole('button', { name: 'Create store' }).click();
+  // Regression guard: registration must provision a usable workspace and land
+  // on the dashboard, never the previous "couldn't load your workspace" error.
   await page.getByRole('heading', { name: 'Good morning, welcome back.' }).waitFor({ timeout: 15000 });
   assert.equal(await page.getByText('We couldn’t load your workspace').count(), 0);
+
+  // Signup provisions a default workspace/store. Convert that store to a
+  // restaurant for this end-to-end test through the normal authenticated API.
+  const bootstrap = await page.evaluate(async ({ apiUrl }) => {
+    const read = async (response) => {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error?.message ?? `API request failed (${response.status})`);
+      return payload.data;
+    };
+    const organizations = await read(await fetch(`${apiUrl}/api/v1/organizations`, { credentials: 'include' }));
+    const organization = organizations?.[0];
+    if (!organization?.id) throw new Error('Signup did not create an organization.');
+    const stores = await read(await fetch(`${apiUrl}/api/v1/organizations/${encodeURIComponent(organization.id)}/stores`, { credentials: 'include' }));
+    const store = stores?.[0];
+    if (!store?.id || !store.slug) throw new Error('Signup did not create a default store.');
+    await read(await fetch(`${apiUrl}/api/v1/organizations/${encodeURIComponent(organization.id)}/stores/${encodeURIComponent(store.id)}/storefront`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Browser Acceptance Restaurant', businessType: 'restaurant', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca' })
+    }));
+    return { organizationId: organization.id, storeId: store.id, storeSlug: store.slug };
+  }, { apiUrl });
+  storeSlug = bootstrap.storeSlug;
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('heading', { name: 'Good morning, welcome back.' }).waitFor({ timeout: 15000 });
 
   // Real-browser restaurant path: create a menu and dish through merchant forms.
   await page.getByRole('button', { name: 'Menus', exact: true }).click();
