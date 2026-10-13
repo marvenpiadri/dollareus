@@ -32,9 +32,17 @@
         <span>Variant</span>
         <select name="variantId" required>
           <option value="">Select variant</option>
-          @for (product of products(); track product.variantId) {
-            @if (product.variantId) {
-              <option [value]="product.variantId">{{ product.name }} · {{ product.sku }}</option>
+          @for (product of products(); track product.id) {
+            @if (product.status === 'Active' && (product.kind === 'physical' || product.kind === 'food')) {
+              @if (product.variants?.length) {
+                @for (variant of product.variants; track variant.id) {
+                  @if (variant.status !== 'archived' && variant.status !== 'draft') {
+                    <option [value]="variant.id">{{ product.name }} · {{ variant.title }}{{ variant.sku ? ' · ' + variant.sku : '' }}</option>
+                  }
+                }
+              } @else if (product.variantId) {
+                <option [value]="product.variantId">{{ product.name }}{{ product.sku ? ' · ' + product.sku : '' }}</option>
+              }
             }
           }
         </select>
@@ -69,7 +77,7 @@
         @for (item of currentStoreInventory(); track item.locationId + ':' + (item.variantId || 'empty')) {
           <tr>
             <td><strong>{{ item.locationName }}</strong></td>
-            <td>{{ item.productName || 'No stock assigned' }}</td>
+            <td>{{ item.productName || 'No stock assigned' }} @if (item.variantTitle) { <small class="muted block">{{ item.variantTitle }}</small> }</td>
             <td class="stock-num">{{ item.quantityOnHand ?? '—' }}</td>
             <td class="muted">{{ item.quantityReserved ?? '—' }}</td>
             <td class="muted">{{ item.reorderPoint ?? '—' }}</td>
