@@ -131,7 +131,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   await pool.query('UPDATE auth_sessions SET last_seen_at=$1 WHERE id=$2', [new Date(), row.session_id]);
 }
 
-async function sendAuthEmail(to: string, subject: string, html: string): Promise<void> {
+export async function sendAuthEmail(to: string, subject: string, html: string): Promise<void> {
   const apiKey = process.env.AUTH_EMAIL_API_KEY;
   const from = process.env.AUTH_EMAIL_FROM;
   if (!apiKey || !from) throw new Error('AUTH_EMAIL_API_KEY and AUTH_EMAIL_FROM are required for email authentication flows.');
@@ -147,7 +147,7 @@ async function sendAuthEmail(to: string, subject: string, html: string): Promise
   }
 }
 
-function authPublicUrl(path: string, token: string): string {
+export function authPublicUrl(path: string, token: string): string {
   const base = process.env.AUTH_PUBLIC_URL;
   if (!base) throw new Error('AUTH_PUBLIC_URL is required for email authentication flows.');
   const url = new URL(path, base);
