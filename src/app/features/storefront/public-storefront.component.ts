@@ -131,9 +131,9 @@ export class PublicStorefrontComponent {
   protected contactWhatsAppUrl(): string {
     const store = this.store();
     const rawPhone = String(store?.whatsappNumber || store?.phone || '').replace(/[^0-9+]/g, '');
-    let phone = rawPhone.replace(/^\\+/, '').replace(/^00/, '');
+    let phone = rawPhone.replace(/^\+/, '').replace(/^00/, '');
     if (String(store?.countryCode ?? '').toUpperCase() === 'MA' && phone.startsWith('0')) phone = '212' + phone.slice(1);
-    return /^\\d{8,15}$/.test(phone) ? 'https://wa.me/' + phone : '';
+    return /^\d{8,15}$/.test(phone) ? 'https://wa.me/' + phone : '';
   }
 
   protected profileImageSrc(): string {
