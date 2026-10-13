@@ -21,7 +21,8 @@ Acceptance gate:
 - [x] Merchant and API implementation exists.
 - [x] API smoke checks cover publish gating, disabled experience, unavailable/limited dishes, modifier data, and QR destination privacy.
 - [x] Public menu smoke check verifies category name, allergens, and dietary labels. Passed in [CI run 38171550934](https://github.com/marvenpiadri/dollareus/actions/runs/38171550934).
-- [ ] Browser/manual test on desktop and a real phone-sized viewport: direct URL, QR destination, loading/error/empty states, long dish names, and narrow-screen layout.
+- [x] CI browser acceptance verifies the published menu at desktop width and a 390px phone-sized viewport, checks the saved dish remains visible, and asserts no horizontal overflow. [Run 38461275979](https://github.com/marvenpiadri/dollareus/actions/runs/38461275979).
+- [ ] Manually verify on a real phone: direct URL, QR destination, loading/error/empty states, long dish names, and narrow-screen layout.
 - [ ] Verify the live deployed URL, HTTPS, and QR destination against the actual configured domain.
 
 Do not move this phase to “complete” until browser/manual and live-environment checks are recorded.
@@ -96,4 +97,4 @@ Acceptance gate:
 
 ## Current execution position
 
-Phase 1 remains the active phase. The public menu UI and API behavior are implemented, and the latest CI checks passed: category grouping in [run 38171271714](https://github.com/marvenpiadri/dollareus/actions/runs/38171271714), public category/allergen/dietary assertions in [run 38171550934](https://github.com/marvenpiadri/dollareus/actions/runs/38171550934), and the latest branch run [38171576417](https://github.com/marvenpiadri/dollareus/actions/runs/38171576417). Phase 1 is not yet closed because browser/manual and live deployment checks are environment-dependent and have not been recorded.
+Phase 1 implementation and automated browser acceptance are in place. The latest CI run [38461275979](https://github.com/marvenpiadri/dollareus/actions/runs/38461275979) passed the production build, API smoke/schema checks, and Chromium restaurant journey, including a phone-sized public-menu viewport with a horizontal-overflow assertion. Phase 1 remains open only for a real-device/manual QR and loading/error-state review plus live URL/HTTPS verification. Phase 2 and Phase 3 implementation is substantially present, but the full menu edit/publish lifecycle, modifier edge cases, multi-store isolation, inventory/return/refund UI journeys, and complete staff shift still need browser/manual acceptance. Live staging database and object-storage verification are intentionally deferred; no claim is made that those external services have been verified.
