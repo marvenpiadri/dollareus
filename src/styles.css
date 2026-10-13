@@ -61,9 +61,9 @@ html[data-theme="dark"] .table-wrap td{border-top-color:var(--color-border)}
 html[data-theme="dark"] .customer-form input:not([type=color]),
 html[data-theme="dark"] .customer-form select,
 html[data-theme="dark"] .customer-form textarea,
-html[data-theme="dark"] .storefront-settings input,
-html[data-theme="dark"] .storefront-settings select,
-html[data-theme="dark"] .storefront-settings textarea{background:var(--color-input-bg);color:var(--color-input-text);border-color:var(--color-input-border)}
+html[data-theme="dark"] .settings-page input,
+html[data-theme="dark"] .settings-page select,
+html[data-theme="dark"] .settings-page textarea{background:var(--color-input-bg);color:var(--color-input-text);border-color:var(--color-input-border)}
 html[data-theme="dark"] .settings-page,
 html[data-theme="dark"] .settings-page h1,
 html[data-theme="dark"] .settings-page h2,
@@ -75,3 +75,15 @@ html[data-theme="dark"] .settings-page small{color:var(--color-text-secondary)}
 html[data-theme="dark"] .create-location-form,
 html[data-theme="dark"] .profile-image-preview,
 html[data-theme="dark"] .menu-choice-options label{background:var(--color-surface);color:var(--color-text-main);border-color:var(--color-border)}
+
+/* First-run onboarding follows the same design language as the CRM. */
+.onboarding-screen{min-height:100dvh;display:grid;place-content:center;padding:24px;background:var(--color-canvas);color:var(--color-text-main)}
+.onboarding-card{width:min(100%,480px);padding:clamp(22px,5vw,34px);border:1px solid var(--color-border);border-radius:var(--radius-xl);background:var(--color-surface);box-shadow:var(--shadow-lg)}
+.onboarding-brand{padding:0 0 24px}
+.onboarding-title{margin:0 0 8px;font-size:26px;line-height:1.25;letter-spacing:-.6px}
+.onboarding-copy{margin:0;color:var(--color-text-secondary);font-size:14px;line-height:1.65}
+.onboarding-form{display:grid;gap:13px;margin-top:22px}
+.onboarding-label{display:grid;gap:7px;color:var(--color-text-main);font-size:13px;font-weight:650}
+.onboarding-input{width:100%;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--color-input-border);border-radius:var(--radius-md);background:var(--color-input-bg);color:var(--color-input-text)}
+.onboarding-hint{color:var(--color-text-secondary);font-size:11px;line-height:1.5;font-weight:400}
+.onboarding-error{margin:0;color:var(--color-status-overdue);font-size:13px;line-height:1.5}
