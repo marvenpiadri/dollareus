@@ -79,7 +79,7 @@ try {
   const menuForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Create menu/ }) });
   await menuForm.locator('input[name="name"]').fill(menuName);
   await menuForm.getByRole('button', { name: /Create menu/ }).click();
-  await page.getByText(menuName).waitFor();
+  await page.getByText(menuName, { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Manage items' }).first().click();
   await page.getByRole('heading', { name: 'Menu items' }).waitFor();
 
@@ -87,7 +87,7 @@ try {
   await itemForm.locator('input[name="name"]').fill(dishName);
   await itemForm.locator('input[name="price"]').fill('45.00');
   await itemForm.getByRole('button', { name: /Add item/ }).click();
-  await page.getByText(dishName).waitFor();
+  await page.getByText(dishName, { exact: true }).waitFor();
 
   // Open a restaurant register, create a server-priced order, and record a
   // manually received cash payment. No payment provider or card data is used.
@@ -118,7 +118,7 @@ try {
   await page.getByRole('button', { name: 'Print receipt' }).first().click();
   const receipt = await popupPromise;
   await receipt.getByText('Sales receipt').waitFor({ timeout: 10000 });
-  await receipt.getByText(dishName).waitFor();
+  await receipt.getByText(dishName, { exact: true }).waitFor();
   assert.match(await receipt.locator('body').innerText(), /Order #/);
   await receipt.close();
 
@@ -151,7 +151,7 @@ try {
   const publicPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await publicPage.addInitScript((url) => { window.DOLLAREUS_API_URL = url; }, apiUrl);
   await publicPage.goto(`${baseUrl}/${storeSlug}/menu`, { waitUntil: 'domcontentloaded' });
-  await publicPage.getByText(dishName).waitFor({ timeout: 15000 });
+  await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
   assert.deepEqual(await publicPage.locator('body').evaluate(() => document.body.innerText.includes(dishName)), true);
   await publicPage.close();
