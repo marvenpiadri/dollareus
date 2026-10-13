@@ -160,3 +160,12 @@ tr:hover td {
     gap: 12px;
   }
 }
+
+/* Compact layouts keep channel actions reachable without squeezing their labels. */
+@media (max-width: 640px) {
+  .overview-layout-grid { gap: 14px; }
+  .channel-item { flex-wrap: wrap; gap: 10px; padding: 14px; }
+  .channel-item-details { flex: 1 1 calc(100% - 50px); }
+  .channel-item > button { flex: 1 0 100%; width: 100%; }
+  .table-wrap { border-radius: var(--radius-md); }
+}
