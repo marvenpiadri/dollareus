@@ -16,6 +16,9 @@ export class ApiClientService {
 
   async request<T = any>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
+    if (typeof window !== 'undefined' && !headers.has('X-Client-Timezone')) {
+      try { headers.set('X-Client-Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone); } catch { /* The API uses its hosting timezone fallback. */ }
+    }
     const token = typeof localStorage !== 'undefined' ? localStorage.getItem('dollareus_token') : null;
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
