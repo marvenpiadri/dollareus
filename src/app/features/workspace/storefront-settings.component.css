@@ -423,3 +423,21 @@
     grid-column: 1 / -1;
   }
 }
+
+.profile-upload-field{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,.7fr);gap:14px;align-items:center}
+.profile-upload-field>label{min-width:0}
+.profile-upload-field input[type=file]{min-height:44px;padding:8px;background:var(--color-input-bg);border:1px dashed var(--color-border-dark);border-radius:var(--radius-md);color:var(--color-input-text);font-size:12px}
+.automatic-url-note{grid-column:1/-1;margin:0;padding:12px 14px;border-radius:var(--radius-md);border:1px solid var(--color-border);background:var(--color-surface-subtle);color:var(--color-text-secondary);font-size:12px;line-height:1.5}
+.map-picker{display:grid;gap:12px;margin-top:18px;padding:16px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface-subtle)}
+.map-picker-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.map-picker-heading h4{margin:0 0 4px;color:var(--color-text-main);font-size:14px}
+.map-picker-heading p{margin:0;color:var(--color-text-secondary);font-size:12px;line-height:1.5}
+.map-results{display:grid;gap:5px}
+.map-result{display:flex;align-items:flex-start;gap:9px;padding:10px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-text-main);text-align:left;font-size:12px;line-height:1.45}
+.map-result:hover{border-color:var(--color-money-green);background:var(--color-money-green-light)}
+.map-result .material-icons{font-size:18px;color:var(--color-money-green)}
+.location-map{display:block;width:100%;height:240px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface)}
+.map-selected{display:flex;align-items:center;gap:7px;margin:0;color:var(--color-money-green);font-size:12px}
+.map-selected .material-icons{font-size:17px}
+.map-selected a{margin-left:auto;color:var(--color-text-secondary)}
+@media(max-width:640px){.profile-upload-field{grid-template-columns:1fr}.map-picker-heading{align-items:flex-start;flex-direction:column}.business-hours-row{grid-template-columns:1fr 1fr}.business-hours-row>strong{grid-column:1/-1}.business-hours-row .closed-day{grid-column:1/-1}}
