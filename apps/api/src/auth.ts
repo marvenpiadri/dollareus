@@ -242,7 +242,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
     const session = await createSession(userId);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
-    return reply.code(201).send({ data: { id: userId, email, displayName: displayName || null, emailVerified: false, verificationEmailSent }, requestId: request.id });
+    return reply.code(201).send({ data: { id: userId, username, email, displayName: displayName || null, emailVerified: false, verificationEmailSent }, requestId: request.id });
   });
 
   app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -268,7 +268,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
     const session = await createSession(row.id);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
-    return { data: { id: row.id, email: row.email, displayName: row.display_name }, requestId: request.id };
+    return { data: { id: row.id, username: row.username, email: row.email, displayName: row.display_name }, requestId: request.id };
   });
 
   app.post<{ Body: { email?: unknown } }>('/api/v1/auth/email/verification/request', { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } }, async (request, reply) => {
