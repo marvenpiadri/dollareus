@@ -252,6 +252,18 @@
               </label>
 
               <label class="form-field">
+                <span>Options (optional)</span>
+                <input
+                  [value]="variant.optionsText"
+                  (input)="updateVariant(i, 'optionsText', $any($event.target).value)"
+                  maxlength="500"
+                  placeholder="Size=M, Color=Blue"
+                  aria-describedby="variant-options-help"
+                >
+                <small id="variant-options-help" class="fieldset-helper">Add choices such as size, color, or package.</small>
+              </label>
+
+              <label class="form-field">
                 <span>Status</span>
                 <select
                   [value]="variant.status"
