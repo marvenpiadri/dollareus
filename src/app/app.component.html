@@ -1,5 +1,5 @@
 <div class="site-frame" (click)="closeMenus()">
-  <header class="site-header" (click)="$event.stopPropagation()">
+  @if (!workspaceRoute()) {\n  <header class="site-header" (click)="$event.stopPropagation()">
     <a class="site-brand" routerLink="/" (click)="closeMenus()" aria-label="Dollareus home">
       <span class="brand-symbol">d.</span>
       <span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span>
@@ -63,7 +63,7 @@
     <router-outlet />
   </div>
 
-  <footer class="site-footer" (click)="$event.stopPropagation()">
+  @if (!workspaceRoute()) {\n  <footer class="site-footer" (click)="$event.stopPropagation()">
     <div class="footer-main">
       <div class="footer-brand-column">
         <a class="footer-brand" routerLink="/"><span class="brand-symbol">d.</span><span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span></a>
