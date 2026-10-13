@@ -37,7 +37,7 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET || 'assets' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -77,7 +77,7 @@ jobs:
       - name: Verify persistent object storage with a put/read/delete round trip
         run: |
           set -euo pipefail
-          for name in AWS_ENDPOINT_URL_S3 AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_S3_BUCKET; do
+          for name in AWS_ENDPOINT_URL_S3 AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Configure $name as a secret in the GitHub staging environment before storage verification."
               exit 1
@@ -99,7 +99,7 @@ jobs:
           aws --endpoint-url "$AWS_ENDPOINT_URL_S3" --region "$region" s3api put-object --bucket "$AWS_S3_BUCKET" --key "$key" --body "$source_file" >/dev/null
           aws --endpoint-url "$AWS_ENDPOINT_URL_S3" --region "$region" s3api get-object --bucket "$AWS_S3_BUCKET" --key "$key" "$readback_file" >/dev/null
           cmp "$source_file" "$readback_file"
-          echo "Object storage round-trip passed for the configured private bucket."
+          echo "Object storage round-trip passed for private bucket: $AWS_S3_BUCKET."
       - name: Apply pending migrations only after backup, restore, and storage verification
         run: pnpm db:migrate
       - name: Verify migration history, checksums, and required schema version
