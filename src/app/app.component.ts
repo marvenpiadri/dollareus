@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 type AppLanguage = 'EN' | 'FR' | 'ES' | 'DE';
 
@@ -41,7 +41,7 @@ const SHELL_COPY: Record<AppLanguage, Record<string, string>> = {
 @Component({
   selector: 'dlr-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
