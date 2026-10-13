@@ -64,7 +64,6 @@ export class StorefrontSettingsComponent {
       return;
     }
     const publicHandle = String(values.get('publicHandle') ?? '').trim().toLowerCase();
-    const locationName = String(values.get('locationName') ?? '').trim();
     const storeName = String(values.get('storeName') ?? '').trim();
     const city = String(values.get('city') ?? '').trim();
     const locationSlug = this.slugify([storeName, city].filter(Boolean).join(' '));
