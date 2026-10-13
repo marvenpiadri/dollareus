@@ -40,8 +40,8 @@ This is a product-design reference, not a claim that Dollareus currently matches
 - Add clear empty, loading, saved, error and unavailable states; keep mobile forms comfortable to use.
 
 ### P1 — improve conversion and everyday usability
-- Public menu: WhatsApp contact/order inquiry, shareable stable URL, strong mobile performance, category navigation and useful no-menu/no-items states.
-- Locale-aware currency and date formatting; audit Arabic RTL and French/English layouts.
+- Public menu: WhatsApp contact/order inquiry is now implemented from the configured business number, with a prefilled message; CI/browser verification is pending. Continue with shareable stable URLs, strong mobile performance, category navigation and useful no-menu/no-items states.
+- Locale-aware currency formatting and Arabic right-to-left direction are now implemented on the public restaurant menu; CI verification and a broader French/English/Arabic layout audit remain.
 - Better low-stock visibility, quick counts, and multi-location context.
 - Public page completeness: contact, hours, map, SEO metadata and consistent profile/menu/catalog links.
 
