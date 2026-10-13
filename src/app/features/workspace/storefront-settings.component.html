@@ -1,5 +1,5 @@
 <section class="settings-page">
-  <div class="settings-intro"><p class="eyebrow">PUBLIC BUSINESS PROFILE</p><h2>Your business, discoverable online</h2><p>Choose a stable public username, give each physical location its own address, and prepare search-friendly information for customers and search engines.</p></div>
+  <div class="settings-intro"><p class="eyebrow">BUSINESS PROFILE</p><h2>How customers see your business</h2><p>Add a profile picture, a short bio, contact details, working hours, and your location. Your public page is created automatically.</p></div>
   @if(loading()){<div class="settings-state">Loading storefront settings…</div>}
   @else if(!settings()){<div class="settings-error" role="alert">{{error()}}</div>}
   @else {
@@ -20,9 +20,8 @@
         </div>
       </section>
       <section class="settings-card">
-        <div class="card-heading"><span class="step">01</span><div><h3>Public address</h3><p>Business names can be shared by different owners. The username plus location keeps each public page distinct.</p></div></div>
+        <div class="card-heading"><span class="step">01</span><div><h3>Your public page</h3><p>Your business name and location name automatically create the public address.</p></div></div>
         <div class="fields two-col">
-          <label>Store username <span class="hint">Unique business identity</span><input name="publicHandle" required minlength="2" maxlength="60" pattern="[a-z0-9]+([_-][a-z0-9]+)*" [value]="settings()?.publicHandle || ''" autocomplete="off"><small>Example: <strong>kfcLLCC</strong> becomes <strong>kfcllcc</strong>. Use lowercase letters, numbers, hyphens or underscores.</small></label>
           <input type="hidden" name="locationSlug" [value]="settings()?.locationSlug || settings()?.slug || ''"><input type="hidden" name="publicHandle" [value]="settings()?.publicHandle || ''"><p class="automatic-url-note">Your public address is created automatically from your business and location name. You don’t need to manage a slug.</p>
         </div>
         <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-username'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
