@@ -69,13 +69,17 @@ async function createSession(userId: string): Promise<{ token: string; expiresAt
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   request.apiCredential = null;
-  const sessionToken = cookieValue(request, SESSION_COOKIE);
-  const bearerToken = request.headers.authorization?.match(/^Bearer\s+(dlr_live_[A-Za-z0-9_-]+)$/i)?.[1] ?? null;
-  if (!sessionToken && bearerToken) {
+  const cookieSession = cookieValue(request, SESSION_COOKIE);
+  const authHeader = request.headers.authorization;
+  const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+  const isApiCredential = bearerToken?.startsWith('dlr_live_');
+  const sessionToken = cookieSession ?? (!isApiCredential ? bearerToken : null);
+  const liveCredentialToken = isApiCredential ? bearerToken : null;
+  if (!sessionToken && liveCredentialToken) {
     const now = new Date();
     const credential = await pool.query(
       'SELECT c.id AS credential_id,c.organization_id,c.scopes,u.id,u.email,u.email_verified_at,u.display_name FROM api_credentials c JOIN users u ON u.id=c.created_by JOIN organization_memberships m ON m.organization_id=c.organization_id AND m.user_id=u.id AND m.status=$3 WHERE c.token_hash=$1 AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>$2) AND u.status=$4 LIMIT 1',
-      [hash(bearerToken), now, 'active', 'active']
+      [hash(liveCredentialToken), now, 'active', 'active']
     );
     const row = credential.rows[0];
     if (!row) {
@@ -257,7 +261,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
     const session = await createSession(userId);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
-    return reply.code(201).send({ data: { id: userId, username, email, displayName: displayName || null, emailVerified: false, verificationEmailSent }, requestId: request.id });
+    return reply.code(201).send({ data: { id: userId, username, email, displayName: displayName || null, emailVerified: false, verificationEmailSent, token: session.token }, requestId: request.id });
   });
 
   app.post<{ Body: { email?: unknown; password?: unknown } }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -283,7 +287,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!valid) return reply.code(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Email or password is incorrect.', requestId: request.id } });
     const session = await createSession(row.id);
     setSessionCookie(reply, session.token, Math.floor(SESSION_TTL_MS / 1000));
-    return { data: { id: row.id, username: row.username, email: row.email, displayName: row.display_name }, requestId: request.id };
+    return { data: { id: row.id, username: row.username, email: row.email, displayName: row.display_name, token: session.token }, requestId: request.id };
   });
 
   app.post<{ Body: { email?: unknown } }>('/api/v1/auth/email/verification/request', { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } }, async (request, reply) => {

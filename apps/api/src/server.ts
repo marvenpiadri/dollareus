@@ -469,7 +469,30 @@ app.post<{ Body: unknown }>('/api/v1/organizations', { preHandler: authenticate 
 });
 
 app.get('/api/v1/organizations', { preHandler: authenticate }, async (request) => {
-  const result = await pool.query('SELECT o.id, o.name, o.slug, o.status, o.created_at, o.updated_at, m.role FROM organizations o JOIN organization_memberships m ON m.organization_id = o.id WHERE m.user_id = $1 AND m.status = $2 ORDER BY o.created_at DESC', [request.identity!.uid, 'active']);
+  let result = await pool.query('SELECT o.id, o.name, o.slug, o.status, o.created_at, o.updated_at, m.role FROM organizations o JOIN organization_memberships m ON m.organization_id = o.id WHERE m.user_id = $1 AND m.status = $2 ORDER BY o.created_at DESC', [request.identity!.uid, 'active']);
+  if (result.rows.length === 0) {
+    const client = await pool.connect();
+    const orgId = randomUUID();
+    const storeId = randomUUID();
+    const now = new Date();
+    const emailPrefix = request.identity!.email?.split('@')[0] ?? 'User';
+    const orgName = (request.identity!.displayName ?? emailPrefix) + "'s Workspace";
+    const orgSlug = 'workspace-' + orgId.slice(0, 8);
+    const username = request.identity!.username ?? 'user-' + orgId.slice(0, 6);
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO organizations (id,name,slug,public_handle,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [orgId, orgName, orgSlug, username, 'active', now]);
+      await client.query('INSERT INTO organization_memberships (organization_id,user_id,role,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [orgId, request.identity!.uid, 'owner', 'active', now]);
+      await client.query('INSERT INTO stores (id,organization_id,name,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)', [storeId, orgId, 'Main Store', 'main-store', username, 'main-store', 'general', 'active', 'MAD', 'en', 'Africa/Casablanca', now]);
+      await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)', [storeId, orgId, 'commerce', ['commerce'], false, JSON.stringify({}), now]);
+      await client.query('COMMIT');
+    } catch {
+      await client.query('ROLLBACK').catch(() => undefined);
+    } finally {
+      client.release();
+    }
+    result = await pool.query('SELECT o.id, o.name, o.slug, o.status, o.created_at, o.updated_at, m.role FROM organizations o JOIN organization_memberships m ON m.organization_id = o.id WHERE m.user_id = $1 AND m.status = $2 ORDER BY o.created_at DESC', [request.identity!.uid, 'active']);
+  }
   return { data: camelize(result.rows), requestId: request.id };
 });
 
