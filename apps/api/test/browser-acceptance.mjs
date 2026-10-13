@@ -166,11 +166,11 @@ try {
   await publicPage.setViewportSize({ width: 390, height: 844 });
   await publicPage.reload({ waitUntil: 'domcontentloaded' });
   await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
-  const mobileLayout = await publicPage.evaluate(() => ({
+  const mobileLayout = await publicPage.evaluate((targetName) => ({
     viewportWidth: window.innerWidth,
     documentWidth: document.documentElement.scrollWidth,
-    dishVisible: [...document.querySelectorAll('h4')].some(element => element.textContent?.trim() === dishName)
-  }));
+    dishVisible: [...document.querySelectorAll('h4')].some(element => element.textContent?.trim() === targetName)
+  }), dishName);
   assert.ok(mobileLayout.documentWidth <= mobileLayout.viewportWidth + 1,
     `Public menu overflows phone viewport: ${mobileLayout.documentWidth}px document for ${mobileLayout.viewportWidth}px viewport.`);
   assert.equal(mobileLayout.dishVisible, true, 'The saved dish should remain visible on a phone-sized screen.');
