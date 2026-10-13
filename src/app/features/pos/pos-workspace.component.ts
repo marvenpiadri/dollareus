@@ -206,6 +206,11 @@ export class PosWorkspaceComponent {
     const sourceVariantId = productType ? variantId : undefined;
     const priceAmountMinor = productType ? productVariant!.priceMinor : menuItem!.priceAmountMinor + modifierDelta;
     const currency = productType ? productVariant!.currency : menuItem!.currency;
+    const cartCurrency = this.posCart()[0]?.currency;
+    if (cartCurrency && cartCurrency !== currency) {
+      this.posCartError.set('A ticket can contain items in one currency only. Remove the current items before starting a sale in ' + currency + '.');
+      return;
+    }
     const metadata = sourceType === 'menu_item' ? { modifiers } : undefined;
     const key = [sourceType, sourceItemId, sourceVariantId ?? '', JSON.stringify(modifiers)].join(':');
     this.posCartError.set('');
@@ -225,6 +230,7 @@ export class PosWorkspaceComponent {
 
   protected removePosCartItem(key: string): void { this.posCart.update(lines => lines.filter(line => line.key !== key)); }
   protected posCartTotalMinor(): number { return this.posCart().reduce((sum, line) => sum + line.priceAmountMinor * line.quantity, 0); }
+  protected posCartCurrency(): string { return this.posCart()[0]?.currency ?? this.storeCurrency(); }
 
   protected async createPosOrder(): Promise<void> {
     const sessionId = this.selectedPosSessionId();
