@@ -38,6 +38,47 @@
         }
       </div>
     </section>
+    <section class="reviews-section" aria-labelledby="store-reviews-title">
+      <div class="reviews-heading">
+        <div><span class="eyebrow">CUSTOMER EXPERIENCES</span><h2 id="store-reviews-title">Reviews from the community</h2><p>Reviews are published after the reviewer verifies their email address.</p></div>
+        <div class="review-score" aria-label="Average review rating">
+          <strong>{{reviewSummary().reviewCount ? reviewSummary().averageRating.toFixed(1) : '—'}}</strong>
+          <span class="heart-display" aria-hidden="true">{{heartString(5)}}</span>
+          <small>{{reviewSummary().reviewCount}} {{reviewSummary().reviewCount === 1 ? 'review' : 'reviews'}}</small>
+        </div>
+      </div>
+      @if (reviewMessage()) { <p class="review-notice" role="status">{{reviewMessage()}}</p> }
+      @if (reviewError()) { <p class="review-error" role="alert">{{reviewError()}}</p> }
+      <div class="review-layout">
+        <div class="review-list">
+          @if (reviews().length) {
+            @for (review of reviews(); track review.id) {
+              <article class="review-card">
+                <div class="review-card-top"><span class="heart-display" aria-label="{{review.rating}} out of 5 hearts">{{heartString(review.rating)}}</span><time>{{review.publishedAt | date:'mediumDate'}}</time></div>
+                <p>{{review.reviewText}}</p>
+              </article>
+            }
+          } @else {
+            <div class="review-empty"><span class="heart-display" aria-hidden="true">♥ ♥ ♥ ♥ ♥</span><h3>Be the first to share your experience</h3><p>Your verified review can help others choose with confidence.</p></div>
+          }
+        </div>
+        <form class="review-form" (submit)="submitReview($event)">
+          <h3>Leave a review</h3>
+          <p>Your email stays private. We'll ask you to verify it before your review is published.</p>
+          <label>Your rating</label>
+          <div class="heart-picker" role="group" aria-label="Choose a rating">
+            @for (heart of [1,2,3,4,5]; track heart) {
+              <button type="button" [class.selected]="heart <= reviewRating()" [attr.aria-pressed]="reviewRating() === heart" [attr.aria-label]="heart + ' out of 5 hearts'" (click)="reviewRating.set(heart)">♥</button>
+            }
+          </div>
+          <label for="review-email">Email address</label>
+          <input id="review-email" type="email" autocomplete="email" maxlength="254" [value]="reviewEmail()" (input)="reviewEmail.set($any($event.target).value)" placeholder="you@example.com" required>
+          <label for="review-text">Your experience</label>
+          <textarea id="review-text" rows="5" minlength="3" maxlength="5000" [value]="reviewText()" (input)="reviewText.set($any($event.target).value)" placeholder="What should other customers know?" required></textarea>
+          <button class="review-submit" type="submit" [disabled]="reviewBusy()">{{reviewBusy() ? 'Submitting…' : 'Submit review'}}</button>
+        </form>
+      </div>
+    </section>
     <footer class="store-footer"><span>Published with Dollareus</span><span>Store information is provided by the business.</span></footer>
   }
 </main>
