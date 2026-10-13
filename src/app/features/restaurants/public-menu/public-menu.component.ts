@@ -40,7 +40,7 @@ export class PublicMenuComponent {
   protected whatsappMenuUrl(): string {
     const store = this.publicMenuStore();
     const rawNumber = String(store?.whatsappNumber ?? store?.phone ?? '');
-    const phone = rawNumber.replace(/\\D/g, '');
+    const phone = rawNumber.replace(/\D/g, '');
     if (!phone) return '';
     const storeName = String(store?.name ?? 'this business');
     const message = 'Hello ' + storeName + ', I am viewing your menu and would like to ask a question or place an order.';
