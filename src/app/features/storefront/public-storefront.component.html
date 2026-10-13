@@ -45,6 +45,11 @@
           <strong>{{reviewSummary().reviewCount ? reviewSummary().averageRating.toFixed(1) : '—'}}</strong>
           <span class="heart-display" aria-hidden="true">{{heartString(roundedRating())}}</span>
           <small>{{reviewSummary().reviewCount}} {{reviewSummary().reviewCount === 1 ? 'review' : 'reviews'}}</small>
+          <div class="rating-distribution" aria-label="Review rating distribution">
+            @for (rating of [5,4,3,2,1]; track rating) {
+              <div class="rating-row"><span>{{rating}} ♥</span><span class="rating-track"><span [style.width.%]="reviewSummary().reviewCount ? (reviewSummary().ratingDistribution[rating] / reviewSummary().reviewCount * 100) : 0"></span></span><small>{{reviewSummary().ratingDistribution[rating] || 0}}</small></div>
+            }
+          </div>
         </div>
       </div>
       @if (reviewMessage()) { <p class="review-notice" role="status">{{reviewMessage()}}</p> }
