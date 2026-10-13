@@ -100,23 +100,26 @@ jobs:
             exit 1
           fi
           node apps/api/test/smoke.mjs
-      - name: Build the production application for browser acceptance
-        run: pnpm build
       - name: Install an isolated Playwright browser runtime
         run: |
           npm install --prefix "$RUNNER_TEMP/dollareus-browser" playwright
           PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node "$RUNNER_TEMP/dollareus-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Run the restaurant workflow in a real Chromium browser
         env:
-          DOLLAREUS_BROWSER_URL: http://127.0.0.1:4000
+          DOLLAREUS_BROWSER_URL: http://127.0.0.1:4200
           DOLLAREUS_API_URL: http://127.0.0.1:3000
         run: |
-          node dist/dollareus/server/server.mjs > /tmp/dollareus-browser-ssr.log 2>&1 &
-          ssr_pid=$!
-          trap 'kill "$ssr_pid" 2>/dev/null || true' EXIT
+          node --env-file-if-exists=.env --import tsx apps/api/src/server.ts > /tmp/dollareus-browser-api.log 2>&1 &
+          api_pid=$!
+          pnpm exec ng serve --host 0.0.0.0 --port 4200 > /tmp/dollareus-browser-web.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
           if ! PLAYWRIGHT_MODULE_URL="file://$RUNNER_TEMP/dollareus-browser/node_modules/playwright/index.mjs" PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/dollareus-browsers" node apps/api/test/browser-acceptance.mjs; then
-            echo "::group::SSR server log"
-            cat /tmp/dollareus-browser-ssr.log || true
+            echo "::group::API server log"
+            cat /tmp/dollareus-browser-api.log || true
+            echo "::endgroup::"
+            echo "::group::Angular browser-test server log"
+            cat /tmp/dollareus-browser-web.log || true
             echo "::endgroup::"
             exit 1
           fi
