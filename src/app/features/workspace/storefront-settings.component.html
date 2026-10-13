@@ -9,7 +9,7 @@
         <div class="fields two-col">
           <div class="profile-upload-field">
             <label>Profile picture <span class="hint">Upload your logo or a clear photo</span><input type="file" accept="image/png,image/jpeg,image/webp" (change)="uploadProfilePicture($event)" [disabled]="uploadingProfilePicture()"><small>PNG, JPG or WebP. The image is optimized automatically.</small></label>
-            @if (profilePicturePreview() || settings()?.theme?.profileImageUrl) { <div class="profile-image-preview"><img [src]="profilePicturePreview() || settings()?.theme?.profileImageUrl" alt="Business profile picture preview" loading="lazy"><span>{{ uploadingProfilePicture() ? 'Uploading picture…' : 'Profile picture' }}</span></div> }
+            @if (profilePicturePreview() || settings()?.theme?.profileImageUrl) { <div class="profile-image-preview"><img [src]="profileImageSource()" alt="Business profile picture preview" loading="lazy"><span>{{ uploadingProfilePicture() ? 'Uploading picture…' : 'Profile picture' }}</span></div> }
             @if (profileUploadError()) { <p class="settings-error" role="alert">{{profileUploadError()}}</p> }
           </div>
           <label>Business name<input name="storeName" required maxlength="180" [value]="settings()?.name || ''" placeholder="Business or branch name"></label>
