@@ -253,8 +253,8 @@ export class PublicStorefrontComponent {
       }
       const name = String(store?.name ?? 'Store');
       const locationName = String(store?.locationSlug ?? location).replace(/-/g, ' ');
-      const title = String(store?.seoTitle ?? (name + ' in ' + locationName + ' | Dollareus')).slice(0, 180);
-      const description = String(store?.seoDescription ?? store?.description ?? ('Discover ' + name + ', opening information, products and services.')).slice(0, 320);
+      const title = String(name + ' in ' + locationName + ' | Dollareus').slice(0, 180);
+      const description = String(store?.description ?? ('Discover ' + name + ', opening information, products and services.')).slice(0, 320);
       this.title.setTitle(title);
       this.meta.updateTag({ name: 'description', content: description });
       this.meta.updateTag({ property: 'og:title', content: title });
