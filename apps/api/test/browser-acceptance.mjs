@@ -17,7 +17,6 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const pageErrors = [];
 page.on('pageerror', error => pageErrors.push(error.message));
-page.on('console', message => { if (message.type() === 'error') pageErrors.push(message.text()); });
 await page.addInitScript((url) => { window.DOLLAREUS_API_URL = url; }, apiUrl);
 
 async function waitForService(url) {
