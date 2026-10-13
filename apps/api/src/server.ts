@@ -1981,9 +1981,17 @@ app.patch<{ Params: { organizationId: string; orderId: string }; Body: unknown }
       await client.query('ROLLBACK');
       return fail(reply, request, 409, 'INVALID_ORDER_TRANSITION', 'This order cannot move from ' + from + ' to ' + to + '.');
     }
-    if (to === 'cancelled' && current.rows[0].payment_status !== 'unpaid' && current.rows[0].payment_status !== 'failed') {
-      await client.query('ROLLBACK');
-      return fail(reply, request, 409, 'REFUND_REQUIRED', 'A paid or authorized order must go through the refund workflow before cancellation.');
+    if (to === 'cancelled') {
+      const moneyResult = await client.query(
+        "SELECT COALESCE((SELECT SUM(amount_minor) FROM payments WHERE order_id=$1 AND organization_id=$2 AND status='succeeded'),0)::text AS received, COALESCE((SELECT SUM(amount_minor) FROM refunds WHERE order_id=$1 AND organization_id=$2 AND status='recorded'),0)::text AS refunded",
+        [orderId, organizationId]
+      );
+      const received = Number(moneyResult.rows[0]?.received ?? 0);
+      const refunded = Number(moneyResult.rows[0]?.refunded ?? 0);
+      if (received > refunded) {
+        await client.query('ROLLBACK');
+        return fail(reply, request, 409, 'REFUND_REQUIRED', 'Record refunds for all received payments before cancelling this order.');
+      }
     }
     const now = new Date();
     const activeReservations = (to === 'cancelled' || to === 'completed')
