@@ -37,7 +37,7 @@
     icon="△"
     [accent]="lowStockCount() > 0 ? 'amber' : 'slate'"
     actionLabel="Check inventory →"
-    (action)="selectNavRequested.emit('Products')"
+    (action)="selectNavRequested.emit('Inventory')"
   />
 </section>
 
@@ -104,7 +104,7 @@
   >
     <div panel-actions>
       <button class="button secondary small" type="button" (click)="selectNavRequested.emit('API & channels')">
-        Manage API
+        Manage channels
       </button>
     </div>
 
