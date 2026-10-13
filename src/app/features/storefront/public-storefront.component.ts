@@ -112,6 +112,13 @@ export class PublicStorefrontComponent {
     return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(lines.join('\n'));
   }
 
+  protected mapEmbedUrl(): string {
+    const store = this.store();
+    const address = [store?.addressLine, store?.city, store?.countryCode].filter((part) => typeof part === 'string' && part.trim()).join(', ');
+    if (!address) return '';
+    return 'https://maps.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed';
+  }
+
   protected initialLetter(): string { return String(this.store()?.name ?? 'S').slice(0, 1).toUpperCase(); }
 
   protected locationLabel(): string { return String(this.store()?.locationName || this.store()?.city || this.store()?.locationSlug || '').replace(/-/g, ' '); }
