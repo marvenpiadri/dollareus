@@ -720,6 +720,9 @@ try {
     body: JSON.stringify({ method: 'cash', amountMinor: 500, status: 'succeeded', reference: `POS-PARTIAL-${suffix}`, idempotencyKey: `smoke-pos-partial-payment-${suffix}` })
   });
   if (partialPosPayment.payload?.data?.paymentStatus !== 'partially_paid') throw new Error('A partial manual POS payment did not set the effective payment status.');
+  await request(`/api/v1/organizations/${organizationId}/orders/${posOrder.payload?.data?.id}`, 409, {
+    method: 'PATCH', headers: authHeaders, body: JSON.stringify({ status: 'cancelled' })
+  });
   const partiallyPaidPosOrders = await request(`${posBase}/orders`, 200, { headers: authHeaders });
   const partiallyPaidProjection = partiallyPaidPosOrders.payload?.data?.find((item) => item.id === posOrder.payload?.data?.id);
   if (partiallyPaidProjection?.paymentStatus !== 'partially_paid') throw new Error('POS order projection did not expose the partial payment status.');
