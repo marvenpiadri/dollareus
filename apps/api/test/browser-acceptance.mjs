@@ -80,6 +80,9 @@ try {
   await menuForm.locator('input[name="name"]').fill(menuName);
   await menuForm.getByRole('button', { name: /Create menu/ }).click();
   await page.getByText(menuName, { exact: true }).waitFor();
+  // POS only offers dishes from an active menu; publish it as a restaurant owner would.
+  await page.getByRole('button', { name: 'Publish', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Unpublish', exact: true }).first().waitFor();
   await page.getByRole('button', { name: 'Manage items' }).first().click();
   await page.getByRole('heading', { name: 'Menu items' }).waitFor();
 
