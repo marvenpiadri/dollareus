@@ -487,7 +487,7 @@ app.get('/api/v1/organizations', { preHandler: authenticate }, async (request) =
     const baseOrgSlug = slugFromName(orgName);
     let orgSlug = baseOrgSlug;
     let suffix = 2;
-    const timezoneHeader = request.headers['x-vercel-ip-timezone'] ?? request.headers['cf-timezone'];
+    const timezoneHeader = request.headers['x-vercel-ip-timezone'] ?? request.headers['cf-timezone'] ?? request.headers['x-client-timezone'];
     const defaultTimeZone = typeof timezoneHeader === 'string' && timezoneHeader.length <= 100 ? timezoneHeader : 'Africa/Casablanca';
     try {
       await client.query('BEGIN');
