@@ -517,7 +517,9 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; sto
   const result = await pool.query(
     `SELECT p.id,p.store_id AS store_id,s.slug AS store_slug,s.name AS store_name,p.slug,p.name,p.description,p.kind,p.availability_status,p.availability_note,
       COALESCE((SELECT jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'options',v.options,'amountMinor',v.price_amount_minor,'currency',v.currency) ORDER BY v.created_at,v.id)
-        FROM product_variants v WHERE v.product_id=p.id AND v.organization_id=p.organization_id AND v.status='active'), '[]'::jsonb) AS variants
+        FROM product_variants v WHERE v.product_id=p.id AND v.organization_id=p.organization_id AND v.status='active'), '[]'::jsonb) AS variants,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'altText',m.alt_text,'width',m.width,'height',m.height,'byteSize',m.byte_size,'position',m.position,'contentUrl','/api/v1/organizations/' || m.organization_id || '/products/' || m.product_id || '/media/' || m.id || '/content') ORDER BY m.position,m.created_at)
+        FROM product_media m WHERE m.product_id=p.id AND m.organization_id=p.organization_id), '[]'::jsonb) AS media
      FROM products p
      JOIN stores s ON s.id=p.store_id AND s.organization_id=p.organization_id AND s.status='active'
      JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id AND f.published=true
@@ -529,6 +531,38 @@ app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; sto
   );
   return { data: camelize(result.rows), requestId: request.id };
 });
+app.get<{ Params: { organizationId: string }; Querystring: { limit?: string; storeId?: string } }>('/api/v1/organizations/:organizationId/integrations/menus', { preHandler: authenticate }, async (request, reply) => {
+  const { organizationId } = request.params;
+  if (!await requireMembership(request, reply, organizationId)) return;
+  const parsedLimit = Number.parseInt(request.query.limit ?? '50', 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 100)) : 50;
+  const storeId = request.query.storeId?.trim() || null;
+  const result = await pool.query(
+    `SELECT m.id, m.organization_id, m.store_id, s.slug AS store_slug, s.name AS store_name,
+            m.slug, m.name, m.description, m.service_periods, m.status, m.position,
+            COALESCE(
+              jsonb_agg(jsonb_build_object(
+                'id', i.id, 'slug', i.slug, 'name', i.name, 'description', i.description,
+                'amountMinor', i.price_amount_minor, 'currency', i.currency, 'status', i.status,
+                'categoryId', i.category_id, 'allergens', i.allergens, 'dietaryLabels', i.dietary_labels,
+                'availability', i.availability, 'position', i.position, 'metadata', i.metadata
+              ) ORDER BY i.position, i.id) FILTER (WHERE i.id IS NOT NULL),
+              '[]'::jsonb
+            ) AS items
+       FROM restaurant_menus m
+       JOIN stores s ON s.id=m.store_id AND s.organization_id=m.organization_id AND s.status='active'
+       JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id AND f.published=true
+         AND ('restaurant'=ANY(f.enabled_experiences) OR 'menu'=ANY(f.enabled_experiences) OR 'commerce'=ANY(f.enabled_experiences) OR 'catalog'=ANY(f.enabled_experiences))
+       LEFT JOIN restaurant_menu_items i ON i.menu_id=m.id AND i.organization_id=m.organization_id AND i.store_id=m.store_id AND i.status='active'
+       WHERE m.organization_id=$1 AND m.status='active' AND ($2::text IS NULL OR s.id=$2)
+       GROUP BY m.id, s.slug, s.name
+       ORDER BY m.position, m.id
+       LIMIT $3`,
+    [organizationId, storeId, limit]
+  );
+  return { data: camelize(result.rows), requestId: request.id };
+});
+
 
 app.get<{ Params: { organizationId: string }; Querystring: { limit?: string } }>('/api/v1/organizations/:organizationId/products', { preHandler: authenticate }, async (request, reply) => {
   const organizationId = request.params.organizationId;
