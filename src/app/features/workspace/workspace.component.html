@@ -62,7 +62,7 @@
               (qrRequested)="openQrStudio()"
             />
           }
-          @if (activeNav() === 'Overview' || activeNav() === 'Products') {
+          @if (activeNav() === 'Products') {
             <dlr-product-catalog
               [products]="products()"
               [categories]="categories()"
