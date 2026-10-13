@@ -34,6 +34,7 @@ export class WorkspaceComponent {
   protected readonly workspaceError = signal('');
   protected readonly onboardingError = signal('');
   protected readonly onboardingBusy = signal(false);
+  protected readonly showCreateStore = signal(false);
   protected readonly storeCurrency = signal('MAD');
   protected readonly onboardingStage = signal<'organization' | 'store' | 'ready'>('organization');
   protected readonly organizationId = signal('');
@@ -111,6 +112,8 @@ export class WorkspaceComponent {
   }
 
   protected retryWorkspace(): void { void this.loadWorkspace(); }
+  protected openCreateStore(): void { this.onboardingError.set(''); this.showCreateStore.set(true); }
+  protected closeCreateStore(): void { if (!this.onboardingBusy()) this.showCreateStore.set(false); }
 
   protected async createOrganization(event: Event): Promise<void> {
     event.preventDefault();
@@ -139,7 +142,8 @@ export class WorkspaceComponent {
       }) });
       this.storeId.set(store.id); this.storeCurrency.set('MAD'); this.storeName.set(store.name); this.storeSlug.set(store.slug);
       this.onboardingStage.set('ready');
-      await this.loadWorkspace();
+      this.showCreateStore.set(false);
+      await this.loadWorkspace(String(store.id));
     } catch (error) {
       this.onboardingError.set(error instanceof Error ? error.message : 'Could not create your store.');
     } finally { this.onboardingBusy.set(false); }
