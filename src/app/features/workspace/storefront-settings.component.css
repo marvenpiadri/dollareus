@@ -3,3 +3,5 @@
 .create-location-form{display:grid;gap:15px}.secondary-save{justify-self:start;border:1px solid #d5e1d2;border-radius:10px;padding:11px 15px;background:#f5f8f3;color:#2e5235;font:inherit;font-size:12px;font-weight:800;cursor:pointer}.secondary-save:disabled{opacity:.55;cursor:wait}
 
 .profile-image-preview{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e1e7df;border-radius:10px;background:#f8faf7;font-size:11px;color:#627064}.profile-image-preview img{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#e9eee7;border:1px solid #dce4d8}.profile-image-preview span{font-weight:700}
+
+.profile-image-preview{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e1e7df;border-radius:10px;background:#f8faf7;font-size:11px;color:#627064}.profile-image-preview img{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#e9eee7;border:1px solid #dce4d8}.profile-image-preview span{font-weight:700}
