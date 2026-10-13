@@ -59,7 +59,7 @@ export class QrStudio {
   readonly projectName = signal<string>('My QR Code');
   readonly selectedType = signal<QrContentType>('website');
   readonly contentData = signal<QrPayloadData>({
-    url: 'https://qr.x-facture.com',
+    url: 'https://example.com',
   });
 
   // Design State
@@ -111,8 +111,8 @@ export class QrStudio {
   readonly colorPresets = [
     '#17151f',
     '#000000',
-    '#7c5cfc',
-    '#4f46e5',
+    '#238636',
+    '#1f6f2c',
     '#0f766e',
     '#b42318',
     '#b45309',

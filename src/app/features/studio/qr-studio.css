@@ -543,3 +543,8 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.studio-quick-links{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.studio-quick-links a{white-space:nowrap;text-decoration:none}
+@media(max-width:900px){.studio-toolbar{align-items:flex-start;flex-direction:column}.studio-quick-links{order:2}.toolbar-actions{width:100%;flex-wrap:wrap}}
