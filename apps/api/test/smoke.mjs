@@ -52,6 +52,16 @@ try {
   if (!signupCookie) throw new Error('Signup session cookie was not present.');
   const signupSession = await request('/api/v1/auth/session', 200, { headers: { cookie: `dollareus_session=${signupCookie}` } });
   if (signupSession.payload?.data?.id !== signupUserId) throw new Error('The session created during signup is not valid.');
+  const signupAuthHeaders = { cookie: `dollareus_session=${signupCookie}` };
+  const signupOrganizations = await request('/api/v1/organizations', 200, { headers: signupAuthHeaders });
+  const signupOrganizationId = signupOrganizations.payload?.data?.[0]?.id;
+  if (!signupOrganizationId) throw new Error('Signup did not create an organization membership for the new user.');
+  const signupStores = await request(`/api/v1/organizations/${signupOrganizationId}/stores`, 200, { headers: signupAuthHeaders });
+  const signupStore = signupStores.payload?.data?.find((store) => store.slug === 'main-store');
+  if (!signupStore || signupStore.defaultExperience !== 'commerce' || signupStore.published !== false) {
+    throw new Error('Signup did not create the expected unpublished default store and storefront settings.');
+  }
+  checks.push('signup creates an organization, membership, store and storefront');
   await request('/api/v1/auth/logout', 200, { method: 'POST', headers: { cookie: `dollareus_session=${signupCookie}` } });
   const login = await request('/api/v1/auth/login', 200, {
     method: 'POST', headers: { 'content-type': 'application/json' },
