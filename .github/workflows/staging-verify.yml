@@ -46,10 +46,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Require the staging database secret
+      - name: Require a direct staging database connection
         run: |
           if [ -z "$DATABASE_URL" ]; then
             echo "::error::Add STAGING_DATABASE_URL as an environment secret in the GitHub staging environment before running this workflow."
+            exit 1
+          fi
+          if node -e 'const u = new URL(process.env.DATABASE_URL); process.exit(u.hostname.includes("-pooler.") ? 1 : 0)'; then
+            echo "Direct PostgreSQL connection detected."
+          else
+            echo "::error::STAGING_DATABASE_URL must use the direct Neon hostname, not the pooled -pooler hostname. The backup/restore rehearsal uses pg_dump and should not run through the transaction pooler."
             exit 1
           fi
       - run: pnpm install --no-frozen-lockfile
