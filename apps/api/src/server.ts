@@ -685,6 +685,11 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   const current = await pool.query('SELECT s.id,s.name,s.business_type,s.status,s.default_currency,s.locale,s.time_zone,s.description,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
   if (!current.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
   const row = current.rows[0];
+  const candidateTheme = parsed.data.theme ?? row.theme ?? {};
+  const profileImageUrl = typeof candidateTheme?.profileImageUrl === 'string' ? candidateTheme.profileImageUrl.trim() : '';
+  if ((parsed.data.published ?? row.published) === true && (!profileImageUrl || (() => { try { return new URL(profileImageUrl).protocol !== 'https:'; } catch { return true; } })())) {
+    return fail(reply, request, 400, 'BUSINESS_PROFILE_IMAGE_REQUIRED', 'Add a valid HTTPS business profile picture before publishing this business.');
+  }
   const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
   const enabledExperiences = parsed.data.enabledExperiences ?? row.enabled_experiences;
   if (!enabledExperiences.includes(defaultExperience)) return fail(reply, request, 400, 'INVALID_DEFAULT_EXPERIENCE', 'The default experience must be included in enabled experiences.');
