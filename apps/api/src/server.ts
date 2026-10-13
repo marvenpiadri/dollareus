@@ -244,7 +244,7 @@ const StoreInput = z.object({
   locationName: z.string().trim().max(180).nullable().optional(), addressLine: z.string().trim().max(300).nullable().optional(), city: z.string().trim().max(120).nullable().optional(),
   countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(), phone: z.string().trim().max(40).nullable().optional(),
   websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional()
-}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
+}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.published || (typeof value.theme.profileImageUrl === 'string' && value.theme.profileImageUrl.startsWith('https://')), { path: ['theme', 'profileImageUrl'], message: 'A valid HTTPS business profile picture is required before publishing.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
   name: z.string().trim().min(1).max(180).optional(),
   businessType: z.enum(['retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general']).optional(),
