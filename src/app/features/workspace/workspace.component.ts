@@ -116,6 +116,8 @@ export class WorkspaceComponent {
   protected openCreateStore(): void { this.onboardingError.set(''); this.showCreateStore.set(true); }
   protected closeCreateStore(): void { if (!this.onboardingBusy()) this.showCreateStore.set(false); }
 
+  private detectedTimeZone(): string { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Casablanca'; } catch { return 'Africa/Casablanca'; } }
+
   private slugify(value: string): string { return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
 
   protected async createOrganization(event: Event): Promise<void> {
@@ -140,7 +142,7 @@ export class WorkspaceComponent {
       const defaultExperience = businessType === 'restaurant' || businessType === 'cafe' ? 'menu' : businessType === 'freelancer' || businessType === 'services' ? 'services' : 'catalog';
       const store = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
         name: String(values.get('name') ?? '').trim(), slug: this.slugify(String(values.get('name') ?? '')), description: null,
-        businessType, status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
+        businessType, status: 'active', currency: 'MAD', locale: 'en', timeZone: this.detectedTimeZone(),
         defaultExperience, enabledExperiences: [defaultExperience], published: false, theme: {}
       }) });
       this.storeId.set(store.id); this.storeCurrency.set('MAD'); this.storeName.set(store.name); this.storeSlug.set(store.slug);
