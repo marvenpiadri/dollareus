@@ -91,8 +91,12 @@
               <option value="">Choose active product</option>
               @if (posSourceType() !== 'menu_item') {
                 @for (product of availablePosProducts(); track product.id) {
-                  @for (variant of product.variants || []; track variant.id) {
-                    <option [value]="variant.id">{{ product.name }} · {{ variant.title }} · {{ money(variant.priceMinor, variant.currency) }}</option>
+                  @if (product.variants?.length) {
+                    @for (variant of product.variants; track variant.id) {
+                      <option [value]="variant.id">{{ product.name }} · {{ variant.title }} · {{ money(variant.priceMinor, variant.currency) }}</option>
+                    }
+                  } @else if (product.variantId) {
+                    <option [value]="product.variantId">{{ product.name }} · {{ money(product.priceMinor, product.currency) }}</option>
                   }
                 }
               } @else {
@@ -166,7 +170,7 @@
 
         <div class="ticket-total-bar">
           <span>Estimated total</span>
-          <strong>{{ money(posCartTotalMinor(), storeCurrency()) }}</strong>
+          <strong>{{ money(posCartTotalMinor(), posCartCurrency()) }}</strong>
         </div>
 
         @if (posCartError()) {
@@ -179,7 +183,7 @@
           [disabled]="posSaveBusy() || !selectedPosSessionId() || !posCart().length"
           (click)="createPosOrder()"
         >
-          {{ posSaveBusy() ? 'Creating order…' : 'Create POS order · ' + money(posCartTotalMinor(), storeCurrency()) }}
+          {{ posSaveBusy() ? 'Creating order…' : 'Create POS order · ' + money(posCartTotalMinor(), posCartCurrency()) }}
         </button>
       } @else {
         <div class="ticket-empty">
