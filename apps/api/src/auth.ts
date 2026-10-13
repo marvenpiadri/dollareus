@@ -128,7 +128,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     await reply.code(401).send({ error: { code: 'INVALID_SESSION', message: 'Your session is invalid or has expired.', requestId: request.id } });
     return;
   }
-  request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
+  request.identity = { uid: row.id, username: row.username ?? null, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
   await pool.query('UPDATE auth_sessions SET last_seen_at=$1 WHERE id=$2', [new Date(), row.session_id]);
 }
 
