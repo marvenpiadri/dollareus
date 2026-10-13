@@ -37,7 +37,11 @@
       </div>
       <aside class="identity-card">
         <span class="card-label">OFFICIAL BUSINESS PAGE</span>
-        <div class="identity-icon">{{initialLetter()}}</div>
+        @if (store()?.theme?.profileImageUrl) {
+          <img class="identity-image" [src]="store()?.theme?.profileImageUrl" [alt]="(store()?.name || 'Business') + ' profile picture'" fetchpriority="high">
+        } @else {
+          <div class="identity-icon">{{initialLetter()}}</div>
+        }
         <h2>{{store()?.name}}</h2>
         <p>{{store()?.businessType || 'Business'}}</p>
         <span class="handle">@{{store()?.publicHandle}}</span>
