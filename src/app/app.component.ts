@@ -1,4 +1,5 @@
 import { Component, signal } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 type AppLanguage = 'EN' | 'FR' | 'ES' | 'DE';
@@ -50,7 +51,13 @@ export class AppComponent {
   protected readonly dark = signal(false);
   protected readonly openMenu = signal<'business' | 'tools' | 'settings' | ''>('');
 
-  constructor() {
+  protected readonly workspaceRoute = signal(false);
+
+  constructor(private readonly router: Router) {
+    this.syncRoute(this.router.url);
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationEnd) this.syncRoute(event.urlAfterRedirects);
+    });
     if (typeof window === 'undefined') return;
     try {
       const storedLanguage = localStorage.getItem('dollareus:language') as AppLanguage | null;
@@ -81,6 +88,10 @@ export class AppComponent {
     this.dark.update(value => !value);
     try { localStorage.setItem('dollareus:theme', this.dark() ? 'dark' : 'light'); } catch { /* Ignore unavailable storage. */ }
     this.applyPreferences();
+  }
+
+  private syncRoute(url: string): void {
+    this.workspaceRoute.set(url.split(/[?#]/, 1)[0] === '/app');
   }
 
   private applyPreferences(): void {
