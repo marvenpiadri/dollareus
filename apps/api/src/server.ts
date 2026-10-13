@@ -243,8 +243,9 @@ const StoreInput = z.object({
   wifiSecurity: z.enum(['none', 'WEP', 'WPA', 'WPA2', 'WPA3']).optional(),
   locationName: z.string().trim().max(180).nullable().optional(), addressLine: z.string().trim().max(300).nullable().optional(), city: z.string().trim().max(120).nullable().optional(),
   countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(), phone: z.string().trim().max(40).nullable().optional(),
-  websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional()
-}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.published || (typeof value.theme.profileImageUrl === 'string' && value.theme.profileImageUrl.startsWith('https://')), { path: ['theme', 'profileImageUrl'], message: 'A valid HTTPS business profile picture is required before publishing.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
+  websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional(),
+  whatsappNumber: z.string().trim().max(40).nullable().optional(), latitude: z.number().min(-90).max(90).nullable().optional(), longitude: z.number().min(-180).max(180).nullable().optional()
+}).strict().refine((value) => value.enabledExperiences.includes(value.defaultExperience), { path: ['enabledExperiences'], message: 'The default experience must be enabled.' }).refine((value) => !value.published || (typeof value.theme.profileImageUrl === 'string' && (value.theme.profileImageUrl.startsWith('https://') || value.theme.profileImageUrl.startsWith('/api/v1/public/storefronts/'))), { path: ['theme', 'profileImageUrl'], message: 'Upload a business profile picture before publishing.' }).refine((value) => !value.wifiSsid || value.wifiSecurity === 'none' || Boolean(value.wifiPassword), { path: ['wifiPassword'], message: 'A password is required for secured guest Wi-Fi.' });
 const StorefrontPatchInput = z.object({
   name: z.string().trim().min(1).max(180).optional(),
   businessType: z.enum(['retail', 'restaurant', 'cafe', 'freelancer', 'services', 'digital', 'general']).optional(),
@@ -261,6 +262,7 @@ const StorefrontPatchInput = z.object({
   locationName: z.string().trim().max(180).nullable().optional(), addressLine: z.string().trim().max(300).nullable().optional(), city: z.string().trim().max(120).nullable().optional(),
   countryCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(), phone: z.string().trim().max(40).nullable().optional(),
   websiteUrl: z.string().url().max(500).nullable().optional(), googleMapsUrl: z.string().url().max(1000).nullable().optional(),
+  whatsappNumber: z.string().trim().max(40).nullable().optional(), latitude: z.number().min(-90).max(90).nullable().optional(), longitude: z.number().min(-180).max(180).nullable().optional(),
   defaultExperience: z.enum(['commerce', 'menu', 'catalog', 'services']).optional(),
   enabledExperiences: z.array(z.enum(['commerce', 'menu', 'catalog', 'services'])).min(1).optional(),
   seoTitle: z.string().trim().max(180).nullable().optional(),
@@ -705,13 +707,13 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
   if (!await requireManagerRole(request, reply, organizationId)) return;
   const parsed = StorefrontPatchInput.safeParse(request.body);
   if (!parsed.success) return fail(reply, request, 400, 'VALIDATION_ERROR', 'The storefront settings payload is invalid.');
-  const current = await pool.query('SELECT s.id,s.name,s.business_type,s.status,s.default_currency,s.locale,s.time_zone,s.description,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
+  const current = await pool.query('SELECT s.id,s.name,s.business_type,s.status,s.default_currency,s.locale,s.time_zone,s.description,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.whatsapp_number,s.latitude,s.longitude,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.id=$1 AND s.organization_id=$2', [storeId, organizationId]);
   if (!current.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The selected store does not exist in this organization.');
   const row = current.rows[0];
   const candidateTheme = parsed.data.theme ?? row.theme ?? {};
   const profileImageUrl = typeof candidateTheme?.profileImageUrl === 'string' ? candidateTheme.profileImageUrl.trim() : '';
-  if ((parsed.data.published ?? row.published) === true && (!profileImageUrl || (() => { try { return new URL(profileImageUrl).protocol !== 'https:'; } catch { return true; } })())) {
-    return fail(reply, request, 400, 'BUSINESS_PROFILE_IMAGE_REQUIRED', 'Add a valid HTTPS business profile picture before publishing this business.');
+  if ((parsed.data.published ?? row.published) === true && (!profileImageUrl || (!profileImageUrl.startsWith('/api/v1/public/storefronts/') && (() => { try { return new URL(profileImageUrl).protocol !== 'https:'; } catch { return true; } })()))) {
+    return fail(reply, request, 400, 'BUSINESS_PROFILE_IMAGE_REQUIRED', 'Upload a business profile picture before publishing this business.');
   }
   const defaultExperience = parsed.data.defaultExperience ?? row.default_experience;
   const enabledExperiences = parsed.data.enabledExperiences ?? row.enabled_experiences;
@@ -743,13 +745,16 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
     const phone = parsed.data.phone === undefined ? row.phone : parsed.data.phone;
     const websiteUrl = parsed.data.websiteUrl === undefined ? row.website_url : parsed.data.websiteUrl;
     const googleMapsUrl = parsed.data.googleMapsUrl === undefined ? row.google_maps_url : parsed.data.googleMapsUrl;
-    await client.query('UPDATE stores SET name=$1,business_type=$2,status=$3,default_currency=$4,locale=$5,time_zone=$6,public_handle=$7,location_slug=$8,description=$9,wifi_ssid=$10,wifi_password=$11,wifi_security=$12,location_name=$13,address_line=$14,city=$15,country_code=$16,phone=$17,website_url=$18,google_maps_url=$19,updated_at=$20 WHERE id=$21 AND organization_id=$22', [name, businessType, status, currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl, new Date(), storeId, organizationId]);
+    const whatsappNumber = parsed.data.whatsappNumber === undefined ? row.whatsapp_number : parsed.data.whatsappNumber;
+    const latitude = parsed.data.latitude === undefined ? row.latitude : parsed.data.latitude;
+    const longitude = parsed.data.longitude === undefined ? row.longitude : parsed.data.longitude;
+    await client.query('UPDATE stores SET name=$1,business_type=$2,status=$3,default_currency=$4,locale=$5,time_zone=$6,public_handle=$7,location_slug=$8,description=$9,wifi_ssid=$10,wifi_password=$11,wifi_security=$12,location_name=$13,address_line=$14,city=$15,country_code=$16,phone=$17,website_url=$18,google_maps_url=$19,whatsapp_number=$20,latitude=$21,longitude=$22,updated_at=$23 WHERE id=$24 AND organization_id=$25', [name, businessType, status, currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl, whatsappNumber, latitude, longitude, new Date(), storeId, organizationId]);
     const result = await client.query(
       'UPDATE store_frontends SET default_experience=$1,enabled_experiences=$2,published=$3,seo_title=$4,seo_description=$5,theme=$6::jsonb,updated_at=$7 WHERE store_id=$8 AND organization_id=$9 RETURNING store_id,organization_id,default_experience,enabled_experiences,published,seo_title,seo_description,theme,updated_at',
       [defaultExperience, enabledExperiences, parsed.data.published ?? row.published, parsed.data.seoTitle === undefined ? row.seo_title : parsed.data.seoTitle, parsed.data.seoDescription === undefined ? row.seo_description : parsed.data.seoDescription, JSON.stringify(parsed.data.theme ?? row.theme ?? {}), new Date(), storeId, organizationId]
     );
     await client.query('COMMIT');
-    return { data: { ...camelize(result.rows[0]) as Record<string, unknown>, name, businessType, status, defaultCurrency: currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl }, requestId: request.id };
+    return { data: { ...camelize(result.rows[0]) as Record<string, unknown>, name, businessType, status, defaultCurrency: currency, locale, timeZone, publicHandle, locationSlug, description, wifiSsid, wifiPassword, wifiSecurity, locationName, addressLine, city, countryCode, phone, websiteUrl, googleMapsUrl, whatsappNumber, latitude, longitude }, requestId: request.id };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'STORE_PUBLIC_PATH_TAKEN', 'That public store address is already in use. Choose another username or location address.');
@@ -759,7 +764,7 @@ app.patch<{ Params: { organizationId: string; storeId: string }; Body: unknown }
 
 app.get<{ Params: { storeHandle: string; locationSlug: string } }>('/api/v1/public/storefronts/:storeHandle/:locationSlug', async (request, reply) => {
   const result = await pool.query(
-    'SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true LIMIT 1',
+    'SELECT s.id,s.name,s.description,s.slug,s.public_handle,s.location_slug,s.wifi_ssid,s.wifi_password,s.wifi_security,s.location_name,s.address_line,s.city,s.country_code,s.phone,s.website_url,s.google_maps_url,s.whatsapp_number,s.latitude,s.longitude,s.business_type,s.default_currency,s.locale,s.time_zone,f.default_experience,f.enabled_experiences,f.published,f.seo_title,f.seo_description,f.theme FROM stores s JOIN store_frontends f ON f.store_id=s.id AND f.organization_id=s.organization_id WHERE s.public_handle=$1 AND s.location_slug=$2 AND s.status=$3 AND f.published=true LIMIT 1',
     [request.params.storeHandle, request.params.locationSlug, 'active']
   );
   if (!result.rowCount) return fail(reply, request, 404, 'STORE_NOT_FOUND', 'The published store location does not exist.');
