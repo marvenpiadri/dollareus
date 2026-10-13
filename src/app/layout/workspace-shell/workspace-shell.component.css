@@ -146,3 +146,7 @@
  .global-search input,.global-search kbd{display:none}
  .content{padding:20px 14px}
 }
+
+html[data-theme="dark"] .nav-item.active{color:var(--color-status-paid)}
+html[data-theme="dark"] .nav-item.active .nav-symbol{color:var(--color-status-paid)}
+html[data-theme="dark"] .nav-item.active:before{background:var(--color-status-paid)}
