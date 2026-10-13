@@ -48,7 +48,8 @@ export class PublicMenuComponent {
   }
 
   protected money(minor: number, currency: string): string {
-    return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
+    const locale = String(this.publicMenuStore()?.locale ?? 'en');
+    return new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
 
   private async generateWifiQr(store: any): Promise<void> {
