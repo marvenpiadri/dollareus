@@ -459,10 +459,14 @@ app.post<{ Body: unknown }>('/api/v1/organizations', { preHandler: authenticate 
   const now = new Date();
   try {
     await client.query('BEGIN');
-    await client.query('INSERT INTO organizations (id, name, slug, public_handle, status, created_at, updated_at) VALUES ($1,$2,$3,$3,$4,$5,$5)', [id, parsed.data.name, parsed.data.slug, 'active', now]);
+    const baseSlug = parsed.data.slug.slice(0, 160);
+    let slug = baseSlug;
+    let suffix = 2;
+    while ((await client.query('SELECT 1 FROM organizations WHERE slug=$1 LIMIT 1', [slug])).rowCount) { slug = baseSlug.slice(0, 180 - String(suffix).length - 1) + '-' + suffix; suffix += 1; }
+    await client.query('INSERT INTO organizations (id, name, slug, public_handle, status, created_at, updated_at) VALUES ($1,$2,$3,$3,$4,$5,$5)', [id, parsed.data.name, slug, 'active', now]);
     await client.query('INSERT INTO organization_memberships (organization_id, user_id, role, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [id, request.identity!.uid, 'owner', 'active', now]);
     await client.query('COMMIT');
-    return reply.code(201).send({ data: { id, ...parsed.data, status: 'active', createdAt: now, updatedAt: now }, requestId: request.id });
+    return reply.code(201).send({ data: { id, ...parsed.data, slug, status: 'active', createdAt: now, updatedAt: now }, requestId: request.id });
   } catch (error) {
     await client.query('ROLLBACK');
     if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return fail(reply, request, 409, 'ORGANIZATION_SLUG_TAKEN', 'An organization with this slug already exists.');
@@ -678,7 +682,10 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
     await client.query('BEGIN');
     const organization = await client.query('SELECT slug,public_handle FROM organizations WHERE id=$1 FOR UPDATE', [organizationId]);
     const publicHandle = parsed.data.publicHandle ?? String(organization.rows[0]?.public_handle ?? organization.rows[0]?.slug ?? parsed.data.slug);
-    const locationSlug = parsed.data.locationSlug ?? parsed.data.slug;
+    let locationSlug = parsed.data.locationSlug ?? parsed.data.slug;
+    const baseLocationSlug = locationSlug.slice(0, 160);
+    let locationSuffix = 2;
+    while ((await client.query('SELECT 1 FROM stores WHERE organization_id=$1 AND (slug=$2 OR (public_handle=$3 AND location_slug=$2)) LIMIT 1', [organizationId, locationSlug, publicHandle])).rowCount) { locationSlug = baseLocationSlug.slice(0, 180 - String(locationSuffix).length - 1) + '-' + locationSuffix; locationSuffix += 1; }
     const timezoneHeader = request.headers['x-vercel-ip-timezone'] ?? request.headers['cf-timezone'];
     const detectedTimeZone = typeof timezoneHeader === 'string' && timezoneHeader.length > 0 && timezoneHeader.length <= 100 ? timezoneHeader : parsed.data.timeZone;
     if (publicHandle !== organization.rows[0]?.public_handle) {
@@ -699,7 +706,7 @@ app.post<{ Params: { organizationId: string }; Body: unknown }>('/api/v1/organiz
 app.get<{ Params: { organizationId: string } }>('/api/v1/organizations/:organizationId/stores', { preHandler: authenticate }, async (request, reply) => {
   const organizationId = request.params.organizationId;
   if (!await requireMembership(request, reply, organizationId)) return;
-  const result = await pool.query('SELECT s.*, f.default_experience, f.enabled_experiences, f.published, f.seo_title, f.seo_description, f.theme FROM stores s LEFT JOIN store_frontends f ON f.store_id=s.id WHERE s.organization_id=$1 ORDER BY s.updated_at DESC LIMIT 100', [organizationId]);
+  const result = await pool.query('SELECT s.*, f.default_experience, f.enabled_experiences, f.published, f.seo_title, f.seo_description, f.theme FROM stores s LEFT JOIN store_frontends f ON f.store_id=s.id WHERE s.organization_id=$1 ORDER BY s.updated_at DESC', [organizationId]);
   return { data: camelize(result.rows), requestId: request.id };
 });
 
