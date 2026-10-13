@@ -158,7 +158,7 @@ try {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'], theme: { profileImageUrl: 'https://example.com/dollareus-browser-profile.webp' } })
+      body: JSON.stringify({ published: true, defaultExperience: 'menu', enabledExperiences: ['menu', 'catalog'], whatsappNumber: '+212600000000', theme: { profileImageUrl: 'https://example.com/dollareus-browser-profile.webp' } })
     }));
     return { organizationId: organization.id, storeId: store.id };
   }, { apiUrl, storeSlug });
@@ -170,6 +170,9 @@ try {
   await publicPage.getByText(categoryName, { exact: true }).waitFor({ timeout: 15000 });
   await publicPage.getByText('Vegetarian', { exact: true }).waitFor({ timeout: 15000 });
   await publicPage.getByText('Contains: Milk', { exact: true }).waitFor({ timeout: 15000 });
+  const whatsappAction = publicPage.getByRole('link', { name: /Ask or order on WhatsApp/ });
+  await whatsappAction.waitFor({ timeout: 15000 });
+  assert.match(await whatsappAction.getAttribute('href'), /^https:\/\/wa\.me\/212600000000\?text=/, 'The menu WhatsApp action should use the configured international business number.');
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
   assert.deepEqual(await publicPage.locator('body').evaluate((body, targetName) => body.innerText.includes(targetName), dishName), true);
 
