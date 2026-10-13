@@ -1,0 +1,109 @@
+<section class="content-page">
+  <button type="button" class="back-link" (click)="back()">
+    <span class="mat-icon">arrow_back</span>
+    Change QR type
+  </button>
+
+  <div class="content-layout">
+    <div class="content-main">
+      <span class="eyebrow">QR CONTENT</span>
+      <div class="content-heading">
+        <span class="content-icon"><span class="mat-icon">{{ definition().icon }}</span></span>
+        <div>
+          <h1>{{ definition().label }}</h1>
+          <p>{{ definition().description }}</p>
+        </div>
+      </div>
+
+      <div class="mode-picker" aria-label="QR behavior">
+        <div class="mode-heading">
+          <span>QR behavior</span>
+          <small>Choose what happens after printing.</small>
+        </div>
+        <div class="mode-options">
+          @if (definition().capabilities.static) {
+            <button type="button" class="mode-option" [class.selected]="mode() === 'static'" (click)="setMode('static')">
+              <span class="mode-icon mat-icon">lock</span>
+              <span><strong>Static</strong><small>Data lives in the QR. It does not depend on QR Studio.</small></span>
+            </button>
+          }
+          @if (definition().capabilities.dynamic) {
+            <button type="button" class="mode-option" [class.selected]="mode() === 'dynamic'" (click)="setMode('dynamic')">
+              <span class="mode-icon mat-icon">sync</span>
+              <span><strong>Dynamic</strong><small>Change the destination later and see scan activity.</small></span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <form class="content-form" (submit)="$event.preventDefault(); continue()">
+        @for (field of definition().fields; track field.key) {
+          <div class="field" [class.invalid]="fieldHasError(field)">
+            @if (field.type !== 'checkbox') {
+              <label [for]="'field-' + field.key">{{ field.label }}@if (field.required) { <span>*</span> }</label>
+            }
+
+            @if (field.type === 'textarea') {
+              <textarea
+                [id]="'field-' + field.key"
+                [placeholder]="field.placeholder || ''"
+                [value]="data()[field.key] ?? ''"
+                (input)="update(field.key, $any($event.target).value)"
+              ></textarea>
+            } @else if (field.type === 'select') {
+              <select
+                [id]="'field-' + field.key"
+                [value]="data()[field.key] ?? ''"
+                (change)="update(field.key, $any($event.target).value)"
+              >
+                @for (option of field.options || []; track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            } @else if (field.type === 'checkbox') {
+              <label class="checkbox-field">
+                <input
+                  type="checkbox"
+                  [checked]="!!data()[field.key]"
+                  (change)="update(field.key, $any($event.target).checked)"
+                />
+                <span>{{ field.label }}</span>
+              </label>
+            } @else {
+              <input
+                [id]="'field-' + field.key"
+                [type]="field.type"
+                [placeholder]="field.placeholder || ''"
+                [value]="data()[field.key] ?? ''"
+                (input)="update(field.key, field.type === 'number' ? +$any($event.target).value : $any($event.target).value)"
+              />
+            }
+
+            @if (field.help) {
+              <small class="field-help">{{ field.help }}</small>
+            }
+            @if (fieldHasError(field)) {
+              <small class="field-error">This field is required.</small>
+            }
+          </div>
+        }
+
+        <div class="content-actions">
+          <button type="button" class="btn btn-secondary" (click)="back()">Back</button>
+          <button type="submit" class="btn btn-primary">
+            Continue to Studio
+            <span class="mat-icon">arrow_forward</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <aside class="content-side">
+      <div class="side-preview">
+        <span class="mat-icon">{{ definition().icon }}</span>
+        <strong>{{ definition().label }}</strong>
+        <p>Enter your details, then style the finished QR code in the Studio.</p>
+      </div>
+    </aside>
+  </div>
+</section>

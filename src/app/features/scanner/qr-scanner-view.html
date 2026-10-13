@@ -1,0 +1,249 @@
+<div class="scanner-container">
+  <!-- Hero Section -->
+  <header class="scanner-hero">
+    <h1 class="scanner-title">Instant QR Scanner & Decoder</h1>
+    <p class="scanner-subtitle">
+      Zero-latency hardware scanner powered by browser APIs. Accurately decodes custom branded QR codes, colored designs, and embedded logos.
+    </p>
+
+    <!-- Mode Switcher -->
+    <div class="scanner-mode-switch" role="tablist">
+      <button
+        type="button"
+        class="mode-switch-btn"
+        [class.active]="mode() === 'camera'"
+        (click)="switchMode('camera')"
+      >
+        <span class="mat-icon">videocam</span>
+        Live Camera
+      </button>
+      <button
+        type="button"
+        class="mode-switch-btn"
+        [class.active]="mode() === 'file'"
+        (click)="switchMode('file')"
+      >
+        <span class="mat-icon">image</span>
+        Upload Image
+      </button>
+    </div>
+  </header>
+
+  <!-- Scanner Stage -->
+  <div class="scanner-stage-card">
+    <!-- 1. LIVE CAMERA MODE -->
+    @if (mode() === 'camera') {
+      <div class="camera-viewport">
+        <!-- Hidden Canvas for frame processing -->
+        <canvas #hiddenCanvas style="display: none;"></canvas>
+
+        @if (cameraError()) {
+          <div style="text-align: center; padding: 24px; max-width: 450px;">
+            <span class="mat-icon" style="font-size: 48px; color: var(--color-warning); margin-bottom: 12px;">videocam_off</span>
+            <p style="font-weight: 700; margin-bottom: 6px;">Camera Access Needed</p>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+              {{ cameraError() }}
+            </p>
+            <button type="button" class="btn btn-primary btn-sm" (click)="startCamera()">
+              <span class="mat-icon">refresh</span>
+              Retry Camera
+            </button>
+          </div>
+        } @else {
+          <!-- Video Feed -->
+          <video #videoEl autoplay playsinline muted class="camera-video"></video>
+
+          <!-- Viewfinder Target Reticle -->
+          <div class="viewfinder-overlay">
+            <div class="target-reticle">
+              <div class="corner-bracket corner-tl"></div>
+              <div class="corner-bracket corner-tr"></div>
+              <div class="corner-bracket corner-bl"></div>
+              <div class="corner-bracket corner-br"></div>
+              <div class="laser-beam"></div>
+            </div>
+          </div>
+
+          <!-- Camera Controls Bar -->
+          <div class="camera-controls-bar">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              (click)="toggleCameraFacing()"
+              title="Flip camera"
+            >
+              <span class="mat-icon">flip_camera_ios</span>
+              Flip Camera
+            </button>
+
+            @if (hasTorch()) {
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                [class.btn-primary]="torchOn()"
+                (click)="toggleTorch()"
+                title="Toggle flashlight"
+              >
+                <span class="mat-icon">{{ torchOn() ? 'flash_on' : 'flash_off' }}</span>
+                Flashlight
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- 2. IMAGE FILE UPLOAD MODE -->
+    @if (mode() === 'file') {
+      <label
+        class="upload-drop-zone"
+        (dragover)="onDragOver($event)"
+        (drop)="onFileDropped($event)"
+      >
+        <input
+          type="file"
+          accept="image/*"
+          (change)="onFileSelected($event)"
+          style="display: none;"
+        />
+        <div class="upload-icon-circle">
+          <span class="mat-icon" style="font-size: 36px;">qr_code_scanner</span>
+        </div>
+        <div>
+          <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 4px;">
+            Drop QR image or screenshot here
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-secondary)">
+            Supports custom branded QR codes, PNG, JPG, WebP, SVG
+          </p>
+        </div>
+
+        @if (isProcessingFile()) {
+          <div style="display: flex; align-items: center; gap: 8px; color: var(--brand-primary); font-weight: 600;">
+            <span class="mat-icon">sync</span>
+            Analyzing & Decoding Matrix...
+          </div>
+        } @else {
+          <button type="button" class="btn btn-secondary btn-sm">
+            <span class="mat-icon">folder_open</span>
+            Browse Files
+          </button>
+        }
+      </label>
+    }
+  </div>
+
+  <!-- DECODED RESULT CARD -->
+  @if (lastResult()) {
+    <section class="decoded-result-card" aria-label="Scan Result">
+      <div class="result-card-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span class="result-type-badge">
+            <span class="mat-icon" style="font-size: 16px;">verified</span>
+            {{ lastResult()!.info.type }}
+          </span>
+          <span style="font-size: 0.8rem; color: var(--text-tertiary); font-family: var(--font-mono)">
+            Scanned Just Now
+          </span>
+        </div>
+
+        <button
+          type="button"
+          class="btn-ghost btn-sm"
+          (click)="lastResult.set(null)"
+          title="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div>
+        <h2 class="result-title">{{ lastResult()!.info.title }}</h2>
+
+        <!-- Key-Value metadata for Wi-Fi or vCard -->
+        @if (lastResult()!.info.parsedDetails) {
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: var(--radius-md);">
+            @for (item of lastResult()!.info.parsedDetails | keyvalue; track item.key) {
+              <div>
+                <span style="font-size: 0.72rem; color: var(--text-tertiary); text-transform: uppercase; font-weight: 700; display: block;">
+                  {{ item.key }}
+                </span>
+                <span style="font-size: 0.9rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">
+                  {{ item.value }}
+                </span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="result-actions">
+        @if (lastResult()!.info.actionUrl && lastResult()!.info.type === 'url') {
+          <button
+            type="button"
+            class="btn btn-primary"
+            (click)="openExternalUrl(lastResult()!.info.actionUrl)"
+          >
+            <span class="mat-icon">open_in_new</span>
+            Open URL
+          </button>
+        }
+
+        <button type="button" class="btn btn-secondary" (click)="copyResultText()">
+          <span class="mat-icon">content_copy</span>
+          {{ copyFeedback() ? 'Copied to Clipboard!' : 'Copy Data' }}
+        </button>
+
+        <button type="button" class="btn btn-secondary" (click)="editInStudio(lastResult()!)">
+          <span class="mat-icon">brush</span>
+          Open in QR Studio
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- SCAN HISTORY -->
+  @if (scanHistory().length > 0) {
+    <section class="history-section">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="font-size: 1.05rem; font-weight: 700;">Recent Scans</h3>
+        <button
+          type="button"
+          class="btn-ghost btn-sm"
+          (click)="scanHistory.set([])"
+        >
+          Clear History
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        @for (item of scanHistory(); track item.timestamp) {
+          <div class="history-item">
+            <div style="display: flex; align-items: center; gap: 12px; overflow: hidden;">
+              <span class="mat-icon" style="color: var(--brand-primary)">qr_code_2</span>
+              <div style="overflow: hidden;">
+                <p style="font-weight: 600; font-size: 0.9rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                  {{ item.info.title }}
+                </p>
+                <p style="font-size: 0.74rem; color: var(--text-tertiary); font-family: var(--font-mono)">
+                  Type: {{ item.info.type }}
+                </p>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <button
+                type="button"
+                class="btn-ghost btn-sm"
+                (click)="lastResult.set(item)"
+              >
+                View
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+</div>

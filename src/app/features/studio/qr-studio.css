@@ -1,16 +1,16 @@
 :host {
-  --text-primary: var(--color-text-main);
-  --text-secondary: var(--color-text-secondary);
-  --text-tertiary: var(--color-text-muted);
-  --border-default: var(--color-border);
-  --border-subtle: var(--color-border);
-  --border-hover: var(--color-border-dark);
-  --surface-panel: var(--color-surface);
-  --surface-input: var(--color-input-bg);
-  --surface-highlight: var(--color-surface-subtle);
-  --brand-primary: var(--color-money-green);
-  --brand-primary-light: var(--color-money-green-light);
-  --brand-primary-border: var(--color-money-green-border);
+  --color-text-main: var(--color-text-main);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-border: var(--color-border);
+  --color-border-dark: var(--color-border-dark);
+  --color-surface: var(--color-surface);
+  --color-surface-subtle: var(--color-input-bg);
+  --color-money-green-light: var(--color-surface-subtle);
+  --color-money-green: var(--color-money-green);
+  --color-money-green-light: var(--color-money-green-light);
+  --color-money-green-border: var(--color-money-green-border);
   --font-mono: var(--font-sans);
   color: var(--color-text-main);
   background: var(--color-canvas);
@@ -53,15 +53,15 @@
   border-radius: 8px;
   outline: 0;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--color-text-main);
   font-size: 0.95rem;
   font-weight: 750;
 }
 
 .project-name-input:hover,
 .project-name-input:focus {
-  border-color: var(--border-default);
-  background: var(--surface-panel);
+  border-color: var(--color-border);
+  background: var(--color-surface);
 }
 
 .studio-grid {
@@ -74,7 +74,7 @@
 .studio-panel,
 .preview-stage-container {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 13px;
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -87,7 +87,7 @@
 .panel-header {
   min-height: 50px;
   padding: 11px 13px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -98,7 +98,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-primary);
+  color: var(--color-text-main);
   font-size: 0.79rem;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -129,7 +129,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   text-align: left;
   font-size: 0.74rem;
@@ -139,12 +139,12 @@
 
 .type-button:hover {
   background: var(--color-surface-hover);
-  color: var(--text-primary);
+  color: var(--color-text-main);
 }
 
 .type-button.active {
-  border-color: var(--brand-primary-border);
-  background: var(--brand-primary-light);
+  border-color: var(--color-money-green-border);
+  background: var(--color-money-green-light);
   color: var(--color-money-green);
 }
 
@@ -173,7 +173,7 @@
 .preview-stage-header {
   min-height: 50px;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -186,20 +186,20 @@
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 700;
 }
 
 .control-pill:hover {
-  color: var(--text-primary);
+  color: var(--color-text-main);
   background: var(--color-surface-hover);
 }
 
 .control-pill.active {
-  border-color: var(--brand-primary-border);
-  background: var(--brand-primary-light);
+  border-color: var(--color-money-green-border);
+  background: var(--color-money-green-light);
   color: var(--color-money-green);
 }
 
@@ -210,7 +210,7 @@
   display: grid;
   place-items: center;
   overflow: auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 11px;
   background: var(--color-canvas);
 }
@@ -249,7 +249,7 @@
   gap: 2px;
   width: 100%;
   padding: 5px;
-  background: var(--surface-input);
+  background: var(--color-surface-subtle);
 }
 
 .design-tab {
@@ -257,7 +257,7 @@
   padding: 0 5px;
   border-radius: 7px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: 0.69rem;
   font-weight: 750;
@@ -265,11 +265,11 @@
 }
 
 .design-tab:hover {
-  color: var(--text-primary);
+  color: var(--color-text-main);
 }
 
 .design-tab.active {
-  background: var(--surface-highlight);
+  background: var(--color-money-green-light);
   color: var(--color-money-green);
 }
 
@@ -286,10 +286,10 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 9px;
   background: var(--color-surface-subtle);
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-size: 0.69rem;
   font-weight: 700;
@@ -298,14 +298,14 @@
 
 .style-tile:hover {
   transform: translateY(-1px);
-  border-color: var(--border-hover);
+  border-color: var(--color-border-dark);
   background: var(--color-surface-hover);
-  color: var(--text-primary);
+  color: var(--color-text-main);
 }
 
 .style-tile.active {
-  border-color: var(--brand-primary-border);
-  background: var(--brand-primary-light);
+  border-color: var(--color-money-green-border);
+  background: var(--color-money-green-light);
   color: var(--color-money-green);
 }
 
@@ -343,7 +343,7 @@
 
 .color-swatch-btn.active {
   border-color: var(--color-surface);
-  box-shadow: 0 0 0 2px var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--color-money-green);
 }
 
 .logo-upload-dropzone {
@@ -356,22 +356,22 @@
   border: 1px dashed var(--color-money-green-border);
   border-radius: 10px;
   background: var(--color-money-green-light);
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   text-align: center;
   transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .logo-upload-dropzone:hover {
-  border-color: var(--brand-primary);
-  background: var(--brand-primary-light);
+  border-color: var(--color-money-green);
+  background: var(--color-money-green-light);
 }
 
 .logo-preview-thumb {
   width: 42px;
   height: 42px;
   object-fit: contain;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
 }
@@ -379,7 +379,7 @@
 .scanability-banner {
   margin-top: 10px;
   padding: 10px 11px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--color-border);
   border-radius: 9px;
   background: var(--color-surface-subtle);
 }
@@ -390,8 +390,8 @@
   min-height: 25px;
   padding: 0 8px;
   border-radius: 6px;
-  background: var(--surface-highlight);
-  color: var(--text-secondary);
+  background: var(--color-money-green-light);
+  color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 600;
@@ -403,7 +403,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--color-border);
   border-radius: 9px;
   background: var(--color-money-green-light);
 }
@@ -411,11 +411,11 @@
 .export-hub-card {
   margin: 12px;
   padding: 13px;
-  border: 1px solid var(--brand-primary-border);
+  border: 1px solid var(--color-money-green-border);
   border-radius: 11px;
   background:
     linear-gradient(180deg, var(--color-money-green-medium), var(--color-money-green-light)),
-    var(--surface-panel);
+    var(--color-surface);
 }
 
 .export-headline {
@@ -427,7 +427,7 @@
 }
 
 .export-tagline {
-  color: var(--text-tertiary);
+  color: var(--color-text-muted);
   font-size: 0.64rem;
   text-align: right;
 }
@@ -454,8 +454,8 @@
 }
 
 .btn-vector-export {
-  border: 1px solid var(--brand-primary-border);
-  background: var(--brand-primary);
+  border: 1px solid var(--color-money-green-border);
+  background: var(--color-money-green);
   color: var(--color-surface);
 }
 
@@ -465,9 +465,9 @@
 }
 
 .btn-raster-export {
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--color-border);
   background: var(--color-surface-hover);
-  color: var(--text-primary);
+  color: var(--color-text-main);
 }
 
 .export-btn-sub {
@@ -477,7 +477,7 @@
 }
 
 .btn-raster-export .export-btn-sub {
-  color: var(--text-tertiary);
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 1180px) {

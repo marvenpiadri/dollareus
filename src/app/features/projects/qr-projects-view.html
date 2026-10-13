@@ -1,0 +1,123 @@
+<div class="projects-container">
+  <header class="projects-header">
+    <div class="projects-title-group">
+      <h1 class="projects-title">Local Projects Library</h1>
+      <p class="projects-subtitle">
+        Saved offline in your browser's IndexedDB. 100% private, permanent, and accessible without an account.
+      </p>
+    </div>
+
+    <button type="button" class="btn btn-primary" (click)="createNew()">
+      <span class="mat-icon">add</span>
+      Create New QR Code
+    </button>
+  </header>
+
+  <!-- Projects Grid or Empty State -->
+  @if (projectRepo.projects().length === 0) {
+    <div class="projects-empty-state">
+      <div class="empty-icon-circle">
+        <span class="mat-icon" style="font-size: 40px;">folder_open</span>
+      </div>
+      <div>
+        <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;">No Saved Projects Yet</h2>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); max-width: 480px;">
+          When you design QR codes in the Studio, click "Save Project" to store your custom designs, colors, logos, and frame settings right here on this device.
+        </p>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="createNew()">
+        <span class="mat-icon">brush</span>
+        Open QR Studio
+      </button>
+    </div>
+  } @else {
+    <div class="projects-grid">
+      @for (project of projectRepo.projects(); track project.id) {
+        <article class="project-card">
+          <!-- Thumbnail Button -->
+          <button
+            type="button"
+            class="project-card-preview"
+            (click)="openProject(project)"
+            aria-label="Open project in Studio"
+          >
+            <span [innerHTML]="getThumbnailSvg(project)"></span>
+          </button>
+
+          <!-- Info -->
+          <div class="project-card-body">
+            <div class="project-card-info">
+              <span class="project-type-tag">
+                <span class="mat-icon" style="font-size: 14px;">label</span>
+                {{ project.contentType }}
+              </span>
+              <h2 class="project-name-heading">{{ project.name }}</h2>
+              <span class="project-date">
+                Updated {{ project.updatedAt | date:'mediumDate' }}
+              </span>
+            </div>
+
+            <!-- Actions -->
+            <div class="project-card-actions">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  (click)="openProject(project)"
+                  title="Edit in Studio"
+                >
+                  <span class="mat-icon" style="font-size: 16px;">edit</span>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  (click)="downloadSvg(project)"
+                  title="Download SVG vector"
+                >
+                  <span class="mat-icon" style="font-size: 16px;">download</span>
+                  SVG
+                </button>
+                <button
+                  type="button"
+                  class="btn-ghost btn-sm"
+                  (click)="duplicateProject(project)"
+                  title="Duplicate project"
+                >
+                  <span class="mat-icon" style="font-size: 16px;">content_copy</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="btn-ghost btn-sm"
+                (click)="deleteProject(project)"
+                style="color: var(--color-danger)"
+                title="Delete project"
+              >
+                <span class="mat-icon" style="font-size: 16px;">delete</span>
+              </button>
+            </div>
+          </div>
+        </article>
+      }
+    </div>
+  }
+
+  <!-- Privacy & Local-first callout -->
+  <aside style="padding: 16px 20px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 10px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="mat-icon" style="color: var(--brand-primary); font-size: 24px;">lock</span>
+      <div>
+        <p style="font-weight: 700; font-size: 0.9rem;">Private & Local-First by Design</p>
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">
+          Your QR codes, Wi-Fi keys, and vCards remain on your current device. We do not track or store your scan destinations on any remote servers.
+        </p>
+      </div>
+    </div>
+    <span class="free-guarantee-badge">
+      <span class="mat-icon" style="font-size: 14px;">shield</span>
+      100% Free • No Account
+    </span>
+  </aside>
+</div>

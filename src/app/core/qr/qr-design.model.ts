@@ -50,7 +50,7 @@ export const DEFAULT_QR_DESIGN: QrDesign = {
   foreground: '#17151f',
   background: '#ffffff',
   useGradient: false,
-  gradientColor2: '#7c5cfc',
+  gradientColor2: '#238636',
   gradientAngle: 45,
 
   moduleStyle: 'square',

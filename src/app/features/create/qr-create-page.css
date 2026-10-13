@@ -1,0 +1,121 @@
+:host { display: block; }
+
+.create-page {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 72px 22px 90px;
+}
+
+.create-hero {
+  max-width: 720px;
+  margin-bottom: 48px;
+}
+
+.eyebrow {
+  color: #a99cff;
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+}
+
+.create-hero h1 {
+  margin: 10px 0 12px;
+  color: var(--color-text-main);
+  font-size: clamp(2.1rem, 5vw, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.055em;
+}
+
+.create-hero p {
+  max-width: 610px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+}
+
+.type-list {
+  display: grid;
+  gap: 34px;
+}
+
+.group-heading {
+  margin-bottom: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.create-type {
+  min-height: 86px;
+  padding: 13px;
+  display: grid;
+  grid-template-columns: 40px 1fr 22px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  color: var(--color-text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.create-type:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-money-green-border);
+  background: var(--color-money-green-light);
+}
+
+.type-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: #a99cff;
+}
+
+.type-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.type-copy strong {
+  font-size: 0.86rem;
+}
+
+.type-copy small {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.arrow {
+  color: var(--color-text-muted);
+  font-size: 17px;
+}
+
+.create-note {
+  margin: 38px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 700px) {
+  .create-page { padding: 48px 14px 60px; }
+  .type-grid { grid-template-columns: 1fr; }
+}

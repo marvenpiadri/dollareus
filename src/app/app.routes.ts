@@ -7,11 +7,19 @@ import { PublicMenuComponent } from './features/restaurants/public-menu/public-m
 import { WorkspaceComponent } from './features/workspace/workspace.component';
 import { PublicStorefrontComponent } from './features/storefront/public-storefront.component';
 import { PublicCatalogComponent } from './features/storefront/public-catalog.component';
+import { QrCreatePage } from './features/create/qr-create-page';
+import { QrContentPage } from './features/create/qr-content-page';
+import { QrProjectsView } from './features/projects/qr-projects-view';
+import { QrScannerView } from './features/scanner/qr-scanner-view';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: PublicHomeComponent },
   { path: 'qr/basic', component: QrStudioComponent },
   { path: 'qr', component: QrStudio },
+  { path: 'qr/create', component: QrCreatePage, title: 'Create a QR Code | Dollareus' },
+  { path: 'qr/create/:type', component: QrContentPage, title: 'QR Content | Dollareus' },
+  { path: 'qr/projects', component: QrProjectsView, title: 'Saved QR Projects | Dollareus' },
+  { path: 'qr/scan', component: QrScannerView, title: 'QR Scanner | Dollareus' },
   { path: 'login', component: AuthPageComponent },
   { path: 'signup', component: AuthPageComponent },
   { path: 'menu', component: PublicMenuComponent },
