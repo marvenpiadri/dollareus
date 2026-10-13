@@ -176,14 +176,27 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   }));
   app.decorateRequest('identity', null);
 
-  app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown } }>('/api/v1/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.get<{ Params: { username: string } }>('/api/v1/auth/usernames/:username/availability', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const username = request.params.username.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) {
+      return reply.code(200).send({ data: { username, available: false, reason: 'invalid' }, requestId: request.id });
+    }
+    const reserved = new Set(['admin', 'api', 'app', 'auth', 'billing', 'dollareus', 'help', 'login', 'mageus', 'null', 'root', 'signup', 'support', 'system', 'www']);
+    if (reserved.has(username)) {
+      return reply.send({ data: { username, available: false, reason: 'reserved' }, requestId: request.id });
+    }
+    const existing = await pool.query('SELECT 1 FROM users WHERE username=$1 LIMIT 1', [username]);
+    return { data: { username, available: existing.rowCount === 0, reason: existing.rowCount === 0 ? null : 'taken' }, requestId: request.id };
+  });
+
+  app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown; username?: unknown } }>('/api/v1/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
-    const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
+    const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';\n    const username = typeof request.body?.username === 'string' ? request.body.username.trim().toLowerCase() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return reply.code(400).send({ error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.', requestId: request.id } });
     }
-    if (password.length < 12 || password.length > 256) {
+    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) {\n      return reply.code(400).send({ error: { code: 'INVALID_USERNAME', message: 'Choose a username with 3–30 lowercase letters, numbers, underscores or hyphens. It must start with a letter or number.', requestId: request.id } });\n    }\n    if (['admin','api','app','auth','billing','dollareus','help','login','mageus','null','root','signup','support','system','www'].includes(username)) {\n      return reply.code(400).send({ error: { code: 'USERNAME_RESERVED', message: 'That username is reserved. Choose another one.', requestId: request.id } });\n    }\n    if (password.length < 12 || password.length > 256) {
       return reply.code(400).send({ error: { code: 'WEAK_PASSWORD', message: 'Password must contain between 12 and 256 characters.', requestId: request.id } });
     }
     if (displayName.length > 120) {
@@ -199,13 +212,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date();
     try {
       await client.query('BEGIN');
-      await client.query('INSERT INTO users (id,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [userId, email, displayName || null, 'active', now]);
+      await client.query('INSERT INTO users (id,username,email,display_name,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [userId, username, email, displayName || null, 'active', now]);
       await client.query('INSERT INTO auth_passwords (user_id,password_hash,created_at,updated_at) VALUES ($1,$2,$3,$3)', [userId, passwordHash, now]);
       const orgName = displayName ? displayName + "'s Workspace" : 'My Workspace';
       const orgSlug = 'workspace-' + userId.slice(0, 8);
-      await client.query('INSERT INTO organizations (id,name,slug,public_handle,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [orgId, orgName, orgSlug, orgSlug, 'active', now]);
+      await client.query('INSERT INTO organizations (id,name,slug,public_handle,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$6)', [orgId, orgName, orgSlug, username, 'active', now]);
       await client.query('INSERT INTO organization_memberships (organization_id,user_id,role,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5)', [orgId, userId, 'owner', 'active', now]);
-      await client.query('INSERT INTO stores (id,organization_id,name,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)', [storeId, orgId, 'Main Store', 'main-store', orgSlug, 'main-store', 'general', 'active', 'MAD', 'en', 'Africa/Casablanca', now]);
+      await client.query('INSERT INTO stores (id,organization_id,name,slug,public_handle,location_slug,business_type,status,default_currency,locale,time_zone,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$12)', [storeId, orgId, 'Main Store', 'main-store', username, 'main-store', 'general', 'active', 'MAD', 'en', 'Africa/Casablanca', now]);
       await client.query('INSERT INTO store_frontends (store_id,organization_id,default_experience,enabled_experiences,published,theme,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$7)', [storeId, orgId, 'commerce', ['commerce'], false, JSON.stringify({}), now]);      await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
