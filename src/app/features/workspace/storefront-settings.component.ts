@@ -51,7 +51,7 @@ export class StorefrontSettingsComponent {
       try { if (new URL(profileImageUrl).protocol !== 'https:') throw new Error(); }
       catch { this.error.set('Use a valid HTTPS image URL for the business profile picture.'); return; }
     }
-    if (values.get('published') === 'on' && !profileImageUrl && !this.settings()?.theme?.profileImageUrl) {
+    if (values.get('published') === 'on' && !profileImageUrl) {
       this.error.set('Add a business profile picture (logo, storefront photo, or another image) before publishing.');
       return;
     }
