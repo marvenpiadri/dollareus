@@ -39,3 +39,16 @@
 .rating-row{display:grid;grid-template-columns:36px minmax(60px,1fr) 18px;align-items:center;gap:7px;font-size:11px;color:var(--color-text-secondary)}
 .rating-track{height:6px;border-radius:99px;background:var(--color-canvas);overflow:hidden}
 .rating-track>span{display:block;height:100%;border-radius:99px;background:#e54868;transition:width .2s ease}
+
+
+.appointment-card{display:grid;gap:12px;max-width:580px;margin-top:24px;padding:22px;border:1px solid var(--color-border);border-radius:16px;background:var(--color-surface)}
+.appointment-card h2{margin:0;font-size:22px;letter-spacing:-.5px}
+.appointment-card>p{margin:0;color:var(--color-text-secondary);font-size:13px;line-height:1.6}
+.appointment-card label{display:grid;gap:6px;color:var(--color-text-secondary);font-size:12px;font-weight:750}
+.appointment-card input,.appointment-card textarea{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--color-border-dark);border-radius:9px;background:var(--color-surface);color:var(--color-text-main);font:inherit;font-size:14px}
+.appointment-card input:focus,.appointment-card textarea:focus{outline:2px solid var(--color-money-green-medium);border-color:var(--color-money-green)}
+.appointment-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.appointment-whatsapp{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 16px;border-radius:10px;background:#18794e;color:#fff;text-decoration:none;font-size:14px;font-weight:800}
+.appointment-whatsapp:hover{background:#12633f}
+.appointment-phone-note{padding:10px 12px;border-radius:8px;background:var(--color-canvas)}
+@media(max-width:520px){.appointment-fields{grid-template-columns:1fr}}
