@@ -1,0 +1,1285 @@
+<div class="studio-container">
+  <!-- Top Toolbar -->
+  <header class="studio-toolbar">
+    <div class="toolbar-title-group">
+      <span class="mat-icon" style="color: var(--brand-primary)">qr_code_2</span>
+      <input
+        type="text"
+        class="project-name-input"
+        [ngModel]="projectName()"
+        (ngModelChange)="projectName.set($event)"
+        placeholder="Project Name..."
+        aria-label="Project Name"
+      />
+      @if (projectId()) {
+        <span class="btn-sm" style="background: rgba(255,255,255,0.06); color: var(--text-tertiary); font-family: var(--font-mono)">
+          Local Saved
+        </span>
+      }
+    </div>
+
+    <div class="toolbar-actions">
+      <!-- In-app Test Scan button -->
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        (click)="testScanGeneratedCode()"
+        [disabled]="isTestingScan()"
+        title="Simulate smartphone camera decode on this generated QR"
+      >
+        <span class="mat-icon">document_scanner</span>
+        {{ isTestingScan() ? 'Verifying...' : 'Test Scan' }}
+      </button>
+
+      <!-- Save Project to Local IndexedDB -->
+      <button
+        type="button"
+        class="btn btn-secondary btn-sm"
+        (click)="saveProject()"
+        title="Save project to your local browser storage"
+      >
+        <span class="mat-icon">bookmark_border</span>
+        {{ saveFeedback() ? 'Saved Locally!' : 'Save Project' }}
+      </button>
+    </div>
+  </header>
+
+  <!-- Main 3-Column Workspace -->
+  <div class="studio-grid">
+    <!-- COLUMN 1: Content Types & Data Form -->
+    <aside class="studio-panel">
+      <div class="panel-header">
+        <h2 class="panel-title">
+          <span class="mat-icon">tune</span>
+          1. Content Type
+        </h2>
+        <span class="form-label" style="margin: 0; font-family: var(--font-mono)">
+          {{ rawPayload().length }} chars
+        </span>
+      </div>
+
+      <div class="panel-body">
+        <!-- Content Types Grid -->
+        <div class="content-types-grid" role="radiogroup" aria-label="QR Content Type">
+          @for (typeDef of contentTypes; track typeDef.id) {
+            <button
+              type="button"
+              class="type-button"
+              [class.active]="selectedType() === typeDef.id"
+              (click)="selectType(typeDef.id)"
+              [title]="typeDef.description"
+            >
+              <span class="mat-icon">{{ typeDef.icon }}</span>
+              <span>{{ typeDef.label }}</span>
+            </button>
+          }
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 4px 0;" />
+
+        <!-- Dynamic Form Fields -->
+        <div class="type-input-form">
+          <!-- WEBSITE -->
+          @if (selectedType() === 'website') {
+            <div class="form-group">
+              <label class="form-label" for="website-url">Website URL</label>
+              <input
+                id="website-url"
+                type="url"
+                class="form-control"
+                [ngModel]="contentData()['url']"
+                (ngModelChange)="updateField('url', $event)"
+                placeholder="https://example.com"
+              />
+              <span style="font-size: 0.76rem; color: var(--text-tertiary);">Direct URL. Permanent static code without redirects.</span>
+            </div>
+          }
+
+          <!-- PLAIN TEXT -->
+          @if (selectedType() === 'text') {
+            <div class="form-group">
+              <label class="form-label" for="plain-text">Message / Content</label>
+              <textarea
+                id="plain-text"
+                class="form-control"
+                rows="4"
+                [ngModel]="contentData()['text']"
+                (ngModelChange)="updateField('text', $event)"
+                placeholder="Type or paste text..."
+              ></textarea>
+            </div>
+          }
+
+          <!-- WI-FI -->
+          @if (selectedType() === 'wifi') {
+            <div class="form-group">
+              <label class="form-label" for="wifi-ssid">Network Name (SSID)</label>
+              <input
+                id="wifi-ssid"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['ssid']"
+                (ngModelChange)="updateField('ssid', $event)"
+                placeholder="e.g. Studio_5G"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wifi-encryption">Security</label>
+              <select
+                id="wifi-encryption"
+                class="form-control"
+                [ngModel]="contentData()['encryption']"
+                (ngModelChange)="updateField('encryption', $event)"
+              >
+                <option value="WPA">WPA / WPA2 / WPA3 (Recommended)</option>
+                <option value="WEP">WEP</option>
+                <option value="nopass">None (Open Network)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wifi-password">Password</label>
+              <input
+                id="wifi-password"
+                type="password"
+                class="form-control"
+                [ngModel]="contentData()['password']"
+                (ngModelChange)="updateField('password', $event)"
+                placeholder="Network password"
+              />
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+              <input
+                id="wifi-hidden"
+                type="checkbox"
+                [ngModel]="contentData()['hidden']"
+                (ngModelChange)="updateField('hidden', $event)"
+              />
+              <label for="wifi-hidden" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;">
+                Hidden SSID Network
+              </label>
+            </div>
+          }
+
+          <!-- VCARD / CONTACT -->
+          @if (selectedType() === 'vcard') {
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="form-group">
+                <label class="form-label" for="vcard-fname">First Name</label>
+                <input
+                  id="vcard-fname"
+                  type="text"
+                  class="form-control"
+                  [ngModel]="contentData()['firstName']"
+                  (ngModelChange)="updateField('firstName', $event)"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="vcard-lname">Last Name</label>
+                <input
+                  id="vcard-lname"
+                  type="text"
+                  class="form-control"
+                  [ngModel]="contentData()['lastName']"
+                  (ngModelChange)="updateField('lastName', $event)"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vcard-org">Organization / Studio</label>
+              <input
+                id="vcard-org"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['organization']"
+                (ngModelChange)="updateField('organization', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vcard-title">Job Title</label>
+              <input
+                id="vcard-title"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['title']"
+                (ngModelChange)="updateField('title', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vcard-phone">Mobile Phone</label>
+              <input
+                id="vcard-phone"
+                type="tel"
+                class="form-control"
+                [ngModel]="contentData()['phone']"
+                (ngModelChange)="updateField('phone', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vcard-email">Email Address</label>
+              <input
+                id="vcard-email"
+                type="email"
+                class="form-control"
+                [ngModel]="contentData()['email']"
+                (ngModelChange)="updateField('email', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="vcard-website">Website</label>
+              <input
+                id="vcard-website"
+                type="url"
+                class="form-control"
+                [ngModel]="contentData()['website']"
+                (ngModelChange)="updateField('website', $event)"
+              />
+            </div>
+          }
+
+          <!-- EMAIL -->
+          @if (selectedType() === 'email') {
+            <div class="form-group">
+              <label class="form-label" for="email-to">Recipient Email</label>
+              <input
+                id="email-to"
+                type="email"
+                class="form-control"
+                [ngModel]="contentData()['email']"
+                (ngModelChange)="updateField('email', $event)"
+                placeholder="hello@example.com"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="email-subject">Subject</label>
+              <input
+                id="email-subject"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['subject']"
+                (ngModelChange)="updateField('subject', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="email-body">Message Body</label>
+              <textarea
+                id="email-body"
+                class="form-control"
+                rows="3"
+                [ngModel]="contentData()['body']"
+                (ngModelChange)="updateField('body', $event)"
+              ></textarea>
+            </div>
+          }
+
+          <!-- PHONE -->
+          @if (selectedType() === 'phone') {
+            <div class="form-group">
+              <label class="form-label" for="phone-number">Phone Number</label>
+              <input
+                id="phone-number"
+                type="tel"
+                class="form-control"
+                [ngModel]="contentData()['phone']"
+                (ngModelChange)="updateField('phone', $event)"
+                placeholder="+1 555 123 4567"
+              />
+            </div>
+          }
+
+          <!-- SMS -->
+          @if (selectedType() === 'sms') {
+            <div class="form-group">
+              <label class="form-label" for="sms-phone">Phone Number</label>
+              <input
+                id="sms-phone"
+                type="tel"
+                class="form-control"
+                [ngModel]="contentData()['phone']"
+                (ngModelChange)="updateField('phone', $event)"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="sms-msg">Text Message</label>
+              <textarea
+                id="sms-msg"
+                class="form-control"
+                rows="3"
+                [ngModel]="contentData()['message']"
+                (ngModelChange)="updateField('message', $event)"
+              ></textarea>
+            </div>
+          }
+
+          <!-- WHATSAPP -->
+          @if (selectedType() === 'whatsapp') {
+            <div class="form-group">
+              <label class="form-label" for="wa-phone">WhatsApp Number (with country code)</label>
+              <input
+                id="wa-phone"
+                type="tel"
+                class="form-control"
+                [ngModel]="contentData()['phone']"
+                (ngModelChange)="updateField('phone', $event)"
+                placeholder="e.g. 15551234567"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="wa-msg">Pre-filled Message</label>
+              <textarea
+                id="wa-msg"
+                class="form-control"
+                rows="3"
+                [ngModel]="contentData()['message']"
+                (ngModelChange)="updateField('message', $event)"
+              ></textarea>
+            </div>
+          }
+
+          <!-- LOCATION -->
+          @if (selectedType() === 'location') {
+            <div class="form-group">
+              <label class="form-label" for="loc-query">Location Name / Address</label>
+              <input
+                id="loc-query"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['query']"
+                (ngModelChange)="updateField('query', $event)"
+                placeholder="e.g. Louvre Museum, Paris"
+              />
+            </div>
+          }
+
+          <!-- EVENT -->
+          @if (selectedType() === 'event') {
+            <div class="form-group">
+              <label class="form-label" for="evt-title">Event Title</label>
+              <input
+                id="evt-title"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['title']"
+                (ngModelChange)="updateField('title', $event)"
+              />
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="form-group">
+                <label class="form-label" for="evt-start">Start Time</label>
+                <input
+                  id="evt-start"
+                  type="datetime-local"
+                  class="form-control"
+                  [ngModel]="contentData()['startDate']"
+                  (ngModelChange)="updateField('startDate', $event)"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="evt-end">End Time</label>
+                <input
+                  id="evt-end"
+                  type="datetime-local"
+                  class="form-control"
+                  [ngModel]="contentData()['endDate']"
+                  (ngModelChange)="updateField('endDate', $event)"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="evt-loc">Location</label>
+              <input
+                id="evt-loc"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['location']"
+                (ngModelChange)="updateField('location', $event)"
+              />
+            </div>
+          }
+
+          <!-- APP LINK -->
+          @if (selectedType() === 'app_link') {
+            <div class="form-group">
+              <label class="form-label" for="app-url">App Store or Play Store Link</label>
+              <input
+                id="app-url"
+                type="url"
+                class="form-control"
+                [ngModel]="contentData()['url']"
+                (ngModelChange)="updateField('url', $event)"
+              />
+            </div>
+          }
+
+          <!-- SOCIAL -->
+          @if (selectedType() === 'social') {
+            <div class="form-group">
+              <label class="form-label" for="soc-platform">Platform</label>
+              <select
+                id="soc-platform"
+                class="form-control"
+                [ngModel]="contentData()['platform']"
+                (ngModelChange)="updateField('platform', $event)"
+              >
+                <option value="instagram">Instagram</option>
+                <option value="linkedin">LinkedIn</option>
+                <option value="x">X (Twitter)</option>
+                <option value="youtube">YouTube</option>
+                <option value="tiktok">TikTok</option>
+                <option value="github">GitHub</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="soc-handle">Username / Handle</label>
+              <input
+                id="soc-handle"
+                type="text"
+                class="form-control"
+                [ngModel]="contentData()['username']"
+                (ngModelChange)="updateField('username', $event)"
+                placeholder="username (without @)"
+              />
+            </div>
+          }
+        </div>
+      </div>
+    </aside>
+
+    <!-- COLUMN 2: Center Live Preview & Export Hub -->
+    <main class="studio-preview-column">
+      <div class="preview-stage-container">
+        <!-- Stage controls -->
+        <div class="preview-stage-header">
+          <div class="preview-controls">
+            <button
+              type="button"
+              class="control-pill"
+              [class.active]="previewBg() === 'white'"
+              (click)="previewBg.set('white')"
+              title="White preview background"
+            >
+              Light
+            </button>
+            <button
+              type="button"
+              class="control-pill"
+              [class.active]="previewBg() === 'dark'"
+              (click)="previewBg.set('dark')"
+              title="Dark preview background"
+            >
+              Dark
+            </button>
+            <button
+              type="button"
+              class="control-pill"
+              [class.active]="previewBg() === 'checker'"
+              (click)="previewBg.set('checker')"
+              title="Transparent checkerboard"
+            >
+              Transparent
+            </button>
+            <button
+              type="button"
+              class="control-pill"
+              [class.active]="previewBg() === 'mockup'"
+              (click)="previewBg.set('mockup')"
+              title="Studio Mockup View"
+            >
+              Mockup
+            </button>
+          </div>
+
+          <div class="preview-controls">
+            <button
+              type="button"
+              class="control-pill"
+              (click)="previewZoom.set(previewZoom() > 0.6 ? previewZoom() - 0.2 : 0.6)"
+              title="Zoom Out"
+            >
+              <span class="mat-icon" style="font-size: 16px;">remove</span>
+            </button>
+            <span style="font-size: 0.76rem; font-family: var(--font-mono); color: var(--text-tertiary)">
+              {{ (previewZoom() * 100).toFixed(0) }}%
+            </span>
+            <button
+              type="button"
+              class="control-pill"
+              (click)="previewZoom.set(previewZoom() < 1.8 ? previewZoom() + 0.2 : 1.8)"
+              title="Zoom In"
+            >
+              <span class="mat-icon" style="font-size: 16px;">add</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Render Target -->
+        <div
+          class="qr-canvas-holder"
+          [class.bg-white]="previewBg() === 'white'"
+          [class.bg-dark]="previewBg() === 'dark'"
+          [class.checkerboard-pattern]="previewBg() === 'checker'"
+          [class.bg-mockup]="previewBg() === 'mockup'"
+        >
+          <div
+            class="svg-render-target"
+            [style.transform]="'scale(' + previewZoom() + ')'"
+            [innerHTML]="safeSvg()"
+          ></div>
+        </div>
+
+        <!-- Scanability Protection Banner -->
+        <div
+          class="scanability-banner"
+          [class.status-excellent]="scanability().status === 'excellent' || scanability().status === 'good'"
+          [class.status-warning]="scanability().status === 'warning'"
+          [class.status-critical]="scanability().status === 'critical'"
+        >
+          <div class="scanability-info">
+            <span class="mat-icon">
+              {{ scanability().status === 'critical' ? 'error' : (scanability().status === 'warning' ? 'warning' : 'verified') }}
+            </span>
+            <div>
+              <span class="score-badge">Score: {{ scanability().score }}/100</span>
+              <span style="margin-left: 6px; font-weight: 600;">
+                Contrast: {{ scanability().contrastRatio.toFixed(1) }}:1
+              </span>
+            </div>
+          </div>
+
+          @if (scanability().warnings.length > 0 && scanability().warnings[0].actionable) {
+            <button
+              type="button"
+              class="btn btn-sm btn-secondary"
+              (click)="handleAutoFix(scanability().warnings[0].actionable!.action)"
+            >
+              {{ scanability().warnings[0].actionable!.label }}
+            </button>
+          }
+        </div>
+
+        <!-- Test Scan Result Popup/Card -->
+        @if (testScanMessage()) {
+          <div class="test-scan-result-card" style="width: 100%; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span
+                class="mat-icon"
+                [style.color]="testScanMessage()!.success ? 'var(--color-success)' : 'var(--color-warning)'"
+              >
+                {{ testScanMessage()!.success ? 'check_circle' : 'info' }}
+              </span>
+              <span style="font-size: 0.85rem;">{{ testScanMessage()!.text }}</span>
+            </div>
+            <button
+              type="button"
+              class="btn-ghost btn-sm"
+              (click)="testScanMessage.set(null)"
+              style="padding: 2px 6px;"
+            >
+              ✕
+            </button>
+          </div>
+        }
+      </div>
+
+      <!-- Designer-First Export Hub -->
+      <div class="export-hub-card">
+        <div class="export-headline">
+          <h3 style="font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+            <span class="mat-icon" style="color: var(--brand-primary)">download</span>
+            Export Design Asset
+          </h3>
+          <span class="export-tagline">100% Free • Permanent Static Vector</span>
+        </div>
+
+        <div class="export-actions-grid">
+          <!-- Primary SVG Vector Export -->
+          <button type="button" class="btn-vector-export" (click)="downloadSvg()">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 1.05rem;">
+              <span class="mat-icon">polyline</span>
+              Download SVG
+            </div>
+            <span class="export-btn-sub">Crisp vector for Illustrator, Figma & Print</span>
+          </button>
+
+          <!-- Copy SVG directly to clipboard -->
+          <button type="button" class="btn-raster-export" (click)="copySvg()">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 700;">
+              <span class="mat-icon">content_copy</span>
+              {{ copyFeedback() ? 'Copied Markup!' : 'Copy SVG' }}
+            </div>
+            <span class="export-btn-sub" style="color: var(--text-tertiary)">
+              Paste vector directly into tools
+            </span>
+          </button>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--border-subtle)">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600;">PNG Resolution:</span>
+            <select
+              class="form-control"
+              style="width: auto; padding: 4px 10px; font-size: 0.82rem;"
+              [ngModel]="pngResolution()"
+              (ngModelChange)="pngResolution.set(+$event)"
+            >
+              <option [value]="1024">1024 × 1024 px (Web)</option>
+              <option [value]="2048">2048 × 2048 px (HD)</option>
+              <option [value]="4096">4096 × 4096 px (300 DPI Print)</option>
+            </select>
+          </div>
+
+          <button type="button" class="btn btn-secondary btn-sm" (click)="downloadPng()">
+            <span class="mat-icon">image</span>
+            Download PNG
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- COLUMN 3: Visual Design Studio -->
+    <aside class="studio-panel studio-options-column">
+      <div class="panel-header" style="padding: 0;">
+        <!-- Tabs -->
+        <nav class="design-tabs" role="tablist">
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'modules'"
+            (click)="activeTab.set('modules')"
+          >
+            Modules
+          </button>
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'eyes'"
+            (click)="activeTab.set('eyes')"
+          >
+            Eyes
+          </button>
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'colors'"
+            (click)="activeTab.set('colors')"
+          >
+            Colors
+          </button>
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'logo'"
+            (click)="activeTab.set('logo')"
+          >
+            Logo
+          </button>
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'frame'"
+            (click)="activeTab.set('frame')"
+          >
+            Frame
+          </button>
+          <button
+            type="button"
+            class="design-tab"
+            [class.active]="activeTab() === 'reliability'"
+            (click)="activeTab.set('reliability')"
+          >
+            Settings
+          </button>
+        </nav>
+      </div>
+
+      <div class="panel-body">
+        <!-- TAB 1: MODULES -->
+        @if (activeTab() === 'modules') {
+          <div class="form-group">
+            <span class="form-label">Module Body Shape</span>
+            <div class="style-tiles-grid">
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().moduleStyle === 'square'"
+                (click)="setModuleStyle('square')"
+              >
+                <div class="style-tile-icon">
+                  <div style="width: 14px; height: 14px; background: currentColor;"></div>
+                </div>
+                <span>Square</span>
+              </button>
+
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().moduleStyle === 'rounded'"
+                (click)="setModuleStyle('rounded')"
+              >
+                <div class="style-tile-icon">
+                  <div style="width: 14px; height: 14px; background: currentColor; border-radius: 4px;"></div>
+                </div>
+                <span>Rounded</span>
+              </button>
+
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().moduleStyle === 'dots'"
+                (click)="setModuleStyle('dots')"
+              >
+                <div class="style-tile-icon">
+                  <div style="width: 14px; height: 14px; background: currentColor; border-radius: 50%;"></div>
+                </div>
+                <span>Dots</span>
+              </button>
+
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().moduleStyle === 'smooth'"
+                (click)="setModuleStyle('smooth')"
+              >
+                <div class="style-tile-icon">
+                  <div style="width: 14px; height: 14px; background: currentColor; border-radius: 6px 0 6px 0;"></div>
+                </div>
+                <span>Smooth</span>
+              </button>
+
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().moduleStyle === 'class'"
+                (click)="setModuleStyle('class')"
+              >
+                <div class="style-tile-icon">
+                  <div style="width: 12px; height: 12px; background: currentColor; transform: rotate(45deg);"></div>
+                </div>
+                <span>Diamond</span>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- TAB 2: FINDER EYES -->
+        @if (activeTab() === 'eyes') {
+          <div class="form-group">
+            <span class="form-label">Eye Outer Frame</span>
+            <div class="style-tiles-grid">
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyeFrameStyle === 'square'"
+                (click)="setEyeFrameStyle('square')"
+              >
+                <span>Square</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyeFrameStyle === 'rounded'"
+                (click)="setEyeFrameStyle('rounded')"
+              >
+                <span>Rounded</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyeFrameStyle === 'circle'"
+                (click)="setEyeFrameStyle('circle')"
+              >
+                <span>Circle</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyeFrameStyle === 'leaf'"
+                (click)="setEyeFrameStyle('leaf')"
+              >
+                <span>Leaf</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 10px;">
+            <span class="form-label">Eye Inner Pupil</span>
+            <div class="style-tiles-grid">
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyePupilStyle === 'square'"
+                (click)="setEyePupilStyle('square')"
+              >
+                <span>Square</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyePupilStyle === 'rounded'"
+                (click)="setEyePupilStyle('rounded')"
+              >
+                <span>Rounded</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyePupilStyle === 'circle'"
+                (click)="setEyePupilStyle('circle')"
+              >
+                <span>Circle</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().eyePupilStyle === 'diamond'"
+                (click)="setEyePupilStyle('diamond')"
+              >
+                <span>Diamond</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span class="form-label" style="margin: 0;">Independent Eye Colors</span>
+              <input
+                type="checkbox"
+                [ngModel]="design().customEyeColors"
+                (ngModelChange)="toggleCustomEyeColors($event)"
+              />
+            </div>
+
+            @if (design().customEyeColors) {
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+                <div>
+                  <span class="form-label">Frame Color</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <input
+                      type="color"
+                      class="form-color"
+                      [ngModel]="design().eyeFrameColor"
+                      (ngModelChange)="setEyeFrameColor($event)"
+                    />
+                    <input
+                      type="text"
+                      class="form-control"
+                      style="font-family: var(--font-mono); padding: 4px 8px;"
+                      [ngModel]="design().eyeFrameColor"
+                      (ngModelChange)="setEyeFrameColor($event)"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <span class="form-label">Pupil Color</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <input
+                      type="color"
+                      class="form-color"
+                      [ngModel]="design().eyePupilColor"
+                      (ngModelChange)="setEyePupilColor($event)"
+                    />
+                    <input
+                      type="text"
+                      class="form-control"
+                      style="font-family: var(--font-mono); padding: 4px 8px;"
+                      [ngModel]="design().eyePupilColor"
+                      (ngModelChange)="setEyePupilColor($event)"
+                    />
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- TAB 3: COLORS & GRADIENTS -->
+        @if (activeTab() === 'colors') {
+          <!-- Quick Presets -->
+          <div class="form-group">
+            <span class="form-label">Designer Palette</span>
+            <div class="color-swatches-row">
+              @for (hex of colorPresets; track hex) {
+                <button
+                  type="button"
+                  class="color-swatch-btn"
+                  [class.active]="design().foreground === hex"
+                  [style.background-color]="hex"
+                  (click)="setForegroundColor(hex)"
+                  [title]="hex"
+                ></button>
+              }
+            </div>
+          </div>
+
+          <!-- Foreground Color -->
+          <div class="form-group">
+            <label class="form-label" for="fg-color">QR Foreground Color</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <input
+                id="fg-color"
+                type="color"
+                class="form-color"
+                [ngModel]="design().foreground"
+                (ngModelChange)="setForegroundColor($event)"
+              />
+              <input
+                type="text"
+                class="form-control"
+                style="font-family: var(--font-mono)"
+                [ngModel]="design().foreground"
+                (ngModelChange)="setForegroundColor($event)"
+              />
+            </div>
+          </div>
+
+          <!-- Linear Gradient Toggle -->
+          <div class="form-group">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span class="form-label" style="margin: 0;">Linear Gradient</span>
+              <input
+                type="checkbox"
+                [ngModel]="design().useGradient"
+                (ngModelChange)="toggleGradient($event)"
+              />
+            </div>
+
+            @if (design().useGradient) {
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                <div>
+                  <span class="form-label">Gradient End Color</span>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input
+                      type="color"
+                      class="form-color"
+                      [ngModel]="design().gradientColor2"
+                      (ngModelChange)="setGradientColor2($event)"
+                    />
+                    <input
+                      type="text"
+                      class="form-control"
+                      style="font-family: var(--font-mono)"
+                      [ngModel]="design().gradientColor2"
+                      (ngModelChange)="setGradientColor2($event)"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span class="form-label">Angle</span>
+                    <span style="font-size: 0.76rem; font-family: var(--font-mono)">{{ design().gradientAngle }}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    class="form-range"
+                    min="0"
+                    max="360"
+                    step="5"
+                    [ngModel]="design().gradientAngle"
+                    (ngModelChange)="setGradientAngle(+$event)"
+                  />
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Background Color -->
+          <div class="form-group">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span class="form-label" style="margin: 0;">Background Color</span>
+              <button
+                type="button"
+                class="btn-sm btn-secondary"
+                (click)="toggleTransparentBg()"
+                style="font-size: 0.74rem;"
+              >
+                {{ design().background === 'transparent' ? 'Use Solid Color' : 'Make Transparent' }}
+              </button>
+            </div>
+
+            @if (design().background !== 'transparent') {
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                <input
+                  type="color"
+                  class="form-color"
+                  [ngModel]="design().background"
+                  (ngModelChange)="setBackgroundColor($event)"
+                />
+                <input
+                  type="text"
+                  class="form-control"
+                  style="font-family: var(--font-mono)"
+                  [ngModel]="design().background"
+                  (ngModelChange)="setBackgroundColor($event)"
+                />
+              </div>
+            } @else {
+              <div style="padding: 10px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--brand-accent); margin-top: 8px;">
+                ✓ Background is 100% transparent vector.
+              </div>
+            }
+          </div>
+        }
+
+        <!-- TAB 4: LOGO -->
+        @if (activeTab() === 'logo') {
+          <div class="form-group">
+            <span class="form-label">Brand Logo</span>
+
+            @if (!design().logo.enabled || !design().logo.dataUrl) {
+              <label class="logo-upload-dropzone">
+                <span class="mat-icon" style="font-size: 28px; color: var(--brand-primary)">cloud_upload</span>
+                <div>
+                  <p style="font-weight: 700; font-size: 0.88rem;">Upload Logo File</p>
+                  <p style="font-size: 0.76rem; color: var(--text-tertiary);">Supports SVG, PNG, or JPEG</p>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  (change)="onLogoUpload($event)"
+                  style="display: none;"
+                />
+              </label>
+            } @else {
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: var(--surface-card); border-radius: var(--radius-md);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <img
+                    [src]="design().logo.dataUrl"
+                    alt="Logo preview"
+                    class="logo-preview-thumb"
+                  />
+                  <div>
+                    <p style="font-size: 0.82rem; font-weight: 700;">{{ design().logo.name || 'Custom Logo' }}</p>
+                    <p style="font-size: 0.72rem; color: var(--brand-primary);">Embedded into Vector</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-ghost btn-sm"
+                  (click)="removeLogo()"
+                  style="color: var(--color-danger)"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <!-- Logo Size Slider -->
+              <div style="margin-top: 14px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span class="form-label">Logo Scale</span>
+                  <span style="font-size: 0.76rem; font-family: var(--font-mono)">
+                    {{ (design().logo.sizeRatio * 100).toFixed(0) }}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  class="form-range"
+                  min="0.10"
+                  max="0.28"
+                  step="0.02"
+                  [ngModel]="design().logo.sizeRatio"
+                  (ngModelChange)="setLogoSize(+$event)"
+                />
+              </div>
+
+              <!-- Logo Padding Slider -->
+              <div style="margin-top: 10px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span class="form-label">Clearance Margin</span>
+                  <span style="font-size: 0.76rem; font-family: var(--font-mono)">
+                    {{ design().logo.padding }} modules
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  class="form-range"
+                  min="0"
+                  max="3"
+                  step="1"
+                  [ngModel]="design().logo.padding"
+                  (ngModelChange)="setLogoPadding(+$event)"
+                />
+              </div>
+
+              <!-- Logo Shield Shape -->
+              <div style="margin-top: 10px;">
+                <span class="form-label">Background Shape</span>
+                <div class="style-tiles-grid">
+                  <button
+                    type="button"
+                    class="style-tile"
+                    [class.active]="design().logo.shape === 'rounded'"
+                    (click)="setLogoShape('rounded')"
+                  >
+                    <span>Rounded</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="style-tile"
+                    [class.active]="design().logo.shape === 'circle'"
+                    (click)="setLogoShape('circle')"
+                  >
+                    <span>Circle</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="style-tile"
+                    [class.active]="design().logo.shape === 'square'"
+                    (click)="setLogoShape('square')"
+                  >
+                    <span>Square</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="style-tile"
+                    [class.active]="design().logo.shape === 'none'"
+                    (click)="setLogoShape('none')"
+                  >
+                    <span>None</span>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- TAB 5: FRAMES & BADGES -->
+        @if (activeTab() === 'frame') {
+          <div class="form-group">
+            <span class="form-label">Frame Template</span>
+            <div class="style-tiles-grid">
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'none'"
+                (click)="setFrameType('none')"
+              >
+                <span>None</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'badge-bottom'"
+                (click)="setFrameType('badge-bottom')"
+              >
+                <span>Bottom Tag</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'badge-top'"
+                (click)="setFrameType('badge-top')"
+              >
+                <span>Top Tag</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'phone'"
+                (click)="setFrameType('phone')"
+              >
+                <span>Phone</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'ticket'"
+                (click)="setFrameType('ticket')"
+              >
+                <span>Ticket</span>
+              </button>
+              <button
+                type="button"
+                class="style-tile"
+                [class.active]="design().frame.type === 'simple-border'"
+                (click)="setFrameType('simple-border')"
+              >
+                <span>Border</span>
+              </button>
+            </div>
+          </div>
+
+          @if (design().frame.type !== 'none') {
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label" for="frame-label-text">Badge Call-To-Action Text</label>
+              <input
+                id="frame-label-text"
+                type="text"
+                class="form-control"
+                [ngModel]="design().frame.text"
+                (ngModelChange)="setFrameText($event)"
+                placeholder="SCAN ME"
+              />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="frame-theme-color">Frame Color</label>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input
+                  id="frame-theme-color"
+                  type="color"
+                  class="form-color"
+                  [ngModel]="design().frame.color"
+                  (ngModelChange)="setFrameColor($event)"
+                />
+                <input
+                  type="text"
+                  class="form-control"
+                  style="font-family: var(--font-mono)"
+                  [ngModel]="design().frame.color"
+                  (ngModelChange)="setFrameColor($event)"
+                />
+              </div>
+            </div>
+          }
+        }
+
+        <!-- TAB 6: RELIABILITY & SETTINGS -->
+        @if (activeTab() === 'reliability') {
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="form-label">Quiet Zone (Margin)</span>
+              <span style="font-size: 0.76rem; font-family: var(--font-mono)">
+                {{ design().quietZone }} modules
+              </span>
+            </div>
+            <input
+              type="range"
+              class="form-range"
+              min="0"
+              max="6"
+              step="1"
+              [ngModel]="design().quietZone"
+              (ngModelChange)="setQuietZone(+$event)"
+            />
+            <span style="font-size: 0.74rem; color: var(--text-tertiary)">
+              Standard recommendation is 2 to 4 modules for reliable camera framing.
+            </span>
+          </div>
+
+          <div class="form-group" style="margin-top: 14px;">
+            <label class="form-label" for="ecc-level">Error Correction Level (ECC)</label>
+            <select
+              id="ecc-level"
+              class="form-control"
+              [ngModel]="design().eccLevel"
+              (ngModelChange)="setEccLevel($event)"
+            >
+              <option value="L">L - Low (7% recovery, smallest size)</option>
+              <option value="M">M - Standard (15% recovery, everyday use)</option>
+              <option value="Q">Q - High (25% recovery, resilient)</option>
+              <option value="H">H - Maximum (30% recovery, recommended for logos)</option>
+            </select>
+            <span style="font-size: 0.74rem; color: var(--text-tertiary)">
+              Higher levels protect the code from dirt, scratches, and embedded logos.
+            </span>
+          </div>
+
+          <div style="padding: 12px; background: rgba(16, 185, 129, 0.08); border-radius: var(--radius-md); border: 1px solid rgba(16, 185, 129, 0.2); font-size: 0.8rem; color: #a7f3d0; margin-top: 14px;">
+            <strong>Zero Redirect Guarantee:</strong> This code directly contains your data payload. It will continue working permanently without any dependency on our server.
+          </div>
+        }
+      </div>
+    </aside>
+  </div>
+</div>
