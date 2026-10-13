@@ -10,7 +10,7 @@ import { QrManagementComponent } from '../qr-studio/qr-management.component';
 import { ApiCredentialsComponent } from '../developer-api/api-credentials.component';
 import { WorkspaceShellComponent } from '../../layout/workspace-shell/workspace-shell.component';
 import { StorefrontSettingsComponent } from './storefront-settings.component';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiClientService } from '../../core/api/api-client.service';
 import { SessionService } from '../../core/auth/session.service';
 import { WorkspaceDataService, StoreSummary } from '../../core/workspace-data.service';
@@ -42,7 +42,7 @@ export class WorkspaceComponent {
   protected readonly storeSlug = signal('');
   protected readonly stores = signal<StoreSummary[]>([]);
 
-  constructor(private readonly router: Router, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService, private readonly workspaceData: WorkspaceDataService) { void this.checkSession(); }
+  constructor(private readonly router: Router, private readonly route: ActivatedRoute, private readonly apiClient: ApiClientService, private readonly sessionService: SessionService, private readonly workspaceData: WorkspaceDataService) { this.route.queryParamMap.subscribe(params => { const section = params.get('section'); const valid: NavItem[] = ['Overview', 'Orders', 'POS', 'Products', 'Menus', 'QR Studio', 'Customers', 'Inventory', 'API & channels', 'Integrations', 'Settings']; if (section && valid.includes(section as NavItem)) this.activeNav.set(section as NavItem); }); void this.checkSession(); }
 
   private async checkSession(): Promise<void> {
     try {
