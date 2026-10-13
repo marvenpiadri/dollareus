@@ -10,3 +10,13 @@ input,select,textarea{min-height:44px;color:var(--color-input-text);background:v
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--color-border-focus);box-shadow:0 0 0 2px var(--color-money-green-light)}
 input::placeholder,textarea::placeholder{color:var(--color-input-placeholder)}input[type=checkbox],input[type=radio]{accent-color:var(--color-money-green)}
 ::selection{background:var(--color-money-green-medium);color:var(--color-text-main)}
+
+/* Shared application UI primitives */
+button{color:inherit}
+button:disabled{cursor:not-allowed}
+a,button,input,select,textarea{transition-color:var(--transition-fast)}
+input,select,textarea{border-color:var(--color-input-border);background:var(--color-input-bg);color:var(--color-input-text)}
+input::placeholder,textarea::placeholder{color:var(--color-input-placeholder)}
+table{color:var(--color-text-main)}
+:where(.panel,.metric,.card,.editor,.preview){background:var(--color-surface);color:var(--color-text-main);border-color:var(--color-border)}
+:where(.button,.primary,.secondary){font-family:var(--font-sans)}
