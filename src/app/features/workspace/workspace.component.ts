@@ -116,12 +116,14 @@ export class WorkspaceComponent {
   protected openCreateStore(): void { this.onboardingError.set(''); this.showCreateStore.set(true); }
   protected closeCreateStore(): void { if (!this.onboardingBusy()) this.showCreateStore.set(false); }
 
+  private slugify(value: string): string { return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'my-business'; }
+
   protected async createOrganization(event: Event): Promise<void> {
     event.preventDefault();
     const values = new FormData(event.currentTarget as HTMLFormElement);
     this.onboardingBusy.set(true); this.onboardingError.set('');
     try {
-      const organization = await this.apiClient.request('/api/v1/organizations', { method: 'POST', body: JSON.stringify({ name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim() }) });
+      const organization = await this.apiClient.request('/api/v1/organizations', { method: 'POST', body: JSON.stringify({ name: String(values.get('name') ?? '').trim(), slug: this.slugify(String(values.get('name') ?? '')) }) });
       this.organizationId.set(organization.id);
       this.onboardingStage.set('store');
     } catch (error) {
@@ -137,7 +139,7 @@ export class WorkspaceComponent {
       const businessType = String(values.get('businessType') ?? 'retail');
       const defaultExperience = businessType === 'restaurant' || businessType === 'cafe' ? 'menu' : businessType === 'freelancer' || businessType === 'services' ? 'services' : 'catalog';
       const store = await this.apiClient.request(`/api/v1/organizations/${encodeURIComponent(this.organizationId())}/stores`, { method: 'POST', body: JSON.stringify({
-        name: String(values.get('name') ?? '').trim(), slug: String(values.get('slug') ?? '').trim(), description: null,
+        name: String(values.get('name') ?? '').trim(), slug: this.slugify(String(values.get('name') ?? '')), description: null,
         businessType, status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca',
         defaultExperience, enabledExperiences: [defaultExperience], published: false, theme: {}
       }) });
@@ -154,9 +156,9 @@ export class WorkspaceComponent {
   protected readonly search = signal('');
   protected readonly toast = signal('');
   protected readonly primaryNav: {label: NavItem; symbol: string}[] = [
-    {label:'Overview',symbol:'▦'},{label:'Orders',symbol:'▤'},{label:'POS',symbol:'▣'},{label:'Products',symbol:'◇'},{label:'Menus',symbol:'☷'},{label:'QR Studio',symbol:'▦'},{label:'Customers',symbol:'♙'},{label:'Inventory',symbol:'▱'}
+    {label:'Overview',symbol:'dashboard'},{label:'Orders',symbol:'receipt_long'},{label:'POS',symbol:'point_of_sale'},{label:'Products',symbol:'inventory_2'},{label:'Menus',symbol:'restaurant_menu'},{label:'QR Studio',symbol:'qr_code_2'},{label:'Customers',symbol:'groups'},{label:'Inventory',symbol:'warehouse'}
   ];
-  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'⌘'},{label:'Integrations',symbol:'⌘'}];
+  protected readonly channelNav: {label: NavItem; symbol: string}[] = [{label:'API & channels',symbol:'hub'},{label:'Integrations',symbol:'extension'}];
   protected readonly filters: ('All' | ProductStatus)[] = ['All','Active','Draft','Archived'];
   protected readonly products = signal<ProductRow[]>([]);
   protected readonly openProductEditorRequest = signal(0);
