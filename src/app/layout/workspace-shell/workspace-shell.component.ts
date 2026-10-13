@@ -28,10 +28,20 @@ export class WorkspaceShellComponent {
   readonly dismissToastRequested = output<void>();
   readonly addStoreRequested = output<void>();
   readonly dark = signal(false);
+  readonly collapsed = signal(false);
+  readonly mobileOpen = signal(false);
 
   constructor() {
     if (typeof document !== 'undefined') this.dark.set(document.documentElement.dataset['theme'] === 'dark');
+    try { if (typeof localStorage !== 'undefined') this.collapsed.set(localStorage.getItem('dollareus:sidebar-collapsed') === 'true'); } catch { /* Keep the default expanded navigation. */ }
   }
+
+  toggleCollapsed(): void {
+    this.collapsed.update(value => !value);
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('dollareus:sidebar-collapsed', String(this.collapsed())); } catch { /* Keep the preference for this session. */ }
+  }
+
+  navigate(label: WorkspaceNavItem): void { this.navRequested.emit(label); this.mobileOpen.set(false); }
 
   toggleTheme(): void {
     this.dark.update(value => !value);
