@@ -104,14 +104,14 @@ try {
   await registerForm.locator('select').first().selectOption('restaurant');
   await registerForm.getByRole('button', { name: /Open register/ }).click();
 
-  const saleForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add item to ticket/ }) });
+  const saleForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add to ticket/ }) });
   await saleForm.locator('select').nth(0).selectOption('menu_item');
   const dishOption = await saleForm.locator('select').nth(1).locator('option').evaluateAll((options, targetName) =>
     options.map(option => ({ value: option.value, text: option.textContent ?? '' })).find(option => option.text.includes(targetName))
   , dishName);
   assert.ok(dishOption?.value, 'The newly saved dish should be selectable in POS.');
   await saleForm.locator('select').nth(1).selectOption(dishOption.value);
-  await saleForm.getByRole('button', { name: /Add item to ticket/ }).click();
+  await saleForm.getByRole('button', { name: /Add to ticket/ }).click();
   await page.getByRole('button', { name: /Create POS order/ }).click();
   await page.getByRole('button', { name: 'Print receipt' }).first().waitFor({ timeout: 15000 });
 
