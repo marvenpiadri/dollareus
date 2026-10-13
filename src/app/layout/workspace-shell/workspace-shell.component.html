@@ -2,6 +2,7 @@
       <aside class="sidebar">
         <a class="brand" href="#" (click)="$event.preventDefault(); navRequested.emit('Overview')"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
         <label class="store-switch"><span class="store-avatar">{{ storeName().slice(0,1).toUpperCase() }}</span><span class="store-switch-fields"><b>{{ storeName() }}</b><select aria-label="Switch store location" [value]="selectedStoreId()" (change)="storeChangeRequested.emit($any($event.target).value)">@for (store of stores(); track store.id) { <option [value]="store.id">{{ store.locationName || store.city || store.locationSlug || store.slug || store.name }}</option> }</select></span><span class="chevron" aria-hidden="true">⌄</span></label>
+        <button class="add-store-button" type="button" (click)="addStoreRequested.emit()">＋ Add store</button>
         <p class="nav-heading">WORKSPACE</p>
         @for (item of primaryNav(); track item.label) {
           <button class="nav-item" [class.active]="activeNav() === item.label" (click)="navRequested.emit(item.label)" type="button"><span class="nav-symbol">{{ item.symbol }}</span>{{ item.label }}@if(item.label === 'Orders' && ordersCount() > 0){<span class="count">{{ ordersCount() }}</span>}</button>
@@ -10,10 +11,10 @@
         @for (item of channelNav(); track item.label) {
           <button class="nav-item" [class.active]="activeNav() === item.label" (click)="navRequested.emit(item.label)" type="button"><span class="nav-symbol">{{ item.symbol }}</span>{{ item.label }}</button>
         }
-        <div class="sidebar-bottom"><div class="help-card"><span>✳</span><b>Building something?</b><p>Your store, your way. More tools are on the way.</p><button type="button" (click)="notifyRequested.emit('The product roadmap will be published soon.')">Explore the roadmap ↗</button></div><button class="nav-item" type="button" (click)="navRequested.emit('Settings')"><span class="nav-symbol">⚙</span>Settings</button><div class="user"><span class="user-avatar">D</span><span><b>Signed-in merchant</b><small>Workspace access</small></span><button type="button" aria-label="Account options" (click)="signOutRequested.emit()" aria-label="Sign out">↪</button></div></div>
+        <div class="sidebar-bottom"><button class="nav-item" type="button" (click)="navRequested.emit('Settings')"><span class="nav-symbol">⚙</span>Settings</button><div class="user"><span class="user-avatar">D</span><span><b>Signed-in merchant</b><small>Workspace access</small></span><button type="button" aria-label="Account options" (click)="signOutRequested.emit()" aria-label="Sign out">↪</button></div></div>
       </aside>
       <main class="main">
-        <header class="topbar"><div class="breadcrumbs"><span>{{ storeName() }}</span><span>/</span><b>{{ activeNav() }}</b></div><div class="top-actions"><label class="global-search"><span>⌕</span><input aria-label="Search products" placeholder="Search products..." [value]="search()" (input)="searchChangeRequested.emit($any($event.target).value)"><kbd>⌘ K</kbd></label><button class="icon-button" aria-label="Notifications" type="button" (click)="notifyRequested.emit('Notifications are not connected yet.')">♧<i></i></button><span class="demo-pill"><i></i> Connected workspace</span></div></header>
+        <header class="topbar"><div class="breadcrumbs"><span>{{ storeName() }}</span><span>/</span><b>{{ activeNav() }}</b></div><div class="top-actions"><button class="icon-button theme-toggle" type="button" (click)="toggleTheme()" [attr.aria-label]="dark() ? 'Switch to light theme' : 'Switch to dark theme'" [title]="dark() ? 'Light theme' : 'Dark theme'">{{ dark() ? '☼' : '◐' }}</button><label class="global-search"><span>⌕</span><input aria-label="Search products" placeholder="Search products..." [value]="search()" (input)="searchChangeRequested.emit($any($event.target).value)"><kbd>⌘ K</kbd></label><button class="icon-button" aria-label="Notifications" type="button" (click)="notifyRequested.emit('Notifications are not connected yet.')">♧<i></i></button></div></header>
         <div class="content">
         <ng-content />
         </div>
