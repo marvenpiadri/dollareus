@@ -72,6 +72,8 @@ jobs:
         run: pnpm db:setup
       - name: Verify migration history and checksums
         run: pnpm db:status
+      - name: Compare migrated PostgreSQL columns with the checked SQL snapshot
+        run: pnpm db:schema-check
       - name: Verify the schema snapshot on a clean PostgreSQL database
         run: |
           PGPASSWORD=postgres createdb -h 127.0.0.1 -U postgres dollareus_snapshot
