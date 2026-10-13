@@ -38,7 +38,7 @@
             <td>
               @if (order.status === 'pending') {
                 <select
-                  aria-label="Update order status"
+                  [attr.aria-label]="'Update status for order #' + order.id">
                   [value]="order.status"
                   [disabled]="orderActionBusyId() === order.resourceId"
                   (change)="updateOrderStatus(order, $any($event.target).value)"
@@ -50,7 +50,7 @@
                 </select>
               } @else if (order.status === 'confirmed') {
                 <select
-                  aria-label="Update order status"
+                  [attr.aria-label]="'Update status for order #' + order.id">
                   [value]="order.status"
                   [disabled]="orderActionBusyId() === order.resourceId"
                   (change)="updateOrderStatus(order, $any($event.target).value)"
@@ -62,7 +62,7 @@
                 </select>
               } @else if (order.status === 'processing') {
                 <select
-                  aria-label="Update order status"
+                  [attr.aria-label]="'Update status for order #' + order.id">
                   [value]="order.status"
                   [disabled]="orderActionBusyId() === order.resourceId"
                   (change)="updateOrderStatus(order, $any($event.target).value)"
