@@ -87,3 +87,32 @@ html[data-theme="dark"] .menu-choice-options label{background:var(--color-surfac
 .onboarding-input{width:100%;min-width:0;min-height:44px;padding:0 12px;border:1px solid var(--color-input-border);border-radius:var(--radius-md);background:var(--color-input-bg);color:var(--color-input-text)}
 .onboarding-hint{color:var(--color-text-secondary);font-size:11px;line-height:1.5;font-weight:400}
 .onboarding-error{margin:0;color:var(--color-status-overdue);font-size:13px;line-height:1.5}
+
+/* Semantic status labels remain legible in dark mode without losing their meaning. */
+html[data-theme="dark"] .status,
+html[data-theme="dark"] .status-pill,
+html[data-theme="dark"] .status-badge,
+html[data-theme="dark"] .pill{background:var(--color-surface-subtle);color:var(--color-text-secondary);border-color:var(--color-border)}
+/* QR Studio's editor and preview also inherit the active application theme. */
+html[data-theme="dark"] .studio-toolbar,
+html[data-theme="dark"] .studio-panel,
+html[data-theme="dark"] .preview-stage-container,
+html[data-theme="dark"] .panel-header,
+html[data-theme="dark"] .preview-stage-header,
+html[data-theme="dark"] .qr-canvas-holder,
+html[data-theme="dark"] .style-tile,
+html[data-theme="dark"] .type-button,
+html[data-theme="dark"] .control-pill,
+html[data-theme="dark"] .design-tab{background-color:var(--color-surface);color:var(--color-text-main);border-color:var(--color-border)}
+html[data-theme="dark"] .type-button:hover,
+html[data-theme="dark"] .style-tile:hover,
+html[data-theme="dark"] .control-pill:hover{background-color:var(--color-surface-hover)}
+html[data-theme="dark"] .type-button.active,
+html[data-theme="dark"] .style-tile.active,
+html[data-theme="dark"] .control-pill.active,
+html[data-theme="dark"] .design-tab.active{background:var(--color-money-green-light);color:var(--color-money-green);border-color:var(--color-money-green-border)}
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .project-name-input{background:var(--color-input-bg);color:var(--color-input-text);border-color:var(--color-input-border)}
+html[data-theme="dark"] .qr-canvas-holder.bg-white,
+html[data-theme="dark"] .qr-canvas-holder.bg-dark{background:var(--color-surface)}
+html[data-theme="dark"] .second{border-top-color:var(--color-border)}
