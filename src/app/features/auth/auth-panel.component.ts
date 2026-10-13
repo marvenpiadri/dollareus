@@ -17,6 +17,10 @@ export class AuthPanelComponent {
   protected readonly message = signal('');
   protected readonly error = signal('');
   protected readonly lastEmail = signal('');
+  protected readonly username = signal('');
+  protected readonly usernameStatus = signal<'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'error'>('idle');
+  private usernameCheckSequence = 0;
+  private usernameDebounce: ReturnType<typeof setTimeout> | undefined;
   protected readonly providers = signal({ google: false, facebook: false, emailFlows: false });
 
   constructor(private readonly apiClient: ApiClientService) {
@@ -39,8 +43,33 @@ export class AuthPanelComponent {
 
   protected setMode(mode: AuthMode): void {
     this.mode.set(mode);
+    if (mode === 'register') this.usernameStatus.set('idle');
     this.message.set('');
     this.error.set('');
+  }
+
+  protected onUsernameInput(value: string): void {
+    const username = value.trim().toLowerCase();
+    this.username.set(username);
+    this.usernameStatus.set('idle');
+    const sequence = ++this.usernameCheckSequence;
+    if (this.usernameDebounce) clearTimeout(this.usernameDebounce);
+    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) {
+      this.usernameStatus.set(username.length ? 'invalid' : 'idle');
+      return;
+    }
+    this.usernameStatus.set('checking');
+    this.usernameDebounce = setTimeout(async () => {
+      try {
+        const result = await this.apiClient.request<{ username: string; available: boolean; reason?: string | null }>(
+          '/api/v1/auth/usernames/' + encodeURIComponent(username) + '/availability'
+        );
+        if (sequence !== this.usernameCheckSequence) return;
+        this.usernameStatus.set(result?.available ? 'available' : 'taken');
+      } catch {
+        if (sequence === this.usernameCheckSequence) this.usernameStatus.set('error');
+      }
+    }, 350);
   }
 
   protected async submit(event: Event): Promise<void> {
@@ -50,7 +79,14 @@ export class AuthPanelComponent {
     const endpoint = mode === 'register' ? '/api/v1/auth/register' : mode === 'forgot' ? '/api/v1/auth/password/forgot' : '/api/v1/auth/login';
     const body: Record<string, string> = { email: String(values.get('email') ?? '') };
     this.lastEmail.set(body['email']);
-    if (mode === 'register') body['displayName'] = String(values.get('displayName') ?? '');
+    if (mode === 'register') {
+      body['displayName'] = String(values.get('displayName') ?? '');
+      body['username'] = String(values.get('username') ?? '').trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(body['username'])) {
+        this.error.set('Choose a username with 3–30 lowercase letters, numbers, underscores or hyphens.');
+        return;
+      }
+    }
     if (mode !== 'forgot') body['password'] = String(values.get('password') ?? '');
     this.busy.set(true); this.error.set(''); this.message.set('');
     try {
