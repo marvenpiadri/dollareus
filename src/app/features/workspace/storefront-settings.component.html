@@ -24,7 +24,7 @@
         <div class="fields two-col">
           <input type="hidden" name="locationSlug" [value]="settings()?.locationSlug || settings()?.slug || ''"><input type="hidden" name="publicHandle" [value]="settings()?.publicHandle || ''"><p class="automatic-url-note">Your public address is created automatically from your business and location name. You don’t need to manage a slug.</p>
         </div>
-        <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-username'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
+        <div class="url-preview"><span>PUBLIC URL</span><code>/{{settings()?.publicHandle || 'your-business'}}/{{settings()?.locationSlug || settings()?.slug || 'your-location'}}</code></div>
       </section>
       <section class="settings-card">
         <div class="card-heading"><span class="step">02</span><div><h3>Location and contact</h3><p>Use accurate branch details so customers can recognize the right location and search engines can associate the page with the local business.</p></div></div>
