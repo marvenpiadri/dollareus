@@ -27,6 +27,11 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       NODE_ENV: test
+      AWS_ENDPOINT_URL_S3: ${{ secrets.AWS_ENDPOINT_URL_S3 }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -58,7 +63,31 @@ jobs:
           test "$required_tables" -eq 7
           echo "Restore rehearsal passed: $migration_count migration records and $required_tables required business tables restored."
           rm -f "$dump_file"
-      - name: Apply pending migrations only after backup and restore verification
+      - name: Verify persistent object storage with a put/read/delete round trip
+        run: |
+          set -euo pipefail
+          for name in AWS_ENDPOINT_URL_S3 AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_S3_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Configure $name as a secret in the GitHub staging environment before storage verification."
+              exit 1
+            fi
+          done
+          command -v aws >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y awscli; }
+          region="${AWS_REGION:-us-east-2}"
+          key="dollareus-healthchecks/staging-storage-probe-${GITHUB_RUN_ID}.txt"
+          source_file="$RUNNER_TEMP/dollareus-storage-probe.txt"
+          readback_file="$RUNNER_TEMP/dollareus-storage-readback.txt"
+          printf 'Dollareus storage round-trip %s\n' "$GITHUB_RUN_ID" > "$source_file"
+          cleanup() {
+            aws --endpoint-url "$AWS_ENDPOINT_URL_S3" --region "$region" s3api delete-object --bucket "$AWS_S3_BUCKET" --key "$key" >/dev/null 2>&1 || true
+            rm -f "$source_file" "$readback_file"
+          }
+          trap cleanup EXIT
+          aws --endpoint-url "$AWS_ENDPOINT_URL_S3" --region "$region" s3api put-object --bucket "$AWS_S3_BUCKET" --key "$key" --body "$source_file" >/dev/null
+          aws --endpoint-url "$AWS_ENDPOINT_URL_S3" --region "$region" s3api get-object --bucket "$AWS_S3_BUCKET" --key "$key" "$readback_file" >/dev/null
+          cmp "$source_file" "$readback_file"
+          echo "Object storage round-trip passed for the configured private bucket."
+      - name: Apply pending migrations only after backup, restore, and storage verification
         run: pnpm db:migrate
       - name: Verify migration history, checksums, and required schema version
         run: pnpm db:status
