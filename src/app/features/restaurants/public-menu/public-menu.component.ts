@@ -37,6 +37,16 @@ export class PublicMenuComponent {
     return [...sections.entries()].map(([name, items]) => ({ name, items }));
   }
 
+  protected whatsappMenuUrl(): string {
+    const store = this.publicMenuStore();
+    const rawNumber = String(store?.whatsappNumber ?? store?.phone ?? '');
+    const phone = rawNumber.replace(/\\D/g, '');
+    if (!phone) return '';
+    const storeName = String(store?.name ?? 'this business');
+    const message = 'Hello ' + storeName + ', I am viewing your menu and would like to ask a question or place an order.';
+    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(message);
+  }
+
   protected money(minor: number, currency: string): string {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(minor / 100);
   }
