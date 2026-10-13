@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { PoolClient } from 'pg';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
@@ -6,6 +7,65 @@ import { pool } from './pool.js';
 const migrationsDirectory = fileURLToPath(new URL('../../db/migrations/', import.meta.url));
 
 type AppliedMigration = { name: string; checksum: string };
+
+async function hasColumn(client: PoolClient, tableName: string, columnName: string): Promise<boolean> {
+  const result = await client.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2
+     ) AS exists`,
+    [tableName, columnName]
+  );
+  return Boolean(result.rows[0]?.exists);
+}
+
+/**
+ * Keep historical migration files/checksums immutable while allowing their
+ * legacy data backfills to run against both the current schema and older
+ * installations that used different price-column names.
+ */
+async function prepareMigrationSql(client: PoolClient, name: string, sourceSql: string): Promise<string> {
+  let sql = sourceSql;
+
+  if (name === '0012_fix_schema_discrepancies.sql' &&
+      !(await hasColumn(client, 'product_variants', 'amount_minor'))) {
+    sql = sql.replace(
+      'UPDATE product_variants SET price_amount_minor = amount_minor WHERE price_amount_minor IS NULL;',
+      ''
+    );
+  }
+
+  if (name === '0014_fix_order_items_unit_amount_minor.sql' &&
+      !(await hasColumn(client, 'order_items', 'price_amount_minor'))) {
+    if (await hasColumn(client, 'order_items', 'amount_minor')) {
+      sql = sql
+        .replaceAll('price_amount_minor', 'amount_minor');
+    } else if (await hasColumn(client, 'order_items', 'unit_amount_minor')) {
+      sql = sql
+        .replace(
+          'UPDATE order_items SET unit_amount_minor = price_amount_minor WHERE unit_amount_minor IS NULL;',
+          ''
+        )
+        .replace(
+          'UPDATE order_items SET total_minor = price_amount_minor * quantity WHERE total_minor IS NULL;',
+          'UPDATE order_items SET total_minor = unit_amount_minor * quantity WHERE total_minor IS NULL;'
+        );
+    } else {
+      sql = sql
+        .replace(
+          'UPDATE order_items SET unit_amount_minor = price_amount_minor WHERE unit_amount_minor IS NULL;',
+          ''
+        )
+        .replace(
+          'UPDATE order_items SET total_minor = price_amount_minor * quantity WHERE total_minor IS NULL;',
+          ''
+        );
+    }
+  }
+
+  return sql;
+}
+
 
 try {
   const client = await pool.connect();
@@ -64,6 +124,7 @@ try {
     for (const name of files) {
       const sql = await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
+      const executionSql = await prepareMigrationSql(client, name, sql);
       const existingChecksum = applied.get(name);
 
       if (existingChecksum) {
@@ -87,7 +148,7 @@ try {
 
       await client.query('BEGIN');
       try {
-        await client.query(sql);
+        await client.query(executionSql);
         await client.query(
           'INSERT INTO public.schema_migrations (name, checksum) VALUES ($1, $2)',
           [name, checksum]
