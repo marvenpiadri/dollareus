@@ -862,3 +862,9 @@ CREATE TABLE store_review_verification_tokens (
 );
 CREATE INDEX store_review_verification_expiry_idx
   ON store_review_verification_tokens (expires_at);
+
+
+-- Source: 0015_store_profile_whatsapp_map.sql
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS whatsapp_number text;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS latitude double precision;
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS longitude double precision;
