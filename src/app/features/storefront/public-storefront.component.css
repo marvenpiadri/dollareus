@@ -34,3 +34,8 @@
 .review-notice{background:var(--color-money-green-light);color:var(--color-money-green)}
 .review-error{background:var(--color-status-overdue-bg);color:var(--color-status-overdue)}
 @media(max-width:760px){.reviews-section{padding:26px 16px}.reviews-heading{align-items:flex-start;flex-direction:column}.review-layout{grid-template-columns:1fr}.review-score{justify-items:start}}
+
+.rating-distribution{display:grid;gap:5px;width:min(220px,100%);margin-top:8px}
+.rating-row{display:grid;grid-template-columns:36px minmax(60px,1fr) 18px;align-items:center;gap:7px;font-size:11px;color:var(--color-text-secondary)}
+.rating-track{height:6px;border-radius:99px;background:var(--color-canvas);overflow:hidden}
+.rating-track>span{display:block;height:100%;border-radius:99px;background:#e54868;transition:width .2s ease}
