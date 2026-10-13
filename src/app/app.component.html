@@ -1,5 +1,6 @@
 <div class="site-frame" (click)="closeMenus()">
-  @if (!workspaceRoute()) {\n  <header class="site-header" (click)="$event.stopPropagation()">
+  @if (!workspaceRoute()) {
+  <header class="site-header" (click)="$event.stopPropagation()">
     <a class="site-brand" routerLink="/" (click)="closeMenus()" aria-label="Dollareus home">
       <span class="brand-symbol">d.</span>
       <span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span>
@@ -58,12 +59,14 @@
       <a class="signin-link" routerLink="/login" (click)="closeMenus()">{{ t('signIn') }} <span aria-hidden="true">↗</span></a>
     </div>
   </header>
+  }
 
   <div class="site-content" (click)="closeMenus()">
     <router-outlet />
   </div>
 
-  @if (!workspaceRoute()) {\n  <footer class="site-footer" (click)="$event.stopPropagation()">
+  @if (!workspaceRoute()) {
+  <footer class="site-footer" (click)="$event.stopPropagation()">
     <div class="footer-main">
       <div class="footer-brand-column">
         <a class="footer-brand" routerLink="/"><span class="brand-symbol">d.</span><span class="brand-wordmark">dollareus<small>BUSINESS WORKSPACE</small></span></a>
@@ -76,4 +79,5 @@
     </div>
     <div class="footer-bottom"><span>© 2026 Dollareus. {{ t('copyright') }}</span><span>One business. One connected workspace.</span></div>
   </footer>
+  }
 </div>
