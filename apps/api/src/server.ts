@@ -34,6 +34,7 @@ function sharp(input: Buffer | Uint8Array, options?: any): any {
 import { pool } from './db/pool.js';
 import { REQUIRED_SCHEMA_VERSION } from './db/schema-version.js';
 import { authenticate, registerAuthRoutes } from './auth.js';
+import { registerReviewRoutes } from './reviews.js';
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 1_048_576, genReqId: () => randomUUID() });
 const configuredOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:4200,http://localhost:3000')
@@ -105,6 +106,7 @@ app.addHook('onRequest', async (request, reply) => {
 const configuredRateLimit = Number.parseInt(process.env.RATE_LIMIT_MAX ?? '120', 10);
 await app.register(rateLimit, { max: Number.isFinite(configuredRateLimit) && configuredRateLimit > 0 ? configuredRateLimit : 120, timeWindow: '1 minute' });
 await registerAuthRoutes(app);
+await registerReviewRoutes(app);
 
 app.addHook('onSend', async (request, reply, payload) => {
   const credential = request.apiCredential;
