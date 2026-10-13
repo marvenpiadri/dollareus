@@ -3,7 +3,7 @@
   @if(loading()){<div class="settings-state">Loading storefront settings…</div>}
   @else if(!settings()){<div class="settings-error" role="alert">{{error()}}</div>}
   @else {
-    <form class="settings-form" (submit)="save($event)">
+    <form class="settings-form" [attr.aria-busy]="saving()" (submit)="save($event)">
       <section class="settings-card">
         <div class="card-heading"><span class="step">00</span><div><h3>Business identity and operations</h3><p>Manage the core business location independently from its public publishing settings.</p></div></div>
         <div class="fields two-col">
@@ -93,7 +93,7 @@
       <section class="publish-card"><div><h3>Publish your public business page</h3><p>Anyone with the link can visit a published business page. Public pages are separate from POS and internal business data.</p></div><label class="publish-toggle"><input type="checkbox" name="published" [checked]="settings()?.published === true"><span>Published and publicly accessible</span></label></section>
       @if(error()){<p class="settings-error" role="alert">{{error()}}</p>}
       @if(notice()){<p class="settings-notice" role="status">{{notice()}}</p>}
-      <div class="save-row"><span>Changes are saved to your store settings.</span><button type="submit" [disabled]="saving()">{{saving() ? 'Saving…' : 'Save storefront settings'}}</button></div>
+      <div class="save-row"><span>{{saving() ? 'Saving your changes…' : 'Remember to save your changes before leaving this page.'}}</span><button type="submit" [disabled]="saving()">{{saving() ? 'Saving…' : 'Save changes'}}</button></div>
     </form>
   }
 </section>
