@@ -898,6 +898,33 @@ try {
   if (publicStorefront.payload?.data?.publicHandle !== `smoke-${suffix}` || publicStorefront.payload?.data?.locationSlug !== `smoke-store-${suffix}` || publicStorefront.payload?.data?.wifiSsid !== 'Smoke Guest WiFi' || publicStorefront.payload?.data?.wifiPassword !== 'smoke-password-123' || publicStorefront.payload?.data?.description !== 'A smoke-test public store description.' || publicStorefront.payload?.data?.city !== 'Casablanca' || publicStorefront.payload?.data?.countryCode !== 'MA') throw new Error('Username/location public identity or guest Wi-Fi settings did not persist.');
   await request(`/api/v1/public/storefronts/smoke-${suffix}/missing-location`, 404);
   checks.push('published storefront username/location routes, SEO fields, and guest Wi-Fi settings');
+  const pendingReviewResponse = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/reviews`, 202, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: `guest-${suffix}@example.test`, rating: 5, reviewText: 'A guest review waiting for email verification.' })
+  });
+  if (pendingReviewResponse.payload?.data?.status !== 'pending_verification') throw new Error('Guest review was not saved in the pending-verification state.');
+  const pendingReview = await pool.query('SELECT rating,status,reviewer_email,email_verified_at FROM store_reviews WHERE store_id=$1 AND reviewer_email=$2', [storeId, `guest-${suffix}@example.test`]);
+  if (Number(pendingReview.rows[0]?.rating) !== 5 || pendingReview.rows[0]?.status !== 'pending_verification' || pendingReview.rows[0]?.email_verified_at !== null) throw new Error('Guest review rating, private email, and verification state did not persist.');
+  const verificationToken = randomUUID() + randomUUID();
+  const verifiedReviewId = randomUUID();
+  const reviewNow = new Date();
+  await pool.query(
+    "INSERT INTO store_reviews (id,store_id,rating,review_text,reviewer_email,status,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,'pending_verification',$6,$6)",
+    [verifiedReviewId, storeId, 4, 'A verified review for metrics.', `verified-${suffix}@example.test`, reviewNow]
+  );
+  await pool.query(
+    'INSERT INTO store_review_verification_tokens (id,review_id,token_hash,created_at,expires_at) VALUES ($1,$2,$3,$4,$5)',
+    [randomUUID(), verifiedReviewId, createHash('sha256').update(verificationToken).digest('hex'), reviewNow, new Date(reviewNow.getTime() + 60_000)]
+  );
+  const verifiedReview = await request('/api/v1/public/reviews/verify', 200, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: verificationToken })
+  });
+  if (verifiedReview.payload?.data?.verified !== true) throw new Error('Review email verification did not publish the review.');
+  const reviewMetrics = await request(`/api/v1/public/storefronts/smoke-${suffix}/smoke-store-${suffix}/reviews`, 200);
+  if (reviewMetrics.payload?.data?.reviewCount !== 1 || Number(reviewMetrics.payload?.data?.averageRating) !== 4 || reviewMetrics.payload?.data?.reviews?.[0]?.reviewText !== 'A verified review for metrics.' || 'reviewerEmail' in (reviewMetrics.payload?.data?.reviews?.[0] ?? {})) {
+    throw new Error('Public five-heart review metrics are inaccurate or expose private reviewer email addresses.');
+  }
+  checks.push('guest review persistence, email verification, private email handling, and five-heart public metrics');
   const secondLocation = await request(`/api/v1/organizations/${organizationId}/stores`, 201, {
     method: 'POST', headers: authHeaders,
     body: JSON.stringify({ name: 'CI Smoke Store Second Location', slug: `smoke-store-second-${suffix}`, locationSlug: `smoke-store-second-${suffix}`, publicHandle: `smoke-${suffix}`, description: null, businessType: 'restaurant', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca', defaultExperience: 'menu', enabledExperiences: ['menu'], published: true, theme: {} })
