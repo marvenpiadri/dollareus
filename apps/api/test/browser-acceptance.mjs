@@ -91,6 +91,9 @@ try {
   await itemForm.locator('input[name="price"]').fill('45.00');
   await itemForm.getByRole('button', { name: /Add item/ }).click();
   await page.getByText(dishName, { exact: true }).waitFor();
+  // Dishes are created as drafts too; publish the dish before selling it in POS.
+  await page.getByRole('button', { name: 'Publish', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Unpublish', exact: true }).nth(1).waitFor();
 
   // Open a restaurant register, create a server-priced order, and record a
   // manually received cash payment. No payment provider or card data is used.
