@@ -65,3 +65,6 @@
 .store-switch select{width:100%;min-width:0;border:0;min-height:28px;padding:0 18px 0 0;background:transparent;color:var(--color-text-secondary);font-size:12px}
 .store-switch select:focus{box-shadow:none}
 @media(max-width:820px){.add-store-button{width:auto;min-width:100%;margin:0 0 8px}.sidebar{overflow:visible;max-height:none}.theme-toggle{display:inline-flex!important}}
+
+/* Preserve natural navigation heights so the sidebar, rather than its items, scrolls. */
+.sidebar>.brand,.sidebar>.store-switch,.sidebar>.add-store-button,.sidebar>.nav-heading,.sidebar>.nav-item,.sidebar>.sidebar-bottom{flex-shrink:0}
