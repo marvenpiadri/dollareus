@@ -258,9 +258,9 @@
                   (input)="updateVariant(i, 'optionsText', $any($event.target).value)"
                   maxlength="500"
                   placeholder="Size=M, Color=Blue"
-                  aria-describedby="variant-options-help"
+                  [attr.aria-describedby]="'variant-options-help-' + i">
                 >
-                <small id="variant-options-help" class="fieldset-helper">Add choices such as size, color, or package.</small>
+                <small [id]="'variant-options-help-' + i"> class="fieldset-helper">Add choices such as size, color, or package.</small>
               </label>
 
               <label class="form-field">
