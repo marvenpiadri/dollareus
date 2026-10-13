@@ -90,7 +90,7 @@ try {
   const categoryForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add category/ }) });
   await categoryForm.locator('input[name="name"]').fill(categoryName);
   await categoryForm.getByRole('button', { name: /Add category/ }).click();
-  await page.getByText(categoryName, { exact: true }).waitFor();
+  await page.locator('tbody tr').filter({ hasText: categoryName }).first().waitFor();
 
   const itemForm = page.locator('form').filter({ has: page.getByRole('button', { name: /Add item/ }) });
   await itemForm.locator('input[name="name"]').fill(dishName);
