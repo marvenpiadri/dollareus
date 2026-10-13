@@ -43,7 +43,7 @@
         <div><span class="eyebrow">CUSTOMER EXPERIENCES</span><h2 id="store-reviews-title">Reviews from the community</h2><p>Reviews are published after the reviewer verifies their email address.</p></div>
         <div class="review-score" aria-label="Average review rating">
           <strong>{{reviewSummary().reviewCount ? reviewSummary().averageRating.toFixed(1) : '—'}}</strong>
-          <span class="heart-display" aria-hidden="true">{{heartString(5)}}</span>
+          <span class="heart-display" aria-hidden="true">{{heartString(roundedRating())}}</span>
           <small>{{reviewSummary().reviewCount}} {{reviewSummary().reviewCount === 1 ? 'review' : 'reviews'}}</small>
         </div>
       </div>
