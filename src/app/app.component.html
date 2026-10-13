@@ -15,11 +15,11 @@
         @if (openMenu() === 'business') {
           <div class="site-dropdown">
             <p class="dropdown-heading">{{ t('platform') }}</p>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">space_dashboard</span><span><b>{{ t('overview') }}</b><small>Manage your business in one place</small></span></a>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">receipt_long</span><span><b>{{ t('orders') }}</b><small>Orders, fulfilment and payment status</small></span></a>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">point_of_sale</span><span><b>{{ t('pointOfSale') }}</b><small>Serve customers at the counter</small></span></a>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">inventory_2</span><span><b>{{ t('products') }} & {{ t('inventory') }}</b><small>Catalog, stock and variants</small></span></a>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">restaurant_menu</span><span><b>{{ t('menus') }}</b><small>Restaurant and café menus</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'Overview'}" (click)="closeMenus()"><span class="material-icons">space_dashboard</span><span><b>{{ t('overview') }}</b><small>Manage your business in one place</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'Orders'}" (click)="closeMenus()"><span class="material-icons">receipt_long</span><span><b>{{ t('orders') }}</b><small>Orders, fulfilment and payment status</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'POS'}" (click)="closeMenus()"><span class="material-icons">point_of_sale</span><span><b>{{ t('pointOfSale') }}</b><small>Serve customers at the counter</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'Products'}" (click)="closeMenus()"><span class="material-icons">inventory_2</span><span><b>{{ t('products') }} & {{ t('inventory') }}</b><small>Catalog, stock and variants</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'Menus'}" (click)="closeMenus()"><span class="material-icons">restaurant_menu</span><span><b>{{ t('menus') }}</b><small>Restaurant and café menus</small></span></a>
           </div>
         }
       </div>
@@ -47,7 +47,7 @@
             <p class="dropdown-heading">{{ t('appearance') }} & {{ t('language') }}</p>
             <label class="preference-row"><span class="material-icons">translate</span><span>{{ t('language') }}</span><select [value]="language()" (change)="setLanguage($any($event.target).value)" aria-label="Interface language"><option value="EN">🇬🇧 English</option><option value="FR">🇫🇷 Français</option><option value="ES">🇪🇸 Español</option><option value="DE">🇩🇪 Deutsch</option></select></label>
             <button class="preference-row" type="button" (click)="toggleTheme()"><span class="material-icons">{{ dark() ? 'light_mode' : 'dark_mode' }}</span><span>{{ t('appearance') }}</span><b>{{ dark() ? t('light') : t('dark') }}</b></button>
-            <a routerLink="/app" (click)="closeMenus()"><span class="material-icons">settings</span><span><b>{{ t('settings') }}</b><small>Store and workspace settings</small></span></a>
+            <a routerLink="/app" [queryParams]="{section:'Settings'}" (click)="closeMenus()"><span class="material-icons">settings</span><span><b>{{ t('settings') }}</b><small>Store and workspace settings</small></span></a>
           </div>
         }
       </div>
@@ -70,7 +70,7 @@
         <p>{{ t('footerTagline') }}</p>
         <div class="footer-status"><i></i> Built for independent businesses</div>
       </div>
-      <div class="footer-column"><h3>{{ t('platform') }}</h3><a routerLink="/app">{{ t('overview') }}</a><a routerLink="/app">{{ t('products') }} & {{ t('inventory') }}</a><a routerLink="/app">{{ t('orders') }}</a><a routerLink="/app">{{ t('pointOfSale') }}</a></div>
+      <div class="footer-column"><h3>{{ t('platform') }}</h3><a routerLink="/app" [queryParams]="{section:'Overview'}">{{ t('overview') }}</a><a routerLink="/app" [queryParams]="{section:'Products'}">{{ t('products') }} & {{ t('inventory') }}</a><a routerLink="/app" [queryParams]="{section:'Orders'}">{{ t('orders') }}</a><a routerLink="/app" [queryParams]="{section:'POS'}">{{ t('pointOfSale') }}</a></div>
       <div class="footer-column"><h3>{{ t('resources') }}</h3><a routerLink="/qr">{{ t('qrStudio') }}</a><a routerLink="/qr/projects">{{ t('savedProjects') }}</a><a routerLink="/qr/scan">{{ t('scanner') }}</a></div>
       <div class="footer-column"><h3>{{ t('legal') }}</h3><a routerLink="/app">{{ t('settings') }}</a><button type="button" (click)="toggleTheme()">{{ t('appearance') }}: {{ dark() ? t('dark') : t('light') }}</button><label class="footer-language">{{ t('language') }}<select [value]="language()" (change)="setLanguage($any($event.target).value)" aria-label="Footer interface language"><option value="EN">🇬🇧 English</option><option value="FR">🇫🇷 Français</option><option value="ES">🇪🇸 Español</option><option value="DE">🇩🇪 Deutsch</option></select></label></div>
     </div>
