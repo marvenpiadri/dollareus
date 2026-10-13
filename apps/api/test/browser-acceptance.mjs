@@ -33,12 +33,13 @@ async function waitForService(url) {
 try {
   await waitForService(`${apiUrl}/api/v1/health`);
   await waitForService(baseUrl);
-  await page.goto(`${baseUrl}/signup`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${baseUrl}/signup`, { waitUntil: 'networkidle' });
   await page.getByRole('heading', { name: 'Create your account' }).waitFor();
   await page.locator('input[name="displayName"]').fill('Browser Acceptance');
   await page.locator('input[name="username"]').fill(username);
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
+  await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: 'Create account' }).click();
 
   // Regression guard: registration must provision a usable workspace and land
