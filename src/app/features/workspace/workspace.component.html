@@ -8,7 +8,7 @@
       <main class="workspace-error-screen"><section class="workspace-error-card"><span class="brand-mark">d.</span><p class="eyebrow">WORKSPACE CONNECTION</p><h1>We couldn’t load your workspace</h1><p class="workspace-error-copy">{{ workspaceError() }}</p><button class="button primary" type="button" (click)="retryWorkspace()">Try again</button><button class="workspace-error-signout" type="button" (click)="signOut()">Sign out</button></section></main>
     } @else if (onboardingStage() !== 'ready') {
       <main class="onboarding-screen">
-        <section style="width:min(100%,480px);padding:34px;background:white;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 18px 60px #253b1b0b">
+        <section class="onboarding-card">
           <a class="brand onboarding-brand" href="#" (click)="$event.preventDefault()"><span class="brand-mark">d.</span><span>dollareus<small>COMMERCE WORKSPACE</small></span></a>
           @if (onboardingStage() === 'organization') {
             <p class="eyebrow">STEP 1 OF 2</p><h1 class="onboarding-title">Create your workspace</h1><p class="onboarding-copy">Start with your business or organization. You can configure more details later.</p>
