@@ -15,7 +15,7 @@
         <div class="hero-actions">
           <a class="primary-action" [routerLink]="primaryLink()">{{primaryLabel()}} <span aria-hidden="true">↗</span></a>
         </div>
-        @if (availableExperiences().includes('services') && store()?.phone) {
+        @if (availableExperiences().includes('services') && (store()?.whatsappNumber || store()?.phone)) {
           <section class="appointment-card" aria-labelledby="appointment-title">
             <span class="eyebrow">BOOK A SERVICE</span>
             <h2 id="appointment-title">Request an appointment</h2>
@@ -29,7 +29,7 @@
             @if (appointmentWhatsAppUrl()) {
               <a class="appointment-whatsapp" [href]="appointmentWhatsAppUrl()" target="_blank" rel="noopener noreferrer">Request via WhatsApp <span aria-hidden="true">↗</span></a>
             } @else {
-              <p class="appointment-phone-note">This business needs a valid phone number with its international country code to accept WhatsApp requests.</p>
+              <p class="appointment-phone-note">This business has not added a WhatsApp number yet.</p>
             }
           </section>
         }
@@ -60,7 +60,7 @@
     @if (mapEmbedUrl()) {
       <section class="business-map-section" aria-labelledby="business-map-title">
         <div><span class="eyebrow">FIND US</span><h2 id="business-map-title">Visit this business</h2><p>Check the address and open directions in Google Maps.</p></div>
-        <iframe [src]="mapEmbedUrl()" title="Business location on Google Maps" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+        <iframe [src]="mapEmbedUrl()" title="Business location map" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
       </section>
     }
     <section class="offerings">
