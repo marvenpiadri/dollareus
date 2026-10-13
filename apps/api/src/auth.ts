@@ -14,6 +14,7 @@ export interface AuthIdentity {
   email: string | null;
   emailVerified: boolean;
   displayName: string | null;
+  username?: string | null;
 }
 export interface ApiCredentialIdentity { id: string; organizationId: string; scopes: string[]; }
 
@@ -86,7 +87,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       await reply.code(403).send({ error: { code: 'API_CREDENTIAL_ORGANIZATION_MISMATCH', message: 'This credential can only access routes under its own organization.', requestId: request.id } });
       return;
     }
-    request.identity = { uid: row.id, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
+    request.identity = { uid: row.id, username: row.username ?? null, email: row.email, emailVerified: Boolean(row.email_verified_at), displayName: row.display_name };
     request.apiCredential = { id: row.credential_id, organizationId: row.organization_id, scopes: row.scopes };
     const utcDay = now.toISOString().slice(0, 10);
     const quota = await pool.query(
@@ -118,7 +119,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     return;
   }
   const result = await pool.query(
-    'SELECT u.id,u.email,u.email_verified_at,u.display_name,s.id AS session_id FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.status=$3 LIMIT 1',
+    'SELECT u.id,u.username,u.email,u.email_verified_at,u.display_name,s.id AS session_id FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>$2 AND u.status=$3 LIMIT 1',
     [hash(sessionToken), new Date(), 'active']
   );
   const row = result.rows[0];
@@ -192,11 +193,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: { email?: unknown; password?: unknown; displayName?: unknown; username?: unknown } }>('/api/v1/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
-    const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';\n    const username = typeof request.body?.username === 'string' ? request.body.username.trim().toLowerCase() : '';
+    const displayName = typeof request.body?.displayName === 'string' ? request.body.displayName.trim() : '';
+    const username = typeof request.body?.username === 'string' ? request.body.username.trim().toLowerCase() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return reply.code(400).send({ error: { code: 'INVALID_EMAIL', message: 'Enter a valid email address.', requestId: request.id } });
     }
-    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) {\n      return reply.code(400).send({ error: { code: 'INVALID_USERNAME', message: 'Choose a username with 3–30 lowercase letters, numbers, underscores or hyphens. It must start with a letter or number.', requestId: request.id } });\n    }\n    if (['admin','api','app','auth','billing','dollareus','help','login','mageus','null','root','signup','support','system','www'].includes(username)) {\n      return reply.code(400).send({ error: { code: 'USERNAME_RESERVED', message: 'That username is reserved. Choose another one.', requestId: request.id } });\n    }\n    if (password.length < 12 || password.length > 256) {
+    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(username)) {
+      return reply.code(400).send({ error: { code: 'INVALID_USERNAME', message: 'Choose a username with 3–30 lowercase letters, numbers, underscores or hyphens. It must start with a letter or number.', requestId: request.id } });
+    }
+    if (['admin','api','app','auth','billing','dollareus','help','login','mageus','null','root','signup','support','system','www'].includes(username)) {
+      return reply.code(400).send({ error: { code: 'USERNAME_RESERVED', message: 'That username is reserved. Choose another one.', requestId: request.id } });
+    }
+    if (password.length < 12 || password.length > 256) {
       return reply.code(400).send({ error: { code: 'WEAK_PASSWORD', message: 'Password must contain between 12 and 256 characters.', requestId: request.id } });
     }
     if (displayName.length > 120) {
@@ -249,7 +257,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const email = typeof request.body?.email === 'string' ? normalizeEmail(request.body.email) : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
     const result = await pool.query(
-      'SELECT u.id,u.email,u.display_name,u.status,p.password_hash FROM users u JOIN auth_passwords p ON p.user_id=u.id WHERE lower(u.email)=$1 OR u.username=$1 LIMIT 1',
+      'SELECT u.id,u.username,u.email,u.display_name,u.status,p.password_hash FROM users u JOIN auth_passwords p ON p.user_id=u.id WHERE lower(u.email)=$1 OR u.username=$1 LIMIT 1',
       [email]
     );
     const row = result.rows[0];
@@ -376,6 +384,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/auth/session', { preHandler: authenticate }, async (request) => ({
     data: {
       id: request.identity!.uid,
+      username: request.identity!.username ?? null,
       email: request.identity!.email,
       displayName: request.identity!.displayName,
       emailVerified: request.identity!.emailVerified
