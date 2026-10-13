@@ -14,7 +14,7 @@
             <p class="eyebrow">STEP 1 OF 2</p><h1 class="onboarding-title">Create your workspace</h1><p class="onboarding-copy">Start with your business or organization. You can configure more details later.</p>
             <form class="onboarding-form" (submit)="createOrganization($event)"><label class="onboarding-label">Business name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" class="onboarding-input"></label>@if (onboardingError()) { <p class="onboarding-error" role="alert">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create workspace' }}</button></form>
           } @else {
-            <p class="eyebrow">STEP 2 OF 2</p><h1 class="onboarding-title">Create your first store</h1><p class="onboarding-copy">Your workspace is ready. Give your first store a name and a unique URL slug.</p>
+            <p class="eyebrow">STEP 2 OF 2</p><h1 class="onboarding-title">Create your first store</h1><p class="onboarding-copy">Your workspace is ready. Name your store and choose what kind of business it is. We’ll set up its public address for you.</p>
             <form class="onboarding-form" (submit)="createStore($event)"><label class="onboarding-label">Store name<input name="name" required maxlength="180" placeholder="e.g. Atlas Atelier" class="onboarding-input"></label><label class="onboarding-label">Business type<select name="businessType" required class="onboarding-input"><option value="retail">Retail store</option><option value="restaurant">Restaurant</option><option value="cafe">Café / coffee shop</option><option value="freelancer">Freelancer</option><option value="services">Service business</option><option value="digital">Digital products</option><option value="general">General business</option></select></label>@if (onboardingError()) { <p role="alert" class="onboarding-error">{{ onboardingError() }}</p> }<button class="button primary" type="submit" [disabled]="onboardingBusy()">{{ onboardingBusy() ? 'Creating…' : 'Create store' }}</button></form>
           }
         </section>
@@ -48,9 +48,7 @@
           <button class="button secondary" type="button" (click)="previewStore()">
             ◉ Preview store
           </button>
-          <button class="button primary" type="button" (click)="addProduct()">
-            ＋ Add product
-          </button>
+          @if (activeNav() === 'Overview' || activeNav() === 'Products') { <button class="button primary" type="button" (click)="addProduct()">＋ Add product</button> }
         </div>
       </dlr-page-header>
           @if (activeNav() === 'Overview') {
