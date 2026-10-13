@@ -214,6 +214,7 @@ export class PublicStorefrontComponent {
       this.meta.updateTag({ property: 'og:title', content: title });
       this.meta.updateTag({ property: 'og:description', content: description });
       this.meta.updateTag({ property: 'og:type', content: 'website' });
+      if (typeof store?.theme?.profileImageUrl === 'string' && store.theme.profileImageUrl.startsWith('https://')) this.meta.updateTag({ property: 'og:image', content: store.theme.profileImageUrl });
       this.meta.updateTag({ name: 'robots', content: 'index,follow' });
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'This store could not be found.');
