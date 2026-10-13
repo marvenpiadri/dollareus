@@ -67,7 +67,7 @@ try {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Browser Acceptance Restaurant', businessType: 'restaurant', status: 'active', currency: 'MAD', locale: 'en', timeZone: 'Africa/Casablanca' })
     }));
-    return { organizationId: organization.id, storeId: store.id, storeSlug: store.slug };
+    return { organizationId: organization.id, storeId: store.id, storeSlug: store.slug, storeHandle: store.publicHandle, locationSlug: store.locationSlug };
   }, { apiUrl });
   storeSlug = bootstrap.storeSlug;
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -156,7 +156,7 @@ try {
   assert.ok(publishResult.storeId, 'The restaurant storefront should publish successfully.');
   const publicPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await publicPage.addInitScript((url) => { window.DOLLAREUS_API_URL = url; }, apiUrl);
-  await publicPage.goto(`${baseUrl}/${storeSlug}/menu`, { waitUntil: 'domcontentloaded' });
+  await publicPage.goto(`${baseUrl}/${bootstrap.storeHandle}/${bootstrap.locationSlug}/menu`, { waitUntil: 'domcontentloaded' });
   await publicPage.getByText(dishName, { exact: true }).waitFor({ timeout: 15000 });
   assert.deepEqual(pageErrors, [], `Browser console/runtime errors: ${pageErrors.join(' | ')}`);
   assert.deepEqual(await publicPage.locator('body').evaluate((body, targetName) => body.innerText.includes(targetName), dishName), true);
