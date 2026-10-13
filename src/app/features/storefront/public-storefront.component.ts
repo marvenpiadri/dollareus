@@ -138,7 +138,16 @@ export class PublicStorefrontComponent {
       ...(hasAddress ? { address } : {}),
       ...(store?.phone ? { telephone: String(store.phone) } : {}),
       ...(store?.websiteUrl ? { url: String(store.websiteUrl) } : {}),
-      ...(store?.googleMapsUrl ? { hasMap: String(store.googleMapsUrl) } : {})
+      ...(store?.googleMapsUrl ? { hasMap: String(store.googleMapsUrl) } : {}),
+      ...(this.reviewSummary().reviewCount > 0 ? {
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: this.reviewSummary().averageRating,
+          reviewCount: this.reviewSummary().reviewCount,
+          bestRating: 5,
+          worstRating: 1
+        }
+      } : {})
     };
     if ((store?.enabledExperiences ?? []).includes('menu')) data['hasMenu'] = '/' + handle + '/' + location + '/menu';
     const existing = this.document.getElementById('dollareus-store-jsonld');
