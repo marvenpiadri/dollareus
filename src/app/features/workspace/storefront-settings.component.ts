@@ -16,6 +16,15 @@ export class StorefrontSettingsComponent {
   protected readonly error = signal('');
   protected readonly notice = signal('');
   protected readonly creatingLocation = signal(false);
+  protected readonly weekdays = [
+    { key: 'monday', label: 'Monday' },
+    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'wednesday', label: 'Wednesday' },
+    { key: 'thursday', label: 'Thursday' },
+    { key: 'friday', label: 'Friday' },
+    { key: 'saturday', label: 'Saturday' },
+    { key: 'sunday', label: 'Sunday' }
+  ];
   protected readonly locationCreateError = signal('');
   readonly locationCreated = output<string>();
   readonly settingsSaved = output<void>();
@@ -47,6 +56,17 @@ export class StorefrontSettingsComponent {
     const publicHandle = String(values.get('publicHandle') ?? '').trim().toLowerCase();
     const locationSlug = String(values.get('locationSlug') ?? '').trim().toLowerCase();
     const profileImageUrl = String(values.get('profileImageUrl') ?? '').trim();
+    const businessHours: Record<string, { open: string; close: string; closed: boolean }> = {};
+    for (const day of this.weekdays) {
+      const open = String(values.get('hours-' + day.key + '-open') ?? '').trim();
+      const close = String(values.get('hours-' + day.key + '-close') ?? '').trim();
+      const closed = values.get('hours-' + day.key + '-closed') === 'on';
+      if (!closed && (open || close) && (!open || !close || open >= close)) {
+        this.error.set('For ' + day.label + ', enter a valid opening time before the closing time, or mark the business closed.');
+        return;
+      }
+      businessHours[day.key] = { open: closed ? '' : open, close: closed ? '' : close, closed };
+    }
     if (profileImageUrl) {
       try { if (new URL(profileImageUrl).protocol !== 'https:') throw new Error(); }
       catch { this.error.set('Use a valid HTTPS image URL for the business profile picture.'); return; }
@@ -94,7 +114,7 @@ export class StorefrontSettingsComponent {
           phone: String(values.get('phone') ?? '').trim() || null,
           websiteUrl: String(values.get('websiteUrl') ?? '').trim() || null,
           googleMapsUrl: String(values.get('googleMapsUrl') ?? '').trim() || null,
-          theme: { ...(this.settings()?.theme ?? {}), profileImageUrl: profileImageUrl || null }
+          theme: { ...(this.settings()?.theme ?? {}), profileImageUrl: profileImageUrl || null, businessHours }
         })
       });
       this.settings.set({ ...(this.settings() ?? {}), ...result });
