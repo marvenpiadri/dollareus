@@ -1,18 +1,18 @@
 # Dollareus
 
-**An API-first commerce platform for independent businesses.**
+**Mageus's private commerce engine and business workspace.**
 
-Dollareus is a modular, API-first business engine for businesses of every kind. Each business has a rich public profile and a configurable set of offerings and capabilities: products, food and drink, services, rentals, appointments, inventory, POS, and more. Dollareus owns business and operational data and exposes it through stable APIs. It can run independently, while Mageus reuses the same engine for publishing, discovery, communities, and commerce.
+Dollareus is Mageus's commerce and business-operations engine for sellers, restaurants, service providers, and future marketplace businesses across Africa. It owns canonical business and operational data—offerings, prices, inventory, POS, orders, and fulfilment—and exposes them through stable APIs to authorized Mageus experiences. The merchant workspace is a private part of the Mageus ecosystem, not a separate consumer-facing account product. Published storefronts, menus, product pages, and QR destinations may remain publicly accessible without a Mageus login.
 
 ## Product principles
 
-- **API-first:** Dollareus serves its own interfaces and authorized external clients such as Mageus through stable, versioned APIs.
+- **API-first:** Dollareus exposes stable, versioned APIs to Mageus and explicitly authorized first-party integrations.
 - **Business-first, not store-first:** a business is a public identity/profile; locations are optional branches; offerings are the shared model for items sold, served, rented, or booked.
 - **One source of truth, many experiences:** Dollareus owns business and offering records; its own public pages, QR links, Mageus, and external client apps are presentations or channels over the same records.
 - **Modular by business need:** business category guides SEO and defaults, while optional capabilities and owner-managed categories compose the actual experience. A café can sell retail products and rent gaming stations without creating separate businesses or systems.
 - **One source of truth:** Dollareus owns commerce records; Mageus and external applications consume authorized API projections rather than duplicating business data.
-- **API as a product:** external developers and client businesses can pay to use scoped Dollareus APIs to power their own branded websites and apps.
-- **Shared identity:** a person can use the same Dollareus identity across Dollareus and Mageus. Cross-domain sign-in will use a proper shared identity/OIDC flow, not shared passwords or an insecure cross-domain cookie.
+- **Controlled integrations:** additional channels are future capabilities and must be explicitly authorized, scoped, audited, and approved; they do not turn Dollareus into a separate self-service account product.
+- **Mageus-owned identity:** people create and manage their primary account through Mageus, then use that identity to enter Dollareus. Shared sign-in must use a proper OIDC flow, not copied passwords or insecure cross-domain cookies. Authentication does not automatically grant access to an organization.
 - **Guest-friendly customer experience:** customers can buy or book through Mageus without being forced to create an account; an optional customer profile can unify their eligible activity across the ecosystem.
 - **Secure by default:** organizations are isolated; access is authenticated, authorized, audited, and validated on the server.
 - **Media is not JSON:** product images live in object storage. JSON records store storage keys and image metadata, not base64 files.
@@ -22,10 +22,10 @@ Dollareus is a modular, API-first business engine for businesses of every kind. 
 ## Product boundaries
 
 - **Dollareus business engine:** business profiles, locations, offerings, pricing, availability, inventory, POS, customers/CRM, orders, manual/offline payment records, bookings, fulfillment, and audit history.
-- **Dollareus public pages:** independent, SEO-ready business profiles with offerings, working hours, contact details, maps, media, and optional location pages. The presentation is configurable rather than locked to a restaurant or retail template.
+- **Published public commerce pages:** SEO-ready business profiles, catalogs, menus, working hours, contact details, maps, media, and location pages. These are public publishing surfaces backed by Dollareus—not separate user workspaces.
 - **Dollareus developer platform:** versioned APIs, scoped app credentials, webhooks, usage metering, documentation, and paid API plans.
 - **Mageus experiences:** Mageus consumes Dollareus APIs and adds publishing, magazines, communities, audience-building, discovery, and its own page composition.
-- **External applications:** branded restaurant, retail, booking, rental, or other applications can use Dollareus APIs without adopting Mageus.
+- **Future channels:** partner applications may be supported later through explicit authorization and narrow scopes; Mageus remains the primary first-party experience.
 - **Shared engines:** QR generation/management and integration with the X-Facture document engine.
 
 ## Repository structure
