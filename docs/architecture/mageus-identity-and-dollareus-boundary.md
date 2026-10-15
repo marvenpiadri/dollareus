@@ -28,11 +28,19 @@ Dollareus remains a separately deployable, separately versioned commerce engine 
 - Link identities by an immutable provider subject (issuer + sub), not by email alone. Email can change and must not be used as an automatic account-merging key.
 - The browser must not receive client secrets or long-lived service credentials. Mageus-to-Dollareus server integration uses a separately authorized, narrowly scoped service identity.
 
-### Important implementation constraint
+### Current repository assessment (2026-10-16)
 
-The current Dollareus codebase has first-party authentication endpoints and a merchant auth screen. These are transitional implementation details, not a reason to preserve two independent identity silos. Do not simply remove password authentication or expose protected routes until the Mageus identity provider, callback flow, server-side session validation, account linking, migration path, and recovery behavior are implemented and verified end to end.
+The current Mageus frontend is **not yet a verified OIDC identity provider**:
 
-The current Mageus repository must be assessed as an identity-provider candidate before implementation. If it does not yet expose a standards-compliant OIDC provider, that capability must be added deliberately or provided by a shared identity service. Do not simulate SSO by copying passwords, sharing browser local storage across domains, trusting unsigned user IDs, or accepting arbitrary bearer tokens.
+- The login form calls the existing Mageus API's `/token/loguser` endpoint; registration calls `/create/account`.
+- The frontend stores the returned JWT in browser `localStorage` under `token` and decodes claims client-side. The HTTP interceptor forwards that token to Mageus API requests.
+- The Angular guards check login state in the browser. They are not an OIDC authorization server and do not, by themselves, protect API resources.
+- The reviewed routes and services do not establish a standards-compliant OIDC discovery document, authorization endpoint, token endpoint, JWKS/signing-key publication, PKCE callback flow, or issuer/audience contract.
+- Dollareus currently has its own server-managed session records and HttpOnly `dollareus_session` cookie, plus a legacy bearer-token compatibility path for sessions. Its auth endpoints and identity store therefore remain separate today.
+
+These findings mean that the desired shared login is a **real identity-provider phase**, not just a frontend redirect. Before wiring the applications together, choose one of two deliberate options: (1) add a standards-compliant OIDC provider to the Mageus backend, or (2) introduce a shared identity provider used by both Mageus and Dollareus. Keep the existing sign-in routes functional until the new flow is verified.
+
+Do not copy Mageus passwords, share browser local storage across domains, trust unsigned user IDs, or accept arbitrary bearer tokens. Do not simply remove Dollareus password authentication or expose protected routes until provider discovery, callback/state/nonce/PKCE validation, server-side session creation and revocation, account linking, migration, and recovery behavior are implemented and verified end to end.
 
 ## Authorization and tenant isolation
 
