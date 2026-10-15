@@ -2,12 +2,12 @@
 
 Last reviewed: 2026-10-11
 
-This is a staged rollout checklist, not a claim that production infrastructure is already configured. Start with a private staging deployment and a test organization. Do not accept real payments until the payment and inventory gaps in [launch readiness](../launch-readiness.md) are closed.
+This is a staged rollout checklist, not a claim that production infrastructure is already configured. Target Vercel SSR with no Docker: the Angular SSR entrypoint routes API requests to the in-process Fastify app. Start with a protected Vercel preview and a test organization. Do not accept real payments until the payment and inventory gaps in [launch readiness](../launch-readiness.md) are closed.
 
 ## 1. Prepare the database
 
 - [ ] Create a dedicated Neon PostgreSQL database for staging and a separate one for production.
-- [ ] Store each environment's `DATABASE_URL` only in the API host's server-side secret settings.
+- [ ] Store each environment's `DATABASE_URL` only in Vercel's server-side environment settings; use a hosted PostgreSQL provider and its recommended pooled connection URL for serverless workloads.
 - [ ] Confirm backups/retention are enabled and test a restore before production data is accepted.
 - [ ] Follow the [first-time Neon database setup guide](../neon-database-setup.md). On a genuinely empty database only, review and run the repository's one-time `pnpm db:setup` command. Do not rerun it blindly against an existing database.
 - [ ] Compare the resulting tables/indexes against `apps/api/db/schema.sql` and confirm the deployed API can execute authenticated smoke workflows.
@@ -16,7 +16,7 @@ Neon usage charts showing query/connection spikes are supporting evidence of dat
 
 ## 2. Configure API runtime secrets
 
-Use the environment variable names documented in the root `.env.example`. Configure secrets in the hosting provider; never place them in Angular/frontend environment files or commit them.
+Use the environment variable names documented in the root `.env.example`. Configure secrets in Vercel's server-side environment settings; never place them in Angular/frontend environment files or commit them. Docker is not used.
 
 - [ ] `DATABASE_URL` and, if needed, `DATABASE_POOL_MAX`
 - [ ] `NODE_ENV=production`, `PORT`, and `HOST` as required by the host
@@ -31,9 +31,9 @@ Use the environment variable names documented in the root `.env.example`. Config
 
 Do not enable an OAuth provider until its redirect URI, consent configuration, and test account have been verified. Do not enable product media until a real upload/read/delete-or-cleanup round-trip is verified against the intended bucket.
 
-## 3. Deploy and verify the merchant app and API
+## 3. Deploy and verify the SSR app and API routes
 
-- [ ] Deploy the API and merchant frontend to staging; configure the frontend API base URL or a same-origin reverse proxy.
+- [ ] Deploy the Angular SSR application to a protected Vercel preview; `/api/*` is handled by the Fastify instance imported into the SSR runtime, not a separate long-running API process.
 - [ ] Configure SPA history fallback/rewrites for `/app`, `/qr`, `/menu`, and `/{storeSlug}/menu`, plus wildcard subdomain routing if using `PUBLIC_STORE_DOMAIN`.
 - [ ] Verify HTTPS, secure session cookies, proxy configuration, request limits, and allowed origins.
 - [ ] Confirm `/health` responds for process liveness and `/api/v1/health` reports `checks.database=ok` for PostgreSQL readiness; monitor both after deployment.
