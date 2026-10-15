@@ -38,6 +38,8 @@ Dollareus is a modular, API-first business engine for businesses of every kind. 
 
 ## Deployment and readiness
 
+**Target: Vercel SSR, without Docker.** The Angular SSR entrypoint dispatches `/api/*` requests to the in-process Fastify app, so production does not require a separate always-running API server. Use hosted PostgreSQL with a server-side connection string and hosted S3-compatible object storage for media. Verify connection pooling, runtime limits, email/OAuth callbacks, image processing, and the complete browser workflow in a Vercel preview before production.
+
 - [Production deployment checklist](docs/deployment/production-checklist.md)
 - [Launch readiness and outstanding blockers](docs/launch-readiness.md)
 - [Developer API credential guide](docs/api/developer-credentials.md)
