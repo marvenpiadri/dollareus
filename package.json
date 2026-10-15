@@ -2,7 +2,7 @@
   "name": "dollareus",
   "version": "0.1.0",
   "private": true,
-  "description": "API-first modular commerce platform for independent businesses",
+  "description": "Mageus private commerce engine and business workspace",
   "type": "module",
   "workspaces": [
     "apps/*",
