@@ -9,9 +9,6 @@ import {
 } from '@angular/ssr/node';
 import { app as fastifyApp } from '../apps/api/src/server.js';
 
-// Disable host check to allow Cloud Run / AI Studio ingress proxies
-(AngularAppEngine as any).ɵdisableAllowedHostsCheck = true;
-
 const fastifyReady = (Promise.resolve(fastifyApp.ready()) as Promise<unknown>).catch((err: unknown) => {
   console.warn('[AI Studio] Fastify initialization warning:', err);
 });
@@ -20,7 +17,12 @@ const configuredHosts = process.env['NG_ALLOWED_HOSTS']
   ?.split(',')
   .map((host) => host.trim())
   .filter(Boolean);
-const defaultAllowedHosts = ['localhost', '127.0.0.1', '*.run.app', '*.google.com', '*.aistudio.google'];
+const vercelHosts = [process.env['VERCEL_URL'], process.env['VERCEL_PROJECT_PRODUCTION_URL']].filter((host): host is string => Boolean(host));
+const appUrl = process.env['APP_URL'] || process.env['AUTH_PUBLIC_URL'];
+if (appUrl) {
+  try { vercelHosts.push(new URL(appUrl).hostname); } catch { /* Invalid public URL is validated by deployment configuration. */ }
+}
+const defaultAllowedHosts = ['localhost', '127.0.0.1', ...vercelHosts];
 const angularApp = new AngularNodeAppEngine({
   allowedHosts: configuredHosts?.length ? configuredHosts : defaultAllowedHosts,
   trustProxyHeaders: true
